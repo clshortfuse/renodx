@@ -7,22 +7,32 @@
 
 #define DEBUG_LEVEL_0
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
-#define RENODX_FPS_LIMIT_HR_TIMER
+
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
-#include <Windows.h>
+#include <detours.h>
 #include <d3d9.h>
+#include <d3d11.h>
+#include <dxgi.h>
 #include <d3dcompiler.h>
 
 #include <embed/shaders.h>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
+#include <initializer_list>
 #include <limits>
 #include <mutex>
 #include <ranges>
@@ -37,13 +47,1435 @@
 #include "../../utils/resource.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
-#include "./mw3_microstutter_core.hpp"
+#include "./mw3_microstutter_core_V14_TRAVERSAL.hpp"
+#include "./mw3_stutter_runtime_V36_V27_SOUND_CACHE_FASTSEEK_NATIVE_FPS.hpp"
+#include "./mw3_frame_deadline.hpp"
+#include "mw3_precise_wait.hpp"
+#include "./half_filter.hpp"
 
 #ifndef RENODX_PSYCHOV24_SLIDER_LAYOUT_VERSION
 #error "CODBLOPS: shared.h is outdated. Replace shared.h with the PsychoV24 slider version from the same package."
 #endif
 
 namespace {
+
+// ============================================================================
+// MW3 x64 V27 lean trace-guided archive/sync runtime + V13 pacing + Plutonium-style mouse fix
+// High-polling-rate mouse / Raw Input bridge
+// ============================================================================
+//
+// Goals:
+//   * Preserve every physical relative mouse delta. There is no 125/500/1000 Hz
+//     resampling and no artificial polling cap.
+//   * Keep the game's native sensitivity, ADS, m_yaw/m_pitch, m_filter and aim
+//     math by continuing to feed movement through its GetCursorPos/SetCursorPos
+//     relative-mouse path.
+//   * Avoid making the old Win32 message loop process thousands of individual
+//     WM_MOUSEMOVE/WM_INPUT messages per second. While the game is recentering
+//     the cursor for gameplay, raw reports are accumulated and input-only bursts
+//     are drained in one PeekMessage/GetMessage hook invocation.
+//   * Do not suppress legacy button/wheel messages. Raw Input is registered
+//     WITHOUT RIDEV_NOLEGACY, so mouse buttons, wheel and menus remain native.
+//   * Automatically fall back to the original cursor path in menus, after focus
+//     loss, and while the ReShade overlay wants the mouse.
+//
+// The stock WaW/BO1/IW5 executables all import GetCursorPos, SetCursorPos,
+// PeekMessageA and GetMessageA and do not import the Windows Raw Input APIs.
+// This bridge therefore patches only those four main-EXE IAT slots. Calls made
+// by ReShade or other DLLs are not redirected.
+
+namespace cod_high_polling_mouse {
+
+using PeekMessageAFn = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT, UINT);
+using GetMessageAFn = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT);
+
+struct IATHook {
+  uintptr_t* slot = nullptr;
+  uintptr_t original = 0u;
+  uintptr_t replacement = 0u;
+};
+
+inline std::atomic<bool> g_enabled{true};
+inline std::atomic<bool> g_overlay_capturing_mouse{false};
+inline std::atomic<uintptr_t> g_game_hwnd{0u};
+inline std::atomic<bool> g_iat_hooks_installed{false};
+inline std::atomic<bool> g_cl_mouse_hook_installed{false};
+inline std::atomic<bool> g_raw_registered{false};
+inline std::atomic<bool> g_logged_install_failure{false};
+inline std::atomic<bool> g_logged_raw_active{false};
+
+inline std::atomic<int64_t> g_raw_total_x{0};
+inline std::atomic<int64_t> g_raw_total_y{0};
+inline std::atomic<int64_t> g_raw_consumed_x{0};
+inline std::atomic<int64_t> g_raw_consumed_y{0};
+inline std::atomic<uint64_t> g_raw_report_count{0u};
+inline std::atomic<uint64_t> g_last_cl_mouse_tick{0u};
+
+inline PeekMessageAFn g_original_peek_message_a = nullptr;
+inline GetMessageAFn g_original_get_message_a = nullptr;
+inline IATHook g_peek_message_hook = {};
+inline IATHook g_get_message_hook = {};
+
+inline bool g_saved_raw_registration_valid = false;
+inline RAWINPUTDEVICE g_saved_raw_registration = {};
+inline HWND g_registered_hwnd = nullptr;
+
+constexpr uint64_t kRelativeModeHoldMs = 250u;
+constexpr uint32_t kMaxInputMessagesDrainedPerCall = 512u;
+
+// These are the exact native IW5 CL_MouseEvent functions recovered from the
+// user's supplied executables. The hook replaces ONLY the cursor-derived dx/dy
+// arguments. x/y, recentering, sensitivity, ADS, m_yaw/m_pitch, acceleration,
+// filtering and all downstream camera code remain the game's own implementation.
+using CLMouseEventFn = int(__fastcall*)(int, int, int, int);
+inline CLMouseEventFn g_original_cl_mouse_event = nullptr;
+constexpr WORD kExpectedMachine = IMAGE_FILE_MACHINE_AMD64;
+constexpr DWORD kExpectedTimestamp = 0x6A743A58u;
+constexpr DWORD kExpectedSizeOfImage = 0x044BE000u;
+constexpr uintptr_t kCLMouseEventRva = 0x0007D920u;
+constexpr std::array<uint8_t, 16> kCLMouseEventSignature = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83,
+    0xEC, 0x20, 0x8B, 0x05, 0x20, 0x4C, 0x66, 0x00,
+};
+
+void LogInfo(const char* text) {
+  reshade::log::message(
+      reshade::log::level::info,
+      text != nullptr ? text : "[MW3 Mouse Fix] (null)");
+}
+
+void LogWarning(const char* text) {
+  reshade::log::message(
+      reshade::log::level::warning,
+      text != nullptr ? text : "[MW3 Mouse Fix] (null)");
+}
+
+bool EqualAsciiInsensitive(const char* a, const char* b) {
+  if (a == nullptr || b == nullptr) return false;
+  while (*a != '\0' && *b != '\0') {
+    char ca = *a++;
+    char cb = *b++;
+    if (ca >= 'A' && ca <= 'Z') ca = static_cast<char>(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = static_cast<char>(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
+bool FindAndPatchMainExeIAT(
+    const char* imported_dll,
+    const char* imported_name,
+    void* replacement,
+    IATHook& hook) {
+  if (imported_dll == nullptr || imported_name == nullptr || replacement == nullptr) {
+    return false;
+  }
+
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+
+  const auto& directory =
+      nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (directory.VirtualAddress == 0u
+      || directory.Size < sizeof(IMAGE_IMPORT_DESCRIPTOR)) {
+    return false;
+  }
+
+  auto* descriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(
+      module + directory.VirtualAddress);
+
+  for (; descriptor->Name != 0u; ++descriptor) {
+    const char* dll_name = reinterpret_cast<const char*>(module + descriptor->Name);
+    if (!EqualAsciiInsensitive(dll_name, imported_dll)) continue;
+    if (descriptor->OriginalFirstThunk == 0u || descriptor->FirstThunk == 0u) {
+      return false;
+    }
+
+    auto* name_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->OriginalFirstThunk);
+    auto* iat_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->FirstThunk);
+
+    for (; name_thunk->u1.AddressOfData != 0u; ++name_thunk, ++iat_thunk) {
+      if (IMAGE_SNAP_BY_ORDINAL(name_thunk->u1.Ordinal)) continue;
+
+      auto* import = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(
+          module + static_cast<uintptr_t>(name_thunk->u1.AddressOfData));
+      if (std::strcmp(reinterpret_cast<const char*>(import->Name), imported_name) != 0) {
+        continue;
+      }
+
+      auto* slot = reinterpret_cast<uintptr_t*>(&iat_thunk->u1.Function);
+      const uintptr_t original = *slot;
+      const uintptr_t replacement_value = reinterpret_cast<uintptr_t>(replacement);
+
+      DWORD old_protect = 0u;
+      if (!VirtualProtect(slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+        return false;
+      }
+
+      *slot = replacement_value;
+      FlushInstructionCache(GetCurrentProcess(), slot, sizeof(uintptr_t));
+
+      DWORD ignored = 0u;
+      VirtualProtect(slot, sizeof(uintptr_t), old_protect, &ignored);
+
+      hook.slot = slot;
+      hook.original = original;
+      hook.replacement = replacement_value;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void RestoreIATHook(IATHook& hook) {
+  if (hook.slot == nullptr || hook.original == 0u) {
+    hook = {};
+    return;
+  }
+
+  DWORD old_protect = 0u;
+  if (VirtualProtect(hook.slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+    if (*hook.slot == hook.replacement) {
+      *hook.slot = hook.original;
+      FlushInstructionCache(GetCurrentProcess(), hook.slot, sizeof(uintptr_t));
+    }
+    DWORD ignored = 0u;
+    VirtualProtect(hook.slot, sizeof(uintptr_t), old_protect, &ignored);
+  }
+  hook = {};
+}
+
+HWND GameWindow() {
+  return reinterpret_cast<HWND>(g_game_hwnd.load(std::memory_order_acquire));
+}
+
+void RebaseRawDeltas() {
+  const int64_t x = g_raw_total_x.load(std::memory_order_relaxed);
+  const int64_t y = g_raw_total_y.load(std::memory_order_relaxed);
+  g_raw_consumed_x.store(x, std::memory_order_relaxed);
+  g_raw_consumed_y.store(y, std::memory_order_relaxed);
+}
+
+bool RelativeCaptureActive() {
+  if (!g_enabled.load(std::memory_order_acquire)
+      || !g_raw_registered.load(std::memory_order_acquire)
+      || g_overlay_capturing_mouse.load(std::memory_order_acquire)) {
+    return false;
+  }
+
+  const HWND hwnd = GameWindow();
+  if (hwnd == nullptr || GetForegroundWindow() != hwnd) return false;
+
+  const uint64_t last = g_last_cl_mouse_tick.load(std::memory_order_relaxed);
+  const uint64_t now = GetTickCount64();
+  return last != 0u && now >= last && (now - last) <= kRelativeModeHoldMs;
+}
+
+void SaveExistingRawMouseRegistration() {
+  g_saved_raw_registration_valid = false;
+  g_saved_raw_registration = {};
+
+  UINT count = 0u;
+  GetRegisteredRawInputDevices(nullptr, &count, sizeof(RAWINPUTDEVICE));
+  if (count == 0u) return;
+
+  std::vector<RAWINPUTDEVICE> devices(count);
+  UINT capacity = count;
+  if (GetRegisteredRawInputDevices(
+          devices.data(),
+          &capacity,
+          sizeof(RAWINPUTDEVICE)) == static_cast<UINT>(-1)) {
+    return;
+  }
+
+  for (UINT i = 0u; i < capacity; ++i) {
+    if (devices[i].usUsagePage == 0x01u && devices[i].usUsage == 0x02u) {
+      g_saved_raw_registration = devices[i];
+      g_saved_raw_registration_valid = true;
+      return;
+    }
+  }
+}
+
+bool RegisterRawMouse(HWND hwnd) {
+  if (hwnd == nullptr) return false;
+
+  SaveExistingRawMouseRegistration();
+
+  RAWINPUTDEVICE mouse = {};
+  mouse.usUsagePage = 0x01u;  // Generic desktop controls
+  mouse.usUsage = 0x02u;      // Mouse
+  // Match the established IW-family raw-input implementation: receive raw
+  // reports through the game window even if Windows momentarily changes focus.
+  // Actual camera injection still requires the game to be foreground.
+  mouse.dwFlags = RIDEV_INPUTSINK;
+  mouse.hwndTarget = hwnd;
+
+  if (!RegisterRawInputDevices(&mouse, 1u, sizeof(mouse))) return false;
+
+  g_registered_hwnd = hwnd;
+  g_raw_registered.store(true, std::memory_order_release);
+  RebaseRawDeltas();
+  return true;
+}
+
+void RestoreRawMouseRegistration() {
+  if (!g_raw_registered.exchange(false, std::memory_order_acq_rel)) return;
+
+  if (g_saved_raw_registration_valid) {
+    RegisterRawInputDevices(
+        &g_saved_raw_registration,
+        1u,
+        sizeof(g_saved_raw_registration));
+  } else {
+    RAWINPUTDEVICE remove = {};
+    remove.usUsagePage = 0x01u;
+    remove.usUsage = 0x02u;
+    remove.dwFlags = RIDEV_REMOVE;
+    remove.hwndTarget = nullptr;
+    RegisterRawInputDevices(&remove, 1u, sizeof(remove));
+  }
+
+  g_registered_hwnd = nullptr;
+  g_saved_raw_registration_valid = false;
+  g_saved_raw_registration = {};
+}
+
+void ProcessRawInput(HRAWINPUT handle) {
+  if (handle == nullptr) return;
+
+  UINT size = 0u;
+  if (GetRawInputData(
+          handle,
+          RID_INPUT,
+          nullptr,
+          &size,
+          sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1)
+      || size < sizeof(RAWINPUTHEADER)) {
+    return;
+  }
+
+  // Avoid the Windows SDK RPC `small` macro from rpcndr.h.
+  std::array<uint8_t, sizeof(RAWINPUT)> stack_storage = {};
+  std::vector<uint8_t> dynamic_storage;
+  void* storage = stack_storage.data();
+  if (size > stack_storage.size()) {
+    dynamic_storage.resize(size);
+    storage = dynamic_storage.data();
+  }
+
+  UINT read_size = size;
+  const UINT result = GetRawInputData(
+      handle,
+      RID_INPUT,
+      storage,
+      &read_size,
+      sizeof(RAWINPUTHEADER));
+  if (result == static_cast<UINT>(-1) || result < sizeof(RAWINPUTHEADER)) return;
+
+  const auto* raw = reinterpret_cast<const RAWINPUT*>(storage);
+  if (raw->header.dwType != RIM_TYPEMOUSE) return;
+
+  const RAWMOUSE& mouse = raw->data.mouse;
+  if ((mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0u) {
+    // Gaming mice are relative. Ignore tablets/touch-style absolute devices
+    // rather than mixing coordinate systems into camera movement.
+    return;
+  }
+
+  g_raw_total_x.fetch_add(static_cast<int64_t>(mouse.lLastX), std::memory_order_relaxed);
+  g_raw_total_y.fetch_add(static_cast<int64_t>(mouse.lLastY), std::memory_order_relaxed);
+  g_raw_report_count.fetch_add(1u, std::memory_order_relaxed);
+}
+
+void CleanupConsumedRawInput(const MSG& message) {
+  if (message.message != WM_INPUT) return;
+  ProcessRawInput(reinterpret_cast<HRAWINPUT>(message.lParam));
+  if (message.hwnd != nullptr && GET_RAWINPUT_CODE_WPARAM(message.wParam) == RIM_INPUT) {
+    DefWindowProcA(message.hwnd, message.message, message.wParam, message.lParam);
+  }
+}
+
+bool IsMovementOnlyMessage(const MSG& message) {
+  return message.message == WM_INPUT || message.message == WM_MOUSEMOVE;
+}
+
+void ObserveRawMessageWithoutConsuming(const MSG& message) {
+  if (message.message == WM_INPUT) {
+    ProcessRawInput(reinterpret_cast<HRAWINPUT>(message.lParam));
+  }
+}
+
+BOOL WINAPI HookPeekMessageA(
+    LPMSG message,
+    HWND hwnd,
+    UINT min_filter,
+    UINT max_filter,
+    UINT remove_message) {
+  if (g_original_peek_message_a == nullptr) return FALSE;
+
+  const BOOL first = g_original_peek_message_a(
+      message, hwnd, min_filter, max_filter, remove_message);
+
+  if (!first || message == nullptr) return first;
+
+  // Only parse a raw handle after the message has actually been removed. A
+  // PM_NOREMOVE peek can expose the same HRAWINPUT repeatedly.
+  if ((remove_message & PM_REMOVE) != 0u) {
+    ObserveRawMessageWithoutConsuming(*message);
+  }
+
+  if ((remove_message & PM_REMOVE) == 0u
+      || min_filter != 0u
+      || max_filter != 0u
+      || !RelativeCaptureActive()
+      || !IsMovementOnlyMessage(*message)) {
+    return first;
+  }
+
+  // This message will not be dispatched, so perform WM_INPUT cleanup ourselves.
+  if (message->message == WM_INPUT
+      && message->hwnd != nullptr
+      && GET_RAWINPUT_CODE_WPARAM(message->wParam) == RIM_INPUT) {
+    DefWindowProcA(message->hwnd, message->message, message->wParam, message->lParam);
+  }
+
+  for (uint32_t drained = 1u;
+       drained < kMaxInputMessagesDrainedPerCall;
+       ++drained) {
+    MSG next = {};
+    if (!g_original_peek_message_a(&next, hwnd, 0u, 0u, PM_REMOVE)) {
+      return FALSE;
+    }
+
+    if (!IsMovementOnlyMessage(next)) {
+      *message = next;
+      return TRUE;
+    }
+
+    CleanupConsumedRawInput(next);
+  }
+
+  return FALSE;
+}
+
+BOOL WINAPI HookGetMessageA(
+    LPMSG message,
+    HWND hwnd,
+    UINT min_filter,
+    UINT max_filter) {
+  if (g_original_get_message_a == nullptr) return -1;
+
+  const BOOL first = g_original_get_message_a(message, hwnd, min_filter, max_filter);
+  if (first <= 0 || message == nullptr) return first;
+
+  ObserveRawMessageWithoutConsuming(*message);
+
+  if (min_filter != 0u
+      || max_filter != 0u
+      || !RelativeCaptureActive()
+      || !IsMovementOnlyMessage(*message)) {
+    return first;
+  }
+
+  if (message->message == WM_INPUT
+      && message->hwnd != nullptr
+      && GET_RAWINPUT_CODE_WPARAM(message->wParam) == RIM_INPUT) {
+    DefWindowProcA(message->hwnd, message->message, message->wParam, message->lParam);
+  }
+
+  // Never block after collapsing a high-polling movement burst. This mirrors
+  // the practical purpose of Plutonium's separate fix_mouse_lag path: reduce
+  // the amount of old message-pump work generated by high-rate mouse motion.
+  for (uint32_t drained = 1u;
+       drained < kMaxInputMessagesDrainedPerCall;
+       ++drained) {
+    MSG next = {};
+    if (g_original_peek_message_a == nullptr
+        || !g_original_peek_message_a(&next, hwnd, 0u, 0u, PM_REMOVE)) {
+      *message = {};
+      message->hwnd = GameWindow();
+      message->message = WM_NULL;
+      return TRUE;
+    }
+
+    if (next.message == WM_QUIT) {
+      *message = next;
+      return FALSE;
+    }
+
+    if (!IsMovementOnlyMessage(next)) {
+      *message = next;
+      return TRUE;
+    }
+
+    CleanupConsumedRawInput(next);
+  }
+
+  *message = {};
+  message->hwnd = GameWindow();
+  message->message = WM_NULL;
+  return TRUE;
+}
+
+bool VerifyCLMouseEventTarget() {
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+
+  if (nt->FileHeader.Machine != kExpectedMachine
+      || nt->FileHeader.TimeDateStamp != kExpectedTimestamp
+      || nt->OptionalHeader.SizeOfImage != kExpectedSizeOfImage) {
+    return false;
+  }
+
+  const auto* target = module + kCLMouseEventRva;
+  return std::memcmp(
+             target,
+             kCLMouseEventSignature.data(),
+             kCLMouseEventSignature.size()) == 0;
+}
+
+int __fastcall HookCLMouseEvent(int x, int y, int stock_dx, int stock_dy) {
+  const auto original = g_original_cl_mouse_event;
+  if (original == nullptr) return 0;
+
+  const uint64_t now = GetTickCount64();
+
+  if (!g_enabled.load(std::memory_order_acquire)
+      || !g_raw_registered.load(std::memory_order_acquire)
+      || g_overlay_capturing_mouse.load(std::memory_order_acquire)
+      || GameWindow() == nullptr
+      || GetForegroundWindow() != GameWindow()) {
+    RebaseRawDeltas();
+    const int result = original(x, y, stock_dx, stock_dy);
+    g_last_cl_mouse_tick.store(
+        result != 0 ? now : 0u,
+        std::memory_order_relaxed);
+    return result;
+  }
+
+  const int64_t total_x = g_raw_total_x.load(std::memory_order_relaxed);
+  const int64_t total_y = g_raw_total_y.load(std::memory_order_relaxed);
+  const int64_t previous_x = g_raw_consumed_x.exchange(total_x, std::memory_order_acq_rel);
+  const int64_t previous_y = g_raw_consumed_y.exchange(total_y, std::memory_order_acq_rel);
+
+  const int64_t raw_dx64 = total_x - previous_x;
+  const int64_t raw_dy64 = total_y - previous_y;
+  const int raw_dx = static_cast<int>(std::clamp<int64_t>(
+      raw_dx64, static_cast<int64_t>(std::numeric_limits<int>::min()),
+      static_cast<int64_t>(std::numeric_limits<int>::max())));
+  const int raw_dy = static_cast<int>(std::clamp<int64_t>(
+      raw_dy64, static_cast<int64_t>(std::numeric_limits<int>::min()),
+      static_cast<int64_t>(std::numeric_limits<int>::max())));
+
+  if (!g_logged_raw_active.exchange(true, std::memory_order_acq_rel)) {
+    LogInfo(
+        "[MW3 Mouse Fix] Plutonium-style direct raw delta path active: CL_MouseEvent receives WM_INPUT dx/dy directly; stock cursor-derived deltas are bypassed.");
+  }
+
+  const int result = original(x, y, raw_dx, raw_dy);
+  if (result != 0) {
+    g_last_cl_mouse_tick.store(now, std::memory_order_relaxed);
+  } else {
+    // CL_MouseEvent returning false means the engine is not requesting relative
+    // recentering (menus/UI). Do not collapse its normal cursor messages.
+    g_last_cl_mouse_tick.store(0u, std::memory_order_relaxed);
+    RebaseRawDeltas();
+  }
+  return result;
+}
+
+bool InstallCLMouseEventHook() {
+  if (g_cl_mouse_hook_installed.load(std::memory_order_acquire)) return true;
+  if (!VerifyCLMouseEventTarget()) {
+    LogWarning(
+        "[MW3 Mouse Fix] Exact CL_MouseEvent signature/build verification failed; direct raw-input injection left disabled.");
+    return false;
+  }
+
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  g_original_cl_mouse_event = reinterpret_cast<CLMouseEventFn>(
+      module + kCLMouseEventRva);
+
+  if (DetourTransactionBegin() != NO_ERROR) return false;
+  DetourUpdateThread(GetCurrentThread());
+  const LONG attach = DetourAttach(
+      reinterpret_cast<PVOID*>(&g_original_cl_mouse_event),
+      reinterpret_cast<PVOID>(&HookCLMouseEvent));
+  if (attach != NO_ERROR) {
+    DetourTransactionAbort();
+    g_original_cl_mouse_event = nullptr;
+    return false;
+  }
+
+  const LONG commit = DetourTransactionCommit();
+  if (commit != NO_ERROR) {
+    g_original_cl_mouse_event = nullptr;
+    return false;
+  }
+
+  g_cl_mouse_hook_installed.store(true, std::memory_order_release);
+  LogInfo(
+      "[MW3 Mouse Fix] Direct native CL_MouseEvent raw-delta hook installed; legacy cursor-derived dx/dy is bypassed during gameplay.");
+  return true;
+}
+
+void RemoveCLMouseEventHook() {
+  if (!g_cl_mouse_hook_installed.exchange(false, std::memory_order_acq_rel)) return;
+  if (g_original_cl_mouse_event == nullptr) return;
+
+  if (DetourTransactionBegin() == NO_ERROR) {
+    DetourUpdateThread(GetCurrentThread());
+    if (DetourDetach(
+            reinterpret_cast<PVOID*>(&g_original_cl_mouse_event),
+            reinterpret_cast<PVOID>(&HookCLMouseEvent)) == NO_ERROR) {
+      DetourTransactionCommit();
+    } else {
+      DetourTransactionAbort();
+    }
+  }
+
+  g_original_cl_mouse_event = nullptr;
+}
+
+bool InstallMessageHooks() {
+  if (g_iat_hooks_installed.load(std::memory_order_acquire)) return true;
+
+  const bool peek_message = FindAndPatchMainExeIAT(
+      "user32.dll", "PeekMessageA",
+      reinterpret_cast<void*>(&HookPeekMessageA),
+      g_peek_message_hook);
+  if (peek_message) {
+    g_original_peek_message_a = reinterpret_cast<PeekMessageAFn>(
+        g_peek_message_hook.original);
+  }
+
+  const bool get_message = FindAndPatchMainExeIAT(
+      "user32.dll", "GetMessageA",
+      reinterpret_cast<void*>(&HookGetMessageA),
+      g_get_message_hook);
+  if (get_message) {
+    g_original_get_message_a = reinterpret_cast<GetMessageAFn>(
+        g_get_message_hook.original);
+  }
+
+  if (!peek_message || !get_message) {
+    RestoreIATHook(g_get_message_hook);
+    RestoreIATHook(g_peek_message_hook);
+    g_original_peek_message_a = nullptr;
+    g_original_get_message_a = nullptr;
+    return false;
+  }
+
+  g_iat_hooks_installed.store(true, std::memory_order_release);
+  return true;
+}
+
+bool InstallHooks() {
+  if (!InstallMessageHooks() || !InstallCLMouseEventHook()) {
+    RestoreIATHook(g_get_message_hook);
+    RestoreIATHook(g_peek_message_hook);
+    g_original_peek_message_a = nullptr;
+    g_original_get_message_a = nullptr;
+    g_iat_hooks_installed.store(false, std::memory_order_release);
+    RemoveCLMouseEventHook();
+
+    if (!g_logged_install_failure.exchange(true, std::memory_order_acq_rel)) {
+      LogWarning(
+          "[MW3 Mouse Fix] Could not install the complete Plutonium-style mouse path; stock input left active rather than partially hooking it.");
+    }
+    return false;
+  }
+
+  return true;
+}
+
+void SetEnabled(bool enabled) {
+  g_enabled.store(enabled, std::memory_order_release);
+  if (!enabled) {
+    g_last_cl_mouse_tick.store(0u, std::memory_order_relaxed);
+    RebaseRawDeltas();
+  }
+}
+
+void Update(HWND hwnd, bool enabled, bool overlay_capturing_mouse) {
+  SetEnabled(enabled);
+
+  const bool previous_overlay = g_overlay_capturing_mouse.exchange(
+      overlay_capturing_mouse,
+      std::memory_order_acq_rel);
+  if (previous_overlay != overlay_capturing_mouse) {
+    RebaseRawDeltas();
+    g_last_cl_mouse_tick.store(0u, std::memory_order_relaxed);
+  }
+
+  const uintptr_t previous_hwnd = g_game_hwnd.exchange(
+      reinterpret_cast<uintptr_t>(hwnd),
+      std::memory_order_acq_rel);
+
+  if (!enabled || hwnd == nullptr) {
+    if (g_raw_registered.load(std::memory_order_acquire)) {
+      RestoreRawMouseRegistration();
+    }
+    RebaseRawDeltas();
+    return;
+  }
+
+  if (!InstallHooks()) return;
+
+  if (!g_raw_registered.load(std::memory_order_acquire)
+      || previous_hwnd != reinterpret_cast<uintptr_t>(hwnd)
+      || g_registered_hwnd != hwnd) {
+    if (g_raw_registered.load(std::memory_order_acquire)) {
+      RestoreRawMouseRegistration();
+    }
+
+    if (!RegisterRawMouse(hwnd)) {
+      LogWarning(
+          "[MW3 Mouse Fix] RegisterRawInputDevices failed; stock mouse path remains active.");
+      return;
+    }
+
+    g_raw_total_x.store(0, std::memory_order_relaxed);
+    g_raw_total_y.store(0, std::memory_order_relaxed);
+    g_raw_report_count.store(0u, std::memory_order_relaxed);
+    RebaseRawDeltas();
+    g_last_cl_mouse_tick.store(0u, std::memory_order_relaxed);
+
+    LogInfo(
+        "[MW3 Mouse Fix] Raw mouse registered with RIDEV_INPUTSINK; high-rate reports will be accumulated and injected directly into CL_MouseEvent.");
+  }
+}
+
+void Shutdown() {
+  g_enabled.store(false, std::memory_order_release);
+  g_overlay_capturing_mouse.store(false, std::memory_order_release);
+  g_last_cl_mouse_tick.store(0u, std::memory_order_relaxed);
+  RebaseRawDeltas();
+
+  RestoreRawMouseRegistration();
+  RemoveCLMouseEventHook();
+
+  RestoreIATHook(g_get_message_hook);
+  RestoreIATHook(g_peek_message_hook);
+  g_original_peek_message_a = nullptr;
+  g_original_get_message_a = nullptr;
+  g_iat_hooks_installed.store(false, std::memory_order_release);
+  g_game_hwnd.store(0u, std::memory_order_release);
+}
+
+}  // namespace cod_high_polling_mouse
+
+
+// ============================================================================
+// MW3 x64 V14 exact render-poll wait replacement
+// ============================================================================
+//
+// Earlier runtime probes identified one hot Present-thread Sleep(1) backoff at
+// return RVA 0x18B895. The call site is:
+//
+//   0x18B88B  mov ecx, 1
+//   0x18B890  call 0x24A410  ; engine Sleep thunk
+//   0x18B895  ...
+//
+// On the tested x64 build that nominal 1 ms sleep frequently consumed ~1-2 ms
+// on the Present thread. V12 can replace only this exact, signature-verified
+// backoff with Sleep(0) or a true busy poll. No other Sleep call is modified.
+namespace mw3_render_poll_wait {
+
+constexpr WORD kExpectedMachine = IMAGE_FILE_MACHINE_AMD64;
+constexpr DWORD kExpectedTimestamp = 0x6A743A58u;
+constexpr DWORD kExpectedSizeOfImage = 0x044BE000u;
+constexpr uintptr_t kPollSleepSiteRva = 0x0018B88Bu;
+
+constexpr std::array<uint8_t, 10> kStockBytes = {
+    0xB9, 0x01, 0x00, 0x00, 0x00,  // mov ecx,1
+    0xE8, 0x7B, 0xEB, 0x0B, 0x00,  // call 0x24A410
+};
+constexpr std::array<uint8_t, 10> kYieldBytes = {
+    0xB9, 0x00, 0x00, 0x00, 0x00,  // mov ecx,0
+    0xE8, 0x7B, 0xEB, 0x0B, 0x00,  // call 0x24A410
+};
+constexpr std::array<uint8_t, 10> kBusyBytes = {
+    0x90, 0x90, 0x90, 0x90, 0x90,
+    0x90, 0x90, 0x90, 0x90, 0x90,
+};
+
+enum class Mode : int {
+  Stock = 0,
+  Yield = 1,
+  Busy = 2,
+};
+
+inline uintptr_t g_exe_base = 0u;
+inline std::atomic<int> g_requested_mode{static_cast<int>(Mode::Stock)};
+inline std::atomic<int> g_applied_mode{-1};
+inline std::atomic<bool> g_warned_signature{false};
+
+void LogInfo(const char* text) {
+  reshade::log::message(reshade::log::level::info, text);
+}
+void LogWarning(const char* text) {
+  reshade::log::message(reshade::log::level::warning, text);
+}
+
+bool VerifyTargetBuild() {
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS64*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE
+      || nt->FileHeader.Machine != kExpectedMachine
+      || nt->FileHeader.TimeDateStamp != kExpectedTimestamp
+      || nt->OptionalHeader.SizeOfImage != kExpectedSizeOfImage) {
+    return false;
+  }
+  g_exe_base = reinterpret_cast<uintptr_t>(module);
+  return true;
+}
+
+bool WriteExecutableBytes(void* address, const uint8_t* bytes, size_t size) {
+  if (address == nullptr || bytes == nullptr || size == 0u) return false;
+  DWORD old_protect = 0u;
+  if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &old_protect)) {
+    return false;
+  }
+  std::memcpy(address, bytes, size);
+  FlushInstructionCache(GetCurrentProcess(), address, size);
+  DWORD ignored = 0u;
+  VirtualProtect(address, size, old_protect, &ignored);
+  return true;
+}
+
+bool IsKnownBytes(const uint8_t* target) {
+  return std::memcmp(target, kStockBytes.data(), kStockBytes.size()) == 0
+      || std::memcmp(target, kYieldBytes.data(), kYieldBytes.size()) == 0
+      || std::memcmp(target, kBusyBytes.data(), kBusyBytes.size()) == 0;
+}
+
+bool ApplyMode(Mode mode) {
+  if (g_exe_base == 0u && !VerifyTargetBuild()) return false;
+  auto* target = reinterpret_cast<uint8_t*>(g_exe_base + kPollSleepSiteRva);
+  if (!IsKnownBytes(target)) {
+    if (!g_warned_signature.exchange(true, std::memory_order_acq_rel)) {
+      LogWarning("[MW3 V14 Busy Wait] exact 0x18B88B Sleep(1) signature mismatch; render-poll wait left stock.");
+    }
+    return false;
+  }
+
+  const auto* wanted = &kStockBytes;
+  if (mode == Mode::Yield) wanted = &kYieldBytes;
+  if (mode == Mode::Busy) wanted = &kBusyBytes;
+
+  if (std::memcmp(target, wanted->data(), wanted->size()) != 0
+      && !WriteExecutableBytes(target, wanted->data(), wanted->size())) {
+    return false;
+  }
+
+  const int previous = g_applied_mode.exchange(static_cast<int>(mode), std::memory_order_acq_rel);
+  if (previous != static_cast<int>(mode)) {
+    if (mode == Mode::Stock) {
+      LogInfo("[MW3 V14 Busy Wait] exact Present-thread render poll restored to stock Sleep(1).");
+    } else if (mode == Mode::Yield) {
+      LogInfo("[MW3 V14 Busy Wait] exact Present-thread render poll now uses Sleep(0) yield instead of Sleep(1).");
+    } else {
+      LogInfo("[MW3 V14 Busy Wait] Plutonium-style busy poll active at exact RVA 0x18B88B; the verified Present-thread Sleep(1) is bypassed.");
+    }
+  }
+  return true;
+}
+
+void SetRequestedMode(int mode) {
+  // V15.1 profiler hardening: never patch executable bytes from settings/DllMain.
+  // The requested state is applied only from the first real native-D3D9 Present.
+  mode = std::clamp(mode, 0, 2);
+  g_requested_mode.store(mode, std::memory_order_release);
+}
+
+void Update() {
+  const int mode = std::clamp(g_requested_mode.load(std::memory_order_acquire), 0, 2);
+  if (g_applied_mode.load(std::memory_order_acquire) != mode) {
+    ApplyMode(static_cast<Mode>(mode));
+  }
+}
+
+void ForceStockForTransition() {
+  ApplyMode(Mode::Stock);
+}
+
+void Shutdown() {
+  if (g_exe_base != 0u) {
+    auto* target = reinterpret_cast<uint8_t*>(g_exe_base + kPollSleepSiteRva);
+    if (IsKnownBytes(target)) {
+      WriteExecutableBytes(target, kStockBytes.data(), kStockBytes.size());
+    }
+  }
+  g_applied_mode.store(-1, std::memory_order_release);
+}
+
+}  // namespace mw3_render_poll_wait
+
+float mw3_render_poll_wait_mode = 0.f;
+
+// ============================================================================
+// MW3 x64 V14 visible-frame pacing
+// ============================================================================
+//
+// V11/V12 disabled MW3's own com_maxfps read and then waited at the native D3D9
+// Present boundary. That improved coarse cadence but made the engine internally
+// behave as if its frame target were 1 ms, while the actual visible frame still
+// had to pass through RenoDX's D3D11 HDR proxy afterwards.
+//
+// V14 keeps MW3's original Com_Frame limiter completely intact. The engine still
+// sees the real com_maxfps value and performs its normal simulation/input timing.
+// We only finish the fractional part of the deadline at the *visible* D3D11 proxy
+// Present. Example at 120 FPS: stock IW5 gets close with its 8 ms integer target;
+// this limiter finishes the frame at 8.333333 ms instead of replacing engine
+// timing with an external 8.333 ms sleep after a 1 ms internal frame.
+namespace mw3_smooth_frame_pacing {
+
+constexpr WORD kExpectedMachine = IMAGE_FILE_MACHINE_AMD64;
+constexpr DWORD kExpectedTimestamp = 0x6A743A58u;
+constexpr DWORD kExpectedSizeOfImage = 0x044BE000u;
+constexpr uintptr_t kComMaxFpsDvarPtrRva = 0x01EFB9E8u;
+constexpr uintptr_t kComFrameMaxFpsReadRva = 0x0023D08Cu;
+constexpr std::array<uint8_t, 3> kComFrameMaxFpsReadOriginal = {
+    0x8B, 0x48, 0x10,  // mov ecx, dword ptr [rax+10h]
+};
+constexpr std::array<uint8_t, 3> kOldExternalBypassBytes = {
+    0x31, 0xC9, 0x90,  // V11/V12 xor ecx,ecx / nop
+};
+
+inline std::atomic<bool> g_enabled{true};
+inline std::atomic<bool> g_logged_active{false};
+inline std::atomic<bool> g_stock_limiter_verified{false};
+inline std::atomic<uintptr_t> g_com_maxfps_dvar{0u};
+inline uintptr_t g_exe_base = 0u;
+
+struct SmoothLimiterState {
+  uint64_t qpc_frequency = 0u;
+  double next_deadline = 0.0;
+  int target_fps = 0;
+  HANDLE timer = nullptr;
+  double wake_error_us = 120.0;
+  bool initialized = false;
+};
+thread_local SmoothLimiterState g_limiter;
+
+void LogInfo(const char* text) {
+  reshade::log::message(reshade::log::level::info,
+                       text != nullptr ? text : "[MW3 V14 Frame Pacing] (null)");
+}
+void LogWarning(const char* text) {
+  reshade::log::message(reshade::log::level::warning,
+                       text != nullptr ? text : "[MW3 V14 Frame Pacing] (null)");
+}
+
+bool IsReadableRange(const void* pointer, size_t size) {
+  if (pointer == nullptr || size == 0u) return false;
+  MEMORY_BASIC_INFORMATION mbi = {};
+  if (VirtualQuery(pointer, &mbi, sizeof(mbi)) == 0u) return false;
+  if (mbi.State != MEM_COMMIT) return false;
+  if ((mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0u) return false;
+  const uintptr_t begin = reinterpret_cast<uintptr_t>(pointer);
+  const uintptr_t end = begin + size;
+  const uintptr_t region_end = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+  return end >= begin && end <= region_end;
+}
+
+bool WriteExecutableBytes(void* address, const uint8_t* bytes, size_t size) {
+  if (address == nullptr || bytes == nullptr || size == 0u) return false;
+  DWORD old_protect = 0u;
+  if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &old_protect)) return false;
+  std::memcpy(address, bytes, size);
+  FlushInstructionCache(GetCurrentProcess(), address, size);
+  DWORD ignored = 0u;
+  VirtualProtect(address, size, old_protect, &ignored);
+  return true;
+}
+
+bool VerifyTargetBuild() {
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS64*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE
+      || nt->FileHeader.Machine != kExpectedMachine
+      || nt->FileHeader.TimeDateStamp != kExpectedTimestamp
+      || nt->OptionalHeader.SizeOfImage != kExpectedSizeOfImage) {
+    return false;
+  }
+  g_exe_base = reinterpret_cast<uintptr_t>(module);
+  return true;
+}
+
+// V13 actively restores the old V11/V12 bypass if this module is hot-reloaded,
+// then keeps the stock instruction untouched for the rest of the process.
+bool EnsureStockComFrameLimiter() {
+  if (g_stock_limiter_verified.load(std::memory_order_acquire)) return true;
+  if (g_exe_base == 0u && !VerifyTargetBuild()) return false;
+  auto* target = reinterpret_cast<uint8_t*>(g_exe_base + kComFrameMaxFpsReadRva);
+  if (std::memcmp(target, kComFrameMaxFpsReadOriginal.data(), kComFrameMaxFpsReadOriginal.size()) == 0) {
+    g_stock_limiter_verified.store(true, std::memory_order_release);
+    return true;
+  }
+  if (std::memcmp(target, kOldExternalBypassBytes.data(), kOldExternalBypassBytes.size()) == 0) {
+    if (!WriteExecutableBytes(target, kComFrameMaxFpsReadOriginal.data(), kComFrameMaxFpsReadOriginal.size())) {
+      return false;
+    }
+    g_stock_limiter_verified.store(true, std::memory_order_release);
+    LogInfo("[MW3 V36 Frame Pacing] restored MW3's native com_maxfps read at RVA 0x23D08C; engine simulation timing is stock again.");
+    return true;
+  }
+  LogWarning("[MW3 V36 Frame Pacing] Com_Frame signature mismatch at RVA 0x23D08C; visible-frame limiter disabled for safety.");
+  return false;
+}
+
+int ReadComMaxFps() {
+  uintptr_t cached = g_com_maxfps_dvar.load(std::memory_order_acquire);
+  if (cached != 0u) {
+    return *reinterpret_cast<const volatile int*>(cached + 0x10u);
+  }
+
+  if (g_exe_base == 0u && !VerifyTargetBuild()) return 0;
+  auto** dvar_slot = reinterpret_cast<uint8_t**>(g_exe_base + kComMaxFpsDvarPtrRva);
+  if (!IsReadableRange(dvar_slot, sizeof(*dvar_slot))) return 0;
+  uint8_t* dvar = *dvar_slot;
+  if (!IsReadableRange(dvar, 0x14u)) return 0;
+  g_com_maxfps_dvar.store(
+      reinterpret_cast<uintptr_t>(dvar), std::memory_order_release);
+  return *reinterpret_cast<const volatile int*>(dvar + 0x10u);
+}
+
+uint64_t QpcNow() {
+  LARGE_INTEGER value = {};
+  QueryPerformanceCounter(&value);
+  return static_cast<uint64_t>(value.QuadPart);
+}
+uint64_t QpcFrequency() {
+  if (g_limiter.qpc_frequency != 0u) return g_limiter.qpc_frequency;
+  LARGE_INTEGER value = {};
+  if (!QueryPerformanceFrequency(&value) || value.QuadPart <= 0) return 0u;
+  g_limiter.qpc_frequency = static_cast<uint64_t>(value.QuadPart);
+  return g_limiter.qpc_frequency;
+}
+
+void ResetLimiter() {
+  g_limiter.next_deadline = 0.0;
+  g_limiter.target_fps = 0;
+  g_limiter.initialized = false;
+  g_limiter.wake_error_us = 120.0;
+}
+
+HANDLE GetLimiterTimer() {
+  if (g_limiter.timer != nullptr) return g_limiter.timer;
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+  HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr,
+      CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_MODIFY_STATE | SYNCHRONIZE);
+  if (timer == nullptr) timer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+  g_limiter.timer = timer;
+  return timer;
+}
+
+void LimitVisibleFrame(int target_fps) {
+  if (target_fps <= 0 || target_fps > 1000) {
+    ResetLimiter();
+    return;
+  }
+  const uint64_t frequency = QpcFrequency();
+  if (frequency == 0u) return;
+  const double period_ticks = static_cast<double>(frequency) / static_cast<double>(target_fps);
+  uint64_t now = QpcNow();
+  auto& state = g_limiter;
+
+  const bool reset = !state.initialized || state.target_fps != target_fps;
+  state.next_deadline = mw3_frame_deadline::Advance(
+      state.next_deadline, static_cast<double>(now), period_ticks, reset);
+  state.initialized = true;
+  state.target_fps = target_fps;
+
+
+  if (state.next_deadline <= static_cast<double>(now)) return;
+
+  mw3_precise_wait::Until(state.next_deadline, frequency, GetLimiterTimer(), state.wake_error_us);
+}
+
+void SetEnabled(bool enabled) {
+  g_enabled.store(enabled, std::memory_order_release);
+  if (enabled && !EnsureStockComFrameLimiter()) {
+    g_enabled.store(false, std::memory_order_release);
+  }
+  if (!enabled) ResetLimiter();
+}
+
+void OnVisibleProxyPresent() {
+  if (!g_enabled.load(std::memory_order_acquire)) return;
+  if (!EnsureStockComFrameLimiter()) return;
+  const int target_fps = ReadComMaxFps();
+  if (target_fps <= 0) {
+    ResetLimiter();
+    return;
+  }
+  if (!g_logged_active.exchange(true, std::memory_order_acq_rel)) {
+    LogInfo("[MW3 Adaptive Frame Pacing] visible proxy pacing active; adaptive timer + spin finish; late frames pass immediately; native com_maxfps retained.");
+  }
+  LimitVisibleFrame(target_fps);
+}
+
+void Shutdown() {
+  g_enabled.store(false, std::memory_order_release);
+  EnsureStockComFrameLimiter();
+  g_com_maxfps_dvar.store(0u, std::memory_order_release);
+  if (g_limiter.timer != nullptr) {
+    CloseHandle(g_limiter.timer);
+    g_limiter.timer = nullptr;
+  }
+  ResetLimiter();
+  g_logged_active.store(false, std::memory_order_release);
+}
+
+}  // namespace mw3_smooth_frame_pacing
+
+float mw3_smooth_frame_pacing_enabled = 1.f;
+float mw3_iwd_stream_cache_mode = 1.f;
+float mw3_crt_iwd_fast_read_enabled = 1.f;
+float mw3_zlibng_iwd_inflate_enabled = 1.f;
+float mw3_backend_sleep1_yield_enabled = 1.f;
+float mw3_renderer_sleep1_precise_enabled = 1.f;
+float mw3_renderer_wait1_precise_enabled = 1.f;
+float mw3_archive_burst_wait_coalesce_enabled = 1.f;
+float mw3_archive_thread_priority_boost_enabled = 1.f;
+float mw3_preload_shaders_enabled = 1.f;
+
+// ============================================================================
+// V14 exact D3D9 query polling patches
+// ============================================================================
+namespace mw3_query_polling {
+constexpr WORD kExpectedMachine = IMAGE_FILE_MACHINE_AMD64;
+constexpr DWORD kExpectedTimestamp = 0x6A743A58u;
+constexpr DWORD kExpectedSizeOfImage = 0x044BE000u;
+constexpr std::array<uintptr_t, 5> kSafeRvas = {
+    0x00186672u, 0x001E91EAu, 0x001E92A6u, 0x001E931Au, 0x001E9746u};
+constexpr std::array<uintptr_t, 2> kRingRvas = {0x001BD696u, 0x001BE748u};
+constexpr std::array<uint8_t, 10> kStock = {
+    0x41,0xB9,0x01,0x00,0x00,0x00,0x45,0x8D,0x41,0x03};
+constexpr std::array<uint8_t, 10> kNoFlush = {
+    0x45,0x33,0xC9,0x41,0xB8,0x04,0x00,0x00,0x00,0x90};
+inline uintptr_t g_base = 0u;
+inline std::atomic<int> g_requested_mode{0};
+inline std::atomic<int> g_applied_mode{-1};
+inline std::atomic<bool> g_warned{false};
+
+bool Verify() {
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (!module) return false;
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS64*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE || nt->FileHeader.Machine != kExpectedMachine
+      || nt->FileHeader.TimeDateStamp != kExpectedTimestamp
+      || nt->OptionalHeader.SizeOfImage != kExpectedSizeOfImage) return false;
+  g_base = reinterpret_cast<uintptr_t>(module);
+  return true;
+}
+
+bool WriteBytes(uintptr_t rva, const std::array<uint8_t,10>& wanted) {
+  if (g_base == 0u && !Verify()) return false;
+  auto* target = reinterpret_cast<uint8_t*>(g_base + rva);
+  const bool known = std::memcmp(target,kStock.data(),kStock.size()) == 0
+      || std::memcmp(target,kNoFlush.data(),kNoFlush.size()) == 0;
+  if (!known) return false;
+  if (std::memcmp(target,wanted.data(),wanted.size()) == 0) return true;
+  DWORD oldp=0;
+  if (!VirtualProtect(target,wanted.size(),PAGE_EXECUTE_READWRITE,&oldp)) return false;
+  std::memcpy(target,wanted.data(),wanted.size());
+  FlushInstructionCache(GetCurrentProcess(),target,wanted.size());
+  DWORD ignored=0; VirtualProtect(target,wanted.size(),oldp,&ignored);
+  return true;
+}
+
+bool Apply(int mode) {
+  mode = std::clamp(mode,0,2);
+  if (g_base == 0u && !Verify()) return false;
+  bool ok=true;
+  for (auto rva : kSafeRvas) ok &= WriteBytes(rva, mode >= 1 ? kNoFlush : kStock);
+  for (auto rva : kRingRvas) ok &= WriteBytes(rva, mode >= 2 ? kNoFlush : kStock);
+  if (!ok) {
+    if (!g_warned.exchange(true,std::memory_order_acq_rel))
+      reshade::log::message(reshade::log::level::warning,
+          "[MW3 V14 Query Polling] one or more exact GetData signatures did not match; unknown sites were left untouched.");
+    return false;
+  }
+  const int old=g_applied_mode.exchange(mode,std::memory_order_acq_rel);
+  if (old != mode) {
+    const char* text = mode == 0
+      ? "[MW3 V14 Query Polling] stock D3DGETDATA_FLUSH restored at all 7 verified poll sites."
+      : mode == 1
+      ? "[MW3 V14 Query Polling] safe mode: 5 non-blocking query polls use GetData flags=0; renderer query-ring polls remain stock."
+      : "[MW3 V14 Query Polling] aggressive mode: safe + 2 renderer query-ring polls use GetData flags=0.";
+    reshade::log::message(reshade::log::level::info,text);
+  }
+  return true;
+}
+void SetRequestedMode(int mode) {
+  // V15.1 profiler hardening: defer all code-byte changes until native D3D9 Present.
+  g_requested_mode.store(std::clamp(mode,0,2),std::memory_order_release);
+}
+void Update() { int m=g_requested_mode.load(std::memory_order_acquire); if (g_applied_mode.load(std::memory_order_acquire)!=m) Apply(m); }
+void ForceStockForTransition() { Apply(0); }
+void Shutdown() { if (g_base!=0u) { for(auto r:kSafeRvas) WriteBytes(r,kStock); for(auto r:kRingRvas) WriteBytes(r,kStock); } g_applied_mode.store(-1,std::memory_order_release); }
+
+} // namespace mw3_query_polling
+
+float mw3_query_polling_mode = 0.f;
+
+// ============================================================================
+// V14 blocking D3D9 event-query retry yield
+// ============================================================================
+//
+// A verified x64 event-query path retries IDirect3DQuery9::GetData while the
+// real result is still S_FALSE. Older experiments proved there is a 12-byte
+// alignment cave that can safely route the retry through the engine's Sleep
+// thunk before looping back. V14 uses Sleep(0), not Sleep(1): this yields the
+// CPU to a runnable renderer/driver thread without adding a coarse millisecond
+// delay. Query completion is never faked and D3DGETDATA_FLUSH remains intact
+// for this genuinely blocking path.
+namespace mw3_blocking_query_yield {
+
+constexpr WORD kExpectedMachine = IMAGE_FILE_MACHINE_AMD64;
+constexpr DWORD kExpectedTimestamp = 0x6A743A58u;
+constexpr DWORD kExpectedSizeOfImage = 0x044BE000u;
+constexpr uintptr_t kCaveRva = 0x001DAE54u;
+constexpr uintptr_t kBranchRva = 0x001DAE9Fu;
+
+constexpr std::array<uint8_t, 12> kCaveStock = {
+    0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0xCC,0xCC};
+constexpr std::array<uint8_t, 12> kCaveYield1 = {
+    0xB9,0x01,0x00,0x00,0x00,0xE8,0xB2,0xF5,0x06,0x00,0xEB,0x14};
+constexpr std::array<uint8_t, 12> kCaveYield0 = {
+    0xB9,0x00,0x00,0x00,0x00,0xE8,0xB2,0xF5,0x06,0x00,0xEB,0x14};
+constexpr std::array<uint8_t, 2> kBranchStock = {0x74,0xD3};
+constexpr std::array<uint8_t, 2> kBranchYield = {0x74,0xB3};
+
+inline uintptr_t g_base = 0u;
+inline std::atomic<bool> g_enabled{true};
+inline std::atomic<int> g_applied{-1};
+inline std::atomic<bool> g_warned{false};
+
+bool Verify() {
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS64*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE
+      || nt->FileHeader.Machine != kExpectedMachine
+      || nt->FileHeader.TimeDateStamp != kExpectedTimestamp
+      || nt->OptionalHeader.SizeOfImage != kExpectedSizeOfImage) {
+    return false;
+  }
+  g_base = reinterpret_cast<uintptr_t>(module);
+  return true;
+}
+
+template <size_t N>
+bool WriteKnown(
+    uintptr_t rva,
+    const std::array<uint8_t, N>& wanted,
+    std::initializer_list<const std::array<uint8_t, N>*> known) {
+  if (g_base == 0u && !Verify()) return false;
+  auto* target = reinterpret_cast<uint8_t*>(g_base + rva);
+  bool is_known = false;
+  for (const auto* bytes : known) {
+    if (bytes != nullptr
+        && std::memcmp(target, bytes->data(), bytes->size()) == 0) {
+      is_known = true;
+      break;
+    }
+  }
+  if (!is_known) return false;
+  if (std::memcmp(target, wanted.data(), wanted.size()) == 0) return true;
+
+  DWORD old_protect = 0u;
+  if (!VirtualProtect(
+          target, wanted.size(), PAGE_EXECUTE_READWRITE, &old_protect)) {
+    return false;
+  }
+  std::memcpy(target, wanted.data(), wanted.size());
+  FlushInstructionCache(GetCurrentProcess(), target, wanted.size());
+  DWORD ignored = 0u;
+  VirtualProtect(target, wanted.size(), old_protect, &ignored);
+  return true;
+}
+
+bool Apply(bool enabled) {
+  if (g_base == 0u && !Verify()) return false;
+
+  bool ok = true;
+  if (enabled) {
+    // Write the cave first; the original branch still cannot reach it.
+    ok &= WriteKnown(
+        kCaveRva,
+        kCaveYield0,
+        {&kCaveStock, &kCaveYield0, &kCaveYield1});
+    if (ok) {
+      ok &= WriteKnown(
+          kBranchRva,
+          kBranchYield,
+          {&kBranchStock, &kBranchYield});
+    }
+  } else {
+    // Stop routing into the cave first, then restore the unused cave bytes.
+    ok &= WriteKnown(
+        kBranchRva,
+        kBranchStock,
+        {&kBranchStock, &kBranchYield});
+    if (ok) {
+      ok &= WriteKnown(
+          kCaveRva,
+          kCaveStock,
+          {&kCaveStock, &kCaveYield0, &kCaveYield1});
+    }
+  }
+
+  if (!ok) {
+    if (!g_warned.exchange(true, std::memory_order_acq_rel)) {
+      reshade::log::message(
+          reshade::log::level::warning,
+          "[MW3 V14 Query Yield] exact blocking-query signature mismatch; retry loop left unchanged.");
+    }
+    return false;
+  }
+
+  const int wanted = enabled ? 1 : 0;
+  const int old = g_applied.exchange(wanted, std::memory_order_acq_rel);
+  if (old != wanted) {
+    reshade::log::message(
+        reshade::log::level::info,
+        enabled
+            ? "[MW3 V14 Query Yield] blocking GetData S_FALSE retry now yields with Sleep(0); real GPU completion and FLUSH semantics are preserved."
+            : "[MW3 V14 Query Yield] blocking GetData retry restored to stock tight loop.");
+  }
+  return true;
+}
+
+void SetEnabled(bool enabled) {
+  // V15.1 profiler hardening: defer the optional code-cave/branch patch until
+  // native D3D9 Present. Default is stock/off in the profiler build.
+  g_enabled.store(enabled, std::memory_order_release);
+}
+
+void Update() {
+  const bool enabled = g_enabled.load(std::memory_order_acquire);
+  const int wanted = enabled ? 1 : 0;
+  if (g_applied.load(std::memory_order_acquire) != wanted) {
+    Apply(enabled);
+  }
+}
+
+void ForceStockForTransition() {
+  Apply(false);
+}
+
+void Shutdown() {
+  if (g_base != 0u) {
+    Apply(false);
+  }
+  g_applied.store(-1, std::memory_order_release);
+}
+
+}  // namespace mw3_blocking_query_yield
+
+float mw3_blocking_query_yield_enabled = 0.f;
+
+// ============================================================================
+// V14 RenoDX HDR proxy queue latency
+// ============================================================================
+namespace mw3_proxy_latency {
+inline std::atomic<int> g_mode{1}; // 0=DXGI default(3), 1=1 frame, 2=2 frames
+inline std::atomic<uintptr_t> g_last_device{0u};
+inline std::atomic<int> g_last_latency{-1};
+inline std::atomic<bool> g_warned{false};
+
+int RequestedLatency() {
+  const int mode=std::clamp(g_mode.load(std::memory_order_acquire),0,2);
+  return mode==0 ? 3 : mode;
+}
+void SetMode(int mode) { g_mode.store(std::clamp(mode,0,2),std::memory_order_release); g_last_latency.store(-1,std::memory_order_release); }
+void Update(reshade::api::device* device) {
+  if (device == nullptr || device->get_api()!=reshade::api::device_api::d3d11) return;
+  auto* native=reinterpret_cast<ID3D11Device*>(device->get_native());
+  if (native==nullptr) return;
+  const uintptr_t key=reinterpret_cast<uintptr_t>(native);
+  const int latency=RequestedLatency();
+  if (g_last_device.load(std::memory_order_acquire)==key
+      && g_last_latency.load(std::memory_order_acquire)==latency) return;
+  IDXGIDevice1* dxgi=nullptr;
+  const HRESULT qi=native->QueryInterface(__uuidof(IDXGIDevice1),reinterpret_cast<void**>(&dxgi));
+  if (FAILED(qi) || dxgi==nullptr) {
+    if (!g_warned.exchange(true,std::memory_order_acq_rel))
+      reshade::log::message(reshade::log::level::warning,"[MW3 V14 Proxy] IDXGIDevice1 unavailable; frame-latency queue left unchanged.");
+    return;
+  }
+  const HRESULT hr=dxgi->SetMaximumFrameLatency(static_cast<UINT>(latency));
+  dxgi->Release();
+  if (FAILED(hr)) {
+    if (!g_warned.exchange(true,std::memory_order_acq_rel))
+      reshade::log::message(reshade::log::level::warning,"[MW3 V14 Proxy] SetMaximumFrameLatency failed; proxy queue left unchanged.");
+    return;
+  }
+  g_last_device.store(key,std::memory_order_release);
+  g_last_latency.store(latency,std::memory_order_release);
+  char msg[160] = {};
+  std::snprintf(msg,sizeof(msg),"[MW3 V14 Proxy] D3D11 HDR proxy maximum frame latency = %d.",latency);
+  reshade::log::message(reshade::log::level::info,msg);
+}
+void Shutdown() { g_last_device.store(0u,std::memory_order_release); g_last_latency.store(-1,std::memory_order_release); }
+} // namespace mw3_proxy_latency
+
+float mw3_proxy_latency_mode = 1.f;
+float mw3_streamed_audio_pretouch = 0.f;
+float mw3_native_fps_limit = 120.f;
+std::atomic<int> g_mw3_audio_pretouch_applied{-1};
+std::atomic<int> g_mw3_preload_shaders_applied{-1};
+std::atomic<int> g_mw3_native_fps_limit_applied{-1};
+
+float cod_high_polling_mouse_fix = 1.f;
+
+// Track the ReShade overlay through the add-on API instead of calling
+// ImGui::GetCurrentContext() from Present. The RenoDX target does not export
+// that ImGui symbol, which caused an lld-link failure in the full-smoothness
+// builds. Returning false preserves ReShade's normal open/close behavior.
+std::atomic<bool> g_reshade_overlay_open{false};
+
+bool OnReShadeOpenOverlay(
+    reshade::api::effect_runtime* runtime,
+    bool open,
+    reshade::api::input_source source) {
+  (void)runtime;
+  (void)source;
+  g_reshade_overlay_open.store(open, std::memory_order_release);
+  return false;
+}
+
 
 void MW3MicrostutterLog(
     mw3_microstutter::LogLevel level,
@@ -1775,11 +3207,6 @@ constexpr bool DX9_READBACK_ENCODE_SRGB = true;
 // readback consumer requires an opaque X8/A8 surface.
 constexpr bool DX9_READBACK_FORCE_OPAQUE_ALPHA = false;
 
-// Optional hue-preserving highlight compression for screenshot-like consumers.
-// MW3 has no photomode and this readback may feed internal game code, so keep it
-// OFF by default to preserve the game's original 8-bit clamp behavior.
-constexpr bool DX9_READBACK_COMPRESS_HDR_HIGHLIGHTS = false;
-
 thread_local bool g_inside_dx9_replacement_copy = false;
 
 uint32_t g_dx9_readback_success_logs = 0;
@@ -1787,11 +3214,9 @@ uint32_t g_dx9_readback_failure_logs = 0;
 uint32_t g_dx9_chain_logs = 0;
 uint32_t g_dx9_gpu_blit_success_logs = 0;
 uint32_t g_dx9_gpu_blit_failure_logs = 0;
-uint32_t g_dx9_texture_to_buffer_logs = 0;
 
 struct DX9NativeReadbackBlitCache {
   reshade::api::device* device = nullptr;
-  IDirect3DVertexShader9* vertex_shader = nullptr;
   IDirect3DPixelShader9* pixel_shader = nullptr;
   IDirect3DStateBlock9* state_block = nullptr;
   IDirect3DTexture9* sampling_texture = nullptr;
@@ -2319,10 +3744,6 @@ void ReleaseDX9NativeReadbackCacheUnlocked() {
     cache.pixel_shader->Release();
     cache.pixel_shader = nullptr;
   }
-  if (cache.vertex_shader != nullptr) {
-    cache.vertex_shader->Release();
-    cache.vertex_shader = nullptr;
-  }
 
   cache = {};
 }
@@ -2383,91 +3804,6 @@ IDirect3DTexture9* GetDX9TextureFromResource(reshade::api::resource resource) {
   return texture;
 }
 
-bool EnsureDX9NativeReadbackVertexShader(
-    IDirect3DDevice9* d3d_device,
-    DX9NativeReadbackBlitCache& cache) {
-  if (cache.vertex_shader != nullptr) return true;
-  if (d3d_device == nullptr) return false;
-
-  auto* compile = GetDX9D3DCompile();
-  if (compile == nullptr) return false;
-
-  // A real vs_3_0 is used instead of relying on fixed-function XYZRHW state.
-  // This mirrors the explicit VS+PS fullscreen blit used by the newer RenoDX
-  // readback implementations, while remaining valid on native D3D9.
-  static constexpr char VERTEX_SHADER_SOURCE[] = R"hlsl(
-    struct VSInput
-    {
-        float3 position : POSITION0;
-        float2 texCoord : TEXCOORD0;
-    };
-
-    struct VSOutput
-    {
-        float4 position : POSITION0;
-        float2 texCoord : TEXCOORD0;
-    };
-
-    VSOutput main(VSInput input)
-    {
-        VSOutput output;
-        output.position = float4(input.position, 1.0);
-        output.texCoord = input.texCoord;
-        return output;
-    }
-  )hlsl";
-
-  ID3DBlob* shader_blob = nullptr;
-  ID3DBlob* error_blob = nullptr;
-  const HRESULT compile_hr = compile(
-      VERTEX_SHADER_SOURCE,
-      sizeof(VERTEX_SHADER_SOURCE) - 1u,
-      "renodx_dx9_readback_blit_vs",
-      nullptr,
-      nullptr,
-      "main",
-      "vs_3_0",
-      D3DCOMPILE_OPTIMIZATION_LEVEL3,
-      0u,
-      &shader_blob,
-      &error_blob);
-
-  if (FAILED(compile_hr) || shader_blob == nullptr) {
-    if (g_dx9_gpu_blit_failure_logs < 8u) {
-      ++g_dx9_gpu_blit_failure_logs;
-      std::stringstream stream;
-      stream << "[RenoDX DX9 Readback] Failed to compile native vs_3_0 readback blit";
-      stream << " (hr=0x" << std::hex << static_cast<uint32_t>(compile_hr) << std::dec << ")";
-      if (error_blob != nullptr && error_blob->GetBufferPointer() != nullptr) {
-        stream << ": " << static_cast<const char*>(error_blob->GetBufferPointer());
-      }
-      reshade::log::message(reshade::log::level::warning, stream.str().c_str());
-    }
-    if (error_blob != nullptr) error_blob->Release();
-    if (shader_blob != nullptr) shader_blob->Release();
-    return false;
-  }
-
-  const HRESULT create_hr = d3d_device->CreateVertexShader(
-      static_cast<const DWORD*>(shader_blob->GetBufferPointer()),
-      &cache.vertex_shader);
-
-  if (error_blob != nullptr) error_blob->Release();
-  shader_blob->Release();
-
-  if (FAILED(create_hr) || cache.vertex_shader == nullptr) {
-    if (g_dx9_gpu_blit_failure_logs < 8u) {
-      ++g_dx9_gpu_blit_failure_logs;
-      reshade::log::message(
-          reshade::log::level::warning,
-          "[RenoDX DX9 Readback] Failed to create native D3D9 vertex shader");
-    }
-    return false;
-  }
-
-  return true;
-}
-
 bool EnsureDX9NativeReadbackShader(
     IDirect3DDevice9* d3d_device,
     DX9NativeReadbackBlitCache& cache) {
@@ -2485,13 +3821,11 @@ bool EnsureDX9NativeReadbackShader(
     return false;
   }
 
-  // Convert the linear HDR clone to an SDR-safe readback. Highlight compression
-  // happens before sRGB encoding, preserving highlight hue better than per-channel
-  // clipping while keeping the operation small enough for ps_3_0.
+  // Matches the old CPU fallback: clamp to SDR, encode linear RGB to sRGB, and
+  // preserve alpha unless the destination is an X8 surface.
   static constexpr char PIXEL_SHADER_SOURCE[] = R"hlsl(
     sampler2D SourceSampler : register(s0);
-    // x = force opaque alpha, y = encode sRGB, z = compress HDR highlights
-    float4 ReadbackOptions : register(c0);
+    float4 ReadbackOptions : register(c0); // x = force opaque alpha
 
     float3 LinearToSRGB(float3 linearColor)
     {
@@ -2507,14 +3841,7 @@ bool EnsureDX9NativeReadbackShader(
     float4 main(float2 texCoord : TEXCOORD0) : COLOR0
     {
         float4 color = tex2D(SourceSampler, texCoord);
-        float3 linearRGB = max(color.rgb, 0.0);
-
-        float peak = max(linearRGB.r, max(linearRGB.g, linearRGB.b));
-        float compressionScale = rcp(max(peak, 1.0));
-        float3 compressedRGB = linearRGB * compressionScale;
-        linearRGB = lerp(linearRGB, compressedRGB, saturate(ReadbackOptions.z));
-        linearRGB = saturate(linearRGB);
-
+        float3 linearRGB = saturate(color.rgb);
         float3 encodedRGB = LinearToSRGB(linearRGB);
         color.rgb = lerp(linearRGB, encodedRGB, saturate(ReadbackOptions.y));
         color.a = lerp(saturate(color.a), 1.0, saturate(ReadbackOptions.x));
@@ -2673,6 +4000,7 @@ struct DX9FullscreenVertex {
   float x;
   float y;
   float z;
+  float rhw;
   float u;
   float v;
 };
@@ -2680,6 +4008,7 @@ struct DX9FullscreenVertex {
 bool BlitDX9CloneToOriginalSDR(
     reshade::api::device* device,
     const DX9CopyEndpoint& source_endpoint) {
+
   if (!DX9_READBACK_GPU_BLIT_ENABLED || device == nullptr) return false;
   if (!source_endpoint.has_clone
       || !source_endpoint.clone_enabled
@@ -2715,8 +4044,7 @@ bool BlitDX9CloneToOriginalSDR(
     cache.device = device;
   }
 
-  if (!EnsureDX9NativeReadbackVertexShader(d3d_device, cache)
-      || !EnsureDX9NativeReadbackShader(d3d_device, cache)
+  if (!EnsureDX9NativeReadbackShader(d3d_device, cache)
       || !EnsureDX9NativeReadbackStateBlock(d3d_device, cache)) {
     return false;
   }
@@ -2746,19 +4074,8 @@ bool BlitDX9CloneToOriginalSDR(
 
   IDirect3DSurface9* old_render_target = nullptr;
   IDirect3DSurface9* old_depth_stencil = nullptr;
-  IDirect3DVertexBuffer9* old_stream0 = nullptr;
-  IDirect3DIndexBuffer9* old_indices = nullptr;
-  IDirect3DVertexDeclaration9* old_vertex_declaration = nullptr;
-  UINT old_stream0_offset = 0u;
-  UINT old_stream0_stride = 0u;
-
   d3d_device->GetRenderTarget(0u, &old_render_target);
   d3d_device->GetDepthStencilSurface(&old_depth_stencil);
-  const HRESULT old_stream0_hr = d3d_device->GetStreamSource(
-      0u, &old_stream0, &old_stream0_offset, &old_stream0_stride);
-  const HRESULT old_indices_hr = d3d_device->GetIndices(&old_indices);
-  const HRESULT old_vertex_decl_hr =
-      d3d_device->GetVertexDeclaration(&old_vertex_declaration);
 
   const uint32_t width = source_endpoint.original_desc.texture.width;
   const uint32_t height = source_endpoint.original_desc.texture.height;
@@ -2771,21 +4088,16 @@ bool BlitDX9CloneToOriginalSDR(
       1.0f,
   };
 
-  // D3D9 rasterization has the classic half-pixel center convention. Express
-  // the old -0.5-pixel screen-space quad in clip space so the programmable VS
-  // samples exactly the same texels without a half-pixel blur/shift.
-  const float inv_width = 1.0f / static_cast<float>(width);
-  const float inv_height = 1.0f / static_cast<float>(height);
-  const float left = -1.0f - inv_width;
-  const float right = 1.0f - inv_width;
-  const float top = 1.0f + inv_height;
-  const float bottom = -1.0f + inv_height;
-
   const DX9FullscreenVertex vertices[4] = {
-      {left, top, 0.0f, 0.0f, 0.0f},
-      {right, top, 0.0f, 1.0f, 0.0f},
-      {left, bottom, 0.0f, 0.0f, 1.0f},
-      {right, bottom, 0.0f, 1.0f, 1.0f},
+      {-0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f},
+      {static_cast<float>(width) - 0.5f, -0.5f, 0.0f, 1.0f, 1.0f, 0.0f},
+      {-0.5f, static_cast<float>(height) - 0.5f, 0.0f, 1.0f, 0.0f, 1.0f},
+      {static_cast<float>(width) - 0.5f,
+       static_cast<float>(height) - 0.5f,
+       0.0f,
+       1.0f,
+       1.0f,
+       1.0f},
   };
 
   const float shader_options[4] = {
@@ -2794,7 +4106,7 @@ bool BlitDX9CloneToOriginalSDR(
           ? 1.0f
           : 0.0f,
       DX9_READBACK_ENCODE_SRGB ? 1.0f : 0.0f,
-      DX9_READBACK_COMPRESS_HDR_HIGHLIGHTS ? 1.0f : 0.0f,
+      0.0f,
       0.0f,
   };
 
@@ -2810,18 +4122,14 @@ bool BlitDX9CloneToOriginalSDR(
     // game is already inside a scene, so drawing may proceed normally.
     const HRESULT begin_scene_hr = d3d_device->BeginScene();
     began_scene = SUCCEEDED(begin_scene_hr);
-    if (FAILED(begin_scene_hr) && begin_scene_hr != D3DERR_INVALIDCALL) {
-      draw_hr = begin_scene_hr;
-    }
 
-    if (SUCCEEDED(draw_hr)
-        && (FAILED(d3d_device->SetRenderTarget(0u, destination_surface))
+    if (FAILED(d3d_device->SetRenderTarget(0u, destination_surface))
         || FAILED(d3d_device->SetDepthStencilSurface(nullptr))
         || FAILED(d3d_device->SetViewport(&viewport))
-        || FAILED(d3d_device->SetVertexShader(cache.vertex_shader))
+        || FAILED(d3d_device->SetVertexShader(nullptr))
         || FAILED(d3d_device->SetPixelShader(cache.pixel_shader))
-        || FAILED(d3d_device->SetFVF(D3DFVF_XYZ | D3DFVF_TEX1))
-        || FAILED(d3d_device->SetTexture(0u, source_texture)))) {
+        || FAILED(d3d_device->SetFVF(D3DFVF_XYZRHW | D3DFVF_TEX1))
+        || FAILED(d3d_device->SetTexture(0u, source_texture))) {
       draw_hr = E_FAIL;
     }
 
@@ -2870,24 +4178,6 @@ bool BlitDX9CloneToOriginalSDR(
   d3d_device->SetDepthStencilSurface(old_depth_stencil);
   cache.state_block->Apply();
 
-  // DrawPrimitiveUP clears stream 0 after the draw. State blocks are not a
-  // reliable way to restore stream/index bindings on all D3D9 runtimes, so put
-  // these back explicitly. This avoids a subtle post-readback rendering crash
-  // or missing-geometry failure when the game reuses its previous bindings.
-  if (SUCCEEDED(old_stream0_hr)) {
-    d3d_device->SetStreamSource(
-        0u, old_stream0, old_stream0_offset, old_stream0_stride);
-  }
-  if (SUCCEEDED(old_indices_hr)) {
-    d3d_device->SetIndices(old_indices);
-  }
-  if (SUCCEEDED(old_vertex_decl_hr) && old_vertex_declaration != nullptr) {
-    d3d_device->SetVertexDeclaration(old_vertex_declaration);
-  }
-
-  if (old_vertex_declaration != nullptr) old_vertex_declaration->Release();
-  if (old_indices != nullptr) old_indices->Release();
-  if (old_stream0 != nullptr) old_stream0->Release();
   if (old_depth_stencil != nullptr) old_depth_stencil->Release();
   if (old_render_target != nullptr) old_render_target->Release();
   destination_surface->Release();
@@ -2996,12 +4286,12 @@ DX9GPUReadbackResult TryHandleDX9ReadbackOnGPU(
   return DX9GPUReadbackResult::REPLACED_COPY;
 }
 
-void DestroyDX9ReadbackStagingForDevice(reshade::api::device* device);
-
 void OnInitDeviceDX9NativeReadback(reshade::api::device* device) {
+
   if (device == nullptr || device->get_api() != reshade::api::device_api::d3d9) {
     return;
   }
+
 
   std::scoped_lock lock(g_dx9_native_readback_mutex);
   if (g_dx9_native_readback_cache.device != device) {
@@ -3011,18 +4301,13 @@ void OnInitDeviceDX9NativeReadback(reshade::api::device* device) {
 }
 
 void OnDestroyDeviceDX9NativeReadback(reshade::api::device* device) {
+
   if (device == nullptr) return;
 
-  {
-    std::scoped_lock lock(g_dx9_native_readback_mutex);
-    if (g_dx9_native_readback_cache.device == device) {
-      ReleaseDX9NativeReadbackCacheUnlocked();
-    }
+  std::scoped_lock lock(g_dx9_native_readback_mutex);
+  if (g_dx9_native_readback_cache.device == device) {
+    ReleaseDX9NativeReadbackCacheUnlocked();
   }
-
-  // The CPU fallback is cached too. Clear it on D3D9 Reset/device teardown so
-  // a later readback can never reuse a resource from the previous device state.
-  DestroyDX9ReadbackStagingForDevice(device);
 }
 
 // Reusable CPU-visible FP16 staging surface for GetRenderTargetData.
@@ -3106,14 +4391,6 @@ void InvalidateDX9ReadbackStaging(reshade::api::device* device) {
   }
 
   cache = {};
-}
-
-void DestroyDX9ReadbackStagingForDevice(reshade::api::device* device) {
-  if (device == nullptr) return;
-  std::scoped_lock lock(g_dx9_readback_staging_mutex);
-  if (g_dx9_readback_staging_cache.device == device) {
-    InvalidateDX9ReadbackStaging(device);
-  }
 }
 
 void ClearDX9ReadbackStagingCache() {
@@ -3247,87 +4524,11 @@ bool TryConvertDX9FloatReadbackToSDR(
   return true;
 }
 
-bool OnDX9CopyTextureToBuffer(
-    reshade::api::command_list* cmd_list,
-    reshade::api::resource source,
-    uint32_t source_subresource,
-    const reshade::api::subresource_box* source_box,
-    reshade::api::resource dest,
-    uint64_t dest_offset,
-    uint32_t row_length,
-    uint32_t slice_height) {
-  if (!DX9_READBACK_FIX_ENABLED
-      || g_inside_dx9_replacement_copy
-      || cmd_list == nullptr
-      || source.handle == 0u
-      || dest.handle == 0u
-      || source_subresource != 0u) {
-    return false;
-  }
-
-  auto* device = cmd_list->get_device();
-  if (device == nullptr
-      || device->get_api() != reshade::api::device_api::d3d9) {
-    return false;
-  }
-
-  const DX9CopyEndpoint source_endpoint =
-      ResolveDX9CopyEndpoint(device, source);
-
-  // Match the Starfield/Infinity Nikki readback contract: only intercept when
-  // the application's source is the ORIGINAL tracked SDR resource. Refresh it
-  // from the live HDR clone, then return false so ReShade/game performs its
-  // original texture->buffer readback with the same boxes/offset/pitch rules.
-  // Do not replace the buffer copy itself; doing so would duplicate backend-
-  // specific packing logic that ReShade already handles correctly.
-  if (!source_endpoint.has_live_tracking
-      || source_endpoint.input_is_clone
-      || !source_endpoint.has_clone
-      || !source_endpoint.clone_enabled
-      || source_endpoint.clone.handle == 0u
-      || source_endpoint.original.handle != source.handle
-      || !IsTextureResource(source_endpoint.original_desc)
-      || !IsFloat16RGBA(source_endpoint.clone_desc.texture.format)
-      || !IsSupportedSDRReadbackFormat(
-          source_endpoint.original_desc.texture.format)
-      || !SameTextureExtent(
-          source_endpoint.clone_desc,
-          source_endpoint.original_desc)) {
-    return false;
-  }
-
-  (void)source_box;  // The SDR refresh is whole-surface; the real copy keeps the box.
-
-  if (!BlitDX9CloneToOriginalSDR(device, source_endpoint)) {
-    return false;
-  }
-
-  if (g_dx9_texture_to_buffer_logs < 8u) {
-    ++g_dx9_texture_to_buffer_logs;
-    std::stringstream stream;
-    stream << "[RenoDX DX9 Readback] Refreshed original SDR source for "
-              "copy_texture_to_buffer";
-    stream << " (" << source_endpoint.clone_desc.texture.format;
-    stream << " -> " << source_endpoint.original_desc.texture.format;
-    stream << ", " << source_endpoint.original_desc.texture.width;
-    stream << "x" << source_endpoint.original_desc.texture.height;
-    stream << ", dest_offset=" << dest_offset;
-    stream << ", row_length=" << row_length;
-    stream << ", slice_height=" << slice_height << ")";
-    reshade::log::message(
-        reshade::log::level::info,
-        stream.str().c_str());
-  }
-
-  // Important: false means "continue the application's original readback".
-  // The source now contains a valid SDR rendering of the HDR clone.
-  return false;
-}
-
 bool OnDX9CopyResource(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     reshade::api::resource dest) {
+
   if (!DX9_READBACK_FIX_ENABLED
       || g_inside_dx9_replacement_copy
       || cmd_list == nullptr
@@ -3405,6 +4606,7 @@ bool OnDX9CopyTextureRegion(
     uint32_t dest_subresource,
     const reshade::api::subresource_box* dest_box,
     reshade::api::filter_mode filter) {
+
   if (!DX9_READBACK_FIX_ENABLED
       || g_inside_dx9_replacement_copy
       || cmd_list == nullptr
@@ -3480,6 +4682,7 @@ bool OnDX9ResolveTextureRegion(
     uint32_t dest_y,
     uint32_t dest_z,
     reshade::api::format format) {
+
   if (!DX9_READBACK_FIX_ENABLED
       || g_inside_dx9_replacement_copy
       || cmd_list == nullptr
@@ -3948,16 +5151,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1;},
     },
-          new renodx::utils::settings::Setting{
-        .key = "FPSLimit",
-        .binding = &renodx::utils::swapchain::fps_limit,
-        .default_value = 60.f,
-        .label = "FPS Limit",
-        .section = "FPS Limit",
-        .min = 30.f,
-        .max = 500.f,
-        .parse = [](float value) { return value * 2.f; },
-    }, 
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
@@ -4424,48 +5617,172 @@ void OnPresent(reshade::api::command_queue* queue,
                const reshade::api::rect* dest_rect,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
-  if (queue == nullptr) return;
 
+  (void)source_rect;
+  (void)dest_rect;
+  (void)dirty_rect_count;
+  (void)dirty_rects;
+  if (queue == nullptr) return;
   auto* device = queue->get_device();
   if (device == nullptr) return;
 
-  if (device->get_api() == reshade::api::device_api::d3d9) {
+
+  const auto api = device->get_api();
+
+  if (api == reshade::api::device_api::d3d9) {
+
+
+    // V27 production runtime: keep the exact-build cache/CRT/sync fixes, remove
+    // Tracy/flight-recorder hot paths, and accelerate the real minizip DEFLATE
+    // stage through an optional modern zlib-ng shadow stream.
+    {
+
+      mw3_deep_profiler::OnPresent(
+          queue, swapchain, source_rect, dest_rect, dirty_rect_count, dirty_rects);
+    }
+
+
+
+
+
+    // The old executable-byte renderer/query experiments stay permanently stock.
+    // Do this once rather than touching their atomics on every frame.
+    static bool v22_stock_lock_done = false;
+    if (!v22_stock_lock_done) {
+      v22_stock_lock_done = true;
+
+      mw3_render_poll_wait_mode = 0.f;
+      mw3_query_polling_mode = 0.f;
+      mw3_blocking_query_yield_enabled = 0.f;
+      mw3_render_poll_wait::SetRequestedMode(0);
+      mw3_query_polling::SetRequestedMode(0);
+      mw3_blocking_query_yield::SetEnabled(false);
+
+      reshade::log::message(
+          reshade::log::level::info,
+          "[MW3 V27 Stability] V36 optimizer runtime: legacy Tracy and ultra flight recorder are removed; all addon Tracy instrumentation is removed; old renderer/query executable-byte patches remain locked stock.");
+      reshade::log::message(
+          reshade::log::level::info,
+          "[MW3 V27 IWD] persistent per-archive mapping + exact CRT _read fast path use TLS-first lookup; no per-read profiler atomics/QPC accounting.");
+      reshade::log::message(
+          reshade::log::level::info,
+          "[MW3 V27 Inflate] actual IWD decoder identified: minizip iw5sp+0x3157C0 -> bundled zlib 1.1.4 inflate iw5sp+0x312790. Optional mw3_zlibng_v27.dll accelerates only that exact stream path.");
+      reshade::log::message(
+          reshade::log::level::info,
+          "[MW3 V7 Sync] original V36 event-preserving wait/coalescing behavior restored; see Runtime hooks log for installation results.");
+      reshade::log::message(
+          reshade::log::level::info,
+          "[MW3 V27 Archive] burst detection is sparse and the archive worker may use temporary ABOVE_NORMAL priority until its verified 0x24A6B7 idle wait.");
+    }
+
     mw3_microstutter::NotifyPresent();
-  } else if (device->get_api() == reshade::api::device_api::d3d11) {
-    // RenoDX's FP16 HDR proxy/flip presentation path. V8 only profiles this
-    // cadence; it deliberately leaves RenoDX's frame limiter/pacing untouched.
-    mw3_microstutter::NotifyProxyPresent();
+
+    // V36: the add-on FPS control drives IW5's own com_maxfps limiter instead
+    // of applying a second swapchain-side cap. Keeping the engine limiter active
+    // preserves IW5 simulation/input timing; Smooth Visible QPC only finishes
+    // the fractional display deadline at the HDR proxy Present.
+    const int wanted_native_fps = std::clamp(
+        static_cast<int>(std::lround(mw3_native_fps_limit)), 0, 500);
+    if (g_mw3_native_fps_limit_applied.load(std::memory_order_acquire)
+        != wanted_native_fps) {
+      char command[64] = {};
+      std::snprintf(command, sizeof(command), "com_maxfps %d", wanted_native_fps);
+      if (SubmitMW3ConsoleCommand(command)) {
+        g_mw3_native_fps_limit_applied.store(
+            wanted_native_fps, std::memory_order_release);
+        char message[160] = {};
+        std::snprintf(
+            message, sizeof(message),
+            "[MW3 V36 Frame Pacing] native com_maxfps set to %d by the RenoDX Performance slider%s.",
+            wanted_native_fps, wanted_native_fps == 0 ? " (uncapped)" : "");
+        reshade::log::message(reshade::log::level::info, message);
+      }
+    }
+
+    const int wanted_audio = mw3_streamed_audio_pretouch >= 0.5f ? 1 : 0;
+    if (g_mw3_audio_pretouch_applied.load(std::memory_order_acquire) != wanted_audio) {
+      if (SubmitMW3ConsoleCommand(wanted_audio
+              ? "snd_touchStreamFilesOnLoad 1"
+              : "snd_touchStreamFilesOnLoad 0")) {
+        g_mw3_audio_pretouch_applied.store(wanted_audio,std::memory_order_release);
+        reshade::log::message(reshade::log::level::info,
+            wanted_audio
+                ? "[MW3 V27 Streaming] snd_touchStreamFilesOnLoad enabled for upcoming/first-use streamed audio."
+                : "[MW3 V27 Streaming] snd_touchStreamFilesOnLoad restored to disabled.");
+      }
+    }
+
+    // Long-standing IW5 PC tweak documented by PCGamingWiki/period guides:
+    // front-load shader creation at level load instead of paying first-use work
+    // in gameplay. This does not target the proven IWD archive stalls, but it
+    // can remove a separate residual shader-first-use hitch class.
+    const int wanted_shader_preload = mw3_preload_shaders_enabled >= 0.5f ? 1 : 0;
+    if (g_mw3_preload_shaders_applied.load(std::memory_order_acquire)
+        != wanted_shader_preload) {
+      if (SubmitMW3ConsoleCommand(wanted_shader_preload
+              ? "r_preloadShaders 1"
+              : "r_preloadShaders 0")) {
+        g_mw3_preload_shaders_applied.store(
+            wanted_shader_preload, std::memory_order_release);
+        reshade::log::message(
+            reshade::log::level::info,
+            wanted_shader_preload
+                ? "[MW3 V27 Shader] r_preloadShaders=1 requested; shader first-use work is front-loaded where IW5 supports it."
+                : "[MW3 V27 Shader] r_preloadShaders restored to 0.");
+      }
+    }
+
+    if (swapchain == nullptr) return;
+    HWND hwnd = reinterpret_cast<HWND>(swapchain->get_hwnd());
+    if (hwnd == nullptr) return;
+
+    const bool overlay_capturing_mouse =
+        g_reshade_overlay_open.load(std::memory_order_acquire);
+    {
+
+      cod_high_polling_mouse::Update(
+          hwnd,
+          cod_high_polling_mouse_fix >= 0.5f,
+          overlay_capturing_mouse);
+    }
+
+    uint32_t backbuffer_width = 0u;
+    uint32_t backbuffer_height = 0u;
+    const reshade::api::resource backbuffer = swapchain->get_back_buffer(0u);
+    if (backbuffer.handle != 0u) {
+      const reshade::api::resource_desc backbuffer_desc =
+          device->get_resource_desc(backbuffer);
+      backbuffer_width = backbuffer_desc.texture.width;
+      backbuffer_height = backbuffer_desc.texture.height;
+    }
+    ApplyWindowedBorderless(hwnd, backbuffer_width, backbuffer_height);
+    return;
   }
 
-  if (device->get_api() == reshade::api::device_api::opengl) {
+  if (api == reshade::api::device_api::d3d11) {
+
+
+    // The RenoDX D3D11 proxy is the frame that is actually displayed. Finish the
+    // fractional com_maxfps deadline here and keep its queue shallow.
+    {
+
+      mw3_proxy_latency::Update(device);
+    }
+    {
+
+      mw3_smooth_frame_pacing::OnVisibleProxyPresent();
+    }
+    {
+
+      mw3_microstutter::NotifyProxyPresent();
+    }
+    return;
+  }
+
+  if (api == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
-
-  if (swapchain == nullptr) return;
-
-  HWND hwnd = reinterpret_cast<HWND>(swapchain->get_hwnd());
-  if (hwnd == nullptr) return;
-
-  uint32_t backbuffer_width = 0u;
-  uint32_t backbuffer_height = 0u;
-
-  // Use the real presentation resource dimensions. This is the important
-  // difference from the previous borderless attempts.
-  const reshade::api::resource backbuffer = swapchain->get_back_buffer(0u);
-  if (backbuffer.handle != 0u) {
-    const reshade::api::resource_desc backbuffer_desc =
-        device->get_resource_desc(backbuffer);
-
-    backbuffer_width = backbuffer_desc.texture.width;
-    backbuffer_height = backbuffer_desc.texture.height;
-  }
-
-  ApplyWindowedBorderless(
-      hwnd,
-      backbuffer_width,
-      backbuffer_height);
 }
-
 bool initialized = false;
 
 }  // namespace
@@ -4477,7 +5794,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      mw3_microstutter::SetLogger(&MW3MicrostutterLog);
+        mw3_microstutter::SetLogger(&MW3MicrostutterLog);
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
@@ -4486,6 +5803,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::constant_buffer_offset = 50 * 4; 
         renodx::mods::swapchain::set_color_space = false; 
+        // V36 uses MW3's native com_maxfps. Do not stack RenoDX's separate
+        // swapchain FPS limiter on top of the engine limiter.
+        renodx::utils::swapchain::fps_limit = 0.f;
         renodx::mods::swapchain::use_device_proxy = true;
           renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_proxy_shaders = {
@@ -4508,6 +5828,487 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // Always register Present so Windowed Borderless works even when the
         // display proxy is disabled.
         reshade::register_event<reshade::addon_event::present>(OnPresent);
+        reshade::register_event<reshade::addon_event::reshade_open_overlay>(
+            OnReShadeOpenOverlay);
+
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "HighPollingMouseFix",
+              .binding = &cod_high_polling_mouse_fix,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Plutonium-Style High Polling Mouse Fix",
+              .section = "Performance",
+              .tooltip = "Plutonium/IW-family style path: accumulates WM_INPUT deltas and injects them directly into MW3's verified native CL_MouseEvent, bypassing the legacy GetCursorPos-derived dx/dy while preserving the game's own sensitivity, ADS, m_yaw/m_pitch, recentering and camera code. High-rate WM_INPUT/WM_MOUSEMOVE bursts are collapsed only during active gameplay to reduce message-pump overhead. Disable to restore the stock mouse path.",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                cod_high_polling_mouse_fix = current;
+                cod_high_polling_mouse::SetEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          cod_high_polling_mouse_fix = setting->GetValue();
+          cod_high_polling_mouse::SetEnabled(
+              cod_high_polling_mouse_fix >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3RenderPollWaitV27LockedStock",
+              .binding = &mw3_render_poll_wait_mode,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Renderer Poll Wait",
+              .section = "Performance",
+              .tooltip = "V27 locks this to stock Sleep(1). The previous Yield/Busy modes hot-patched executable instructions while renderer threads were active and are disabled for stability.",
+              .labels = {"Locked: Stock Sleep(1)"},
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                (void)current;
+                mw3_render_poll_wait_mode = 0.f;
+                mw3_render_poll_wait::SetRequestedMode(0);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_render_poll_wait_mode = 0.f;
+          mw3_render_poll_wait::SetRequestedMode(0);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3NativeFpsLimitV36",
+              .binding = &mw3_native_fps_limit,
+              .default_value = 120.f,
+              .label = "In-Game FPS Limit (com_maxfps)",
+              .section = "Performance",
+              .tooltip = "Controls MW3's own com_maxfps limiter through the native command buffer. This is intentionally used instead of RenoDX's separate swapchain FPS limiter because IW5's native cap gives smoother simulation/input pacing. 0 = uncapped. Smooth Visible QPC can remain enabled to finish fractional frame deadlines at the visible HDR proxy Present.",
+              .min = 0.f,
+              .max = 500.f,
+              .format = "%.0f FPS",
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_native_fps_limit = std::clamp(std::round(current), 0.f, 500.f);
+                g_mw3_native_fps_limit_applied.store(-1, std::memory_order_release);
+                renodx::utils::swapchain::fps_limit = 0.f;
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_native_fps_limit = std::clamp(
+              std::round(setting->GetValue()), 0.f, 500.f);
+          g_mw3_native_fps_limit_applied.store(-1, std::memory_order_release);
+          renodx::utils::swapchain::fps_limit = 0.f;
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3SmoothFramePacing",
+              .binding = &mw3_smooth_frame_pacing_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Smooth Frame Pacing",
+              .section = "Performance",
+              .tooltip = "Keeps MW3's native com_maxfps and simulation timing intact, then finishes the fractional deadline at RenoDX's actual visible D3D11 HDR proxy Present. This avoids V11/V12's 1 ms internal-frame bypass while still correcting 120/144/165/240 Hz whole-millisecond quantization at display time. com_maxfps 0 remains uncapped.",
+              .labels = {
+                  "Stock Visible Output",
+                  "Smooth Visible QPC",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_smooth_frame_pacing_enabled = current;
+                mw3_smooth_frame_pacing::SetEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_smooth_frame_pacing_enabled = setting->GetValue();
+          mw3_smooth_frame_pacing::SetEnabled(
+              mw3_smooth_frame_pacing_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3IwdStreamCacheV27",
+              .binding = &mw3_iwd_stream_cache_mode,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "IWD Traversal Stream Cache",
+              .section = "Performance",
+              .tooltip = "V27 keeps one persistent read-only mapping per .iwd archive path with no explicit prefetch. This removes physical I/O; the separate Modern DEFLATE Decoder targets the remaining CPU decode stage.",
+              .labels = {
+                  "Disabled / Stock ReadFile",
+                  "Persistent Mapped IWD Cache (No Prefetch)",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_iwd_stream_cache_mode = current;
+                mw3_deep_profiler::SetIwdCacheMode(static_cast<int>(current));
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_iwd_stream_cache_mode = setting->GetValue();
+          mw3_deep_profiler::SetIwdCacheMode(
+              static_cast<int>(mw3_iwd_stream_cache_mode));
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3CrtIwdFastReadV27",
+              .binding = &mw3_crt_iwd_fast_read_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "IWD CRT Fast Read",
+              .section = "Performance",
+              .tooltip = "Exact-build iw5sp+0x3BB340 binary-IWD fast path. This bypasses old CRT read overhead but does not replace ZIP/DEFLATE processing; the Modern DEFLATE Decoder setting below targets that actual CPU stage. Non-IWD/text/device/pipe reads remain stock.",
+              .labels = {
+                  "Stock CRT _read",
+                  "Fast Binary IWD _read",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_crt_iwd_fast_read_enabled = current;
+                mw3_deep_profiler::SetCrtIwdFastReadEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_crt_iwd_fast_read_enabled = setting->GetValue();
+          mw3_deep_profiler::SetCrtIwdFastReadEnabled(
+              mw3_crt_iwd_fast_read_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3ZlibNgIwdInflateV27",
+              .binding = &mw3_zlibng_iwd_inflate_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "IWD Modern DEFLATE Decoder",
+              .section = "Performance",
+              .tooltip = "V36 keeps the exact V27/V31 all-entry zlib-ng fast path and the corrected audio seek semantics, adds a shared-lock cached-read path, and bypasses IW5's discard/reopen seek loop only when the entire following 128 KiB sound block is already decoded. Only the exact streamed-sound FS_Seek caller gets a decoded-prefix cache backed by the existing persistent mapped IWD view: each requested sound byte is decompressed at most once, backward seeks are served from memory, and non-audio IWD inflation remains on the V31/V33 path. The private DLL remains mw3_zlibng_v27.dll and the V27 setting key is retained.",
+              .labels = {
+                  "Stock bundled zlib 1.1.4",
+                  "Modern zlib-ng shadow inflater",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_zlibng_iwd_inflate_enabled = current;
+                mw3_deep_profiler::SetZlibNgIwdInflateEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_zlibng_iwd_inflate_enabled = setting->GetValue();
+          mw3_deep_profiler::SetZlibNgIwdInflateEnabled(
+              mw3_zlibng_iwd_inflate_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3BackendSleep1YieldV27",
+              .binding = &mw3_backend_sleep1_yield_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Backend 1 ms Poll Scheduler",
+              .section = "Performance",
+              .tooltip = "Targets only the exact Sleep(1) call whose return address is iw5sp.exe+0x1BE473. The V19 residual-stutter trace measured this single Sleep(1) taking 64-588 ms in nasty hitches after physical I/O had fallen to zero. Targeted mode uses SwitchToThread so the real loop condition is still re-checked; all other Sleep/wait calls remain completely stock.",
+              .labels = {
+                  "Stock Sleep(1)",
+                  "Targeted SwitchToThread",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_backend_sleep1_yield_enabled = current;
+                mw3_deep_profiler::SetBackendSleep1YieldEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_backend_sleep1_yield_enabled = setting->GetValue();
+          mw3_deep_profiler::SetBackendSleep1YieldEnabled(
+              mw3_backend_sleep1_yield_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3RendererSleep1PreciseV27",
+              .binding = &mw3_renderer_sleep1_precise_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Renderer Sleep(1) Precision",
+              .section = "Performance",
+              .tooltip = "V27 calibrates the exact iw5sp+0x18B895 high-resolution timer during a short warm-up, then freezes the learned request so normal gameplay no longer pays QPC calibration overhead on every call.",
+              .labels = {
+                  "Stock Sleep(1)",
+                  "Adaptive Precise ~0.90 ms Actual",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_renderer_sleep1_precise_enabled = current;
+                mw3_deep_profiler::SetRendererSleep1PreciseEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_renderer_sleep1_precise_enabled = setting->GetValue();
+          mw3_deep_profiler::SetRendererSleep1PreciseEnabled(
+              mw3_renderer_sleep1_precise_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3RendererWait1PreciseV27",
+              .binding = &mw3_renderer_wait1_precise_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Renderer 1 ms Event Wait",
+              .section = "Performance",
+              .tooltip = "V27 keeps the real iw5sp+0x24AA36 producer event as wait object #0. Normal polls use a warm-up-calibrated ~0.90 ms timeout; repeated timeout storms coalesce to 2 ms, and sustained IWD bursts can step to 4 ms. A real producer signal always wakes immediately.",
+              .labels = {
+                  "Stock 1 ms Wait",
+                  "Adaptive Event Wait + Burst Coalescing",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_renderer_wait1_precise_enabled = current;
+                mw3_deep_profiler::SetRendererWait1PreciseEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          mw3_renderer_wait1_precise_enabled = setting->GetValue();
+          mw3_deep_profiler::SetRendererWait1PreciseEnabled(
+              mw3_renderer_wait1_precise_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3ArchiveBurstWaitCoalesceV27",
+              .binding = &mw3_archive_burst_wait_coalesce_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Render-Sync Timeout Coalescing",
+              .section = "Performance",
+              .tooltip = "Event-preserving progressive coalescing. After repeated 0x24AA36 timeouts V27 uses 2 ms deadlines; during proven archive bursts a longer streak can use 4 ms. The real producer event remains first and can wake immediately, so completion is never fabricated.",
+              .labels = {
+                  "Disabled / Normal Adaptive Poll",
+                  "Enabled / Event-Preserving Coalescing",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_archive_burst_wait_coalesce_enabled = current;
+                mw3_deep_profiler::SetArchiveBurstWaitCoalesceEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_archive_burst_wait_coalesce_enabled = setting->GetValue();
+          mw3_deep_profiler::SetArchiveBurstWaitCoalesceEnabled(
+              mw3_archive_burst_wait_coalesce_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3ArchiveThreadPriorityBoostV27",
+              .binding = &mw3_archive_thread_priority_boost_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Archive Decode Worker Priority",
+              .section = "Performance",
+              .tooltip = "Temporarily raises only the active mapped-IWD/CRT worker to THREAD_PRIORITY_ABOVE_NORMAL during a sustained archive burst, then restores its original priority when that thread reaches the known 0x24A6B7 worker-idle wait. Never uses highest/realtime priority and never changes the whole process priority class.",
+              .labels = {
+                  "Stock Thread Priority",
+                  "Temporary Above Normal During Burst",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_archive_thread_priority_boost_enabled = current;
+                mw3_deep_profiler::SetArchiveThreadPriorityBoostEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_archive_thread_priority_boost_enabled = setting->GetValue();
+          mw3_deep_profiler::SetArchiveThreadPriorityBoostEnabled(
+              mw3_archive_thread_priority_boost_enabled >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3GPUQueryPollingV27LockedStock",
+              .binding = &mw3_query_polling_mode,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "GPU Query Polling",
+              .section = "Performance",
+              .tooltip = "V27 locks all seven verified GetData call sites to the game's stock D3DGETDATA_FLUSH behavior. Runtime No-Flush instruction patching is disabled.",
+              .labels = {"Locked: Stock FLUSH"},
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                (void)current;
+                mw3_query_polling_mode = 0.f;
+                mw3_query_polling::SetRequestedMode(0);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_query_polling_mode = 0.f;
+          mw3_query_polling::SetRequestedMode(0);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3BlockingQueryYieldV27LockedStock",
+              .binding = &mw3_blocking_query_yield_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Blocking GPU Query Retry",
+              .section = "Performance",
+              .tooltip = "V27 locks the blocking GetData retry path to the original tight retry. Runtime branch/code-cave switching is disabled.",
+              .labels = {"Locked: Stock Tight Retry"},
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                (void)current;
+                mw3_blocking_query_yield_enabled = 0.f;
+                mw3_blocking_query_yield::SetEnabled(false);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_blocking_query_yield_enabled = 0.f;
+          mw3_blocking_query_yield::SetEnabled(false);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3ProxyFrameLatencyV27",
+              .binding = &mw3_proxy_latency_mode,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "HDR Proxy Frame Latency",
+              .section = "Performance",
+              .tooltip = "Controls the D3D11 RenoDX HDR proxy queue. 1 frame minimizes queued-frame latency and usually gives the cleanest cadence on a fast GPU; 2 is a throughput fallback; Driver Default restores DXGI's normal 3-frame maximum.",
+              .labels = {"Driver Default (3)", "1 Frame", "2 Frames"},
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_proxy_latency_mode = current;
+                mw3_proxy_latency::SetMode(static_cast<int>(current));
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          mw3_proxy_latency_mode = setting->GetValue();
+          mw3_proxy_latency::SetMode(static_cast<int>(mw3_proxy_latency_mode));
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3StreamedAudioPreTouchV27",
+              .binding = &mw3_streamed_audio_pretouch,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Streamed Audio Pre-Touch",
+              .section = "Performance",
+              .tooltip = "Sets MW3 x64's native snd_touchStreamFilesOnLoad dvar through Cbuf_AddText. This can move first-use streamed-audio file access into loading instead of gameplay. It may slightly increase level/load work.",
+              .labels = {"Disabled", "Enabled"},
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_streamed_audio_pretouch = current;
+                g_mw3_audio_pretouch_applied.store(-1,std::memory_order_release);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          mw3_streamed_audio_pretouch = setting->GetValue();
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "MW3PreloadShadersV27",
+              .binding = &mw3_preload_shaders_enabled,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Native Shader Preload",
+              .section = "Performance",
+              .tooltip = "Sets IW5's native r_preloadShaders dvar. Community/PCGamingWiki guidance recommends 1 for smoother play by moving shader first-use work into level loading. It can increase level-load time and memory use. The profiler remains enabled.",
+              .labels = {"Disabled", "Enabled"},
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                mw3_preload_shaders_enabled = current;
+                g_mw3_preload_shaders_applied.store(-1, std::memory_order_release);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          mw3_preload_shaders_enabled = setting->GetValue();
+          g_mw3_preload_shaders_applied.store(-1, std::memory_order_release);
+          settings.push_back(setting);
+        }
+
         // Register as a ReShade-managed overlay window. Unlike the generic
         // reshade_overlay event, this callback is only invoked while the
         // ReShade UI is actually open.
@@ -4734,6 +6535,10 @@ for (const auto old_format : scene_intermediate_formats) {
      
     
         
+        reshade::register_event<reshade::addon_event::init_device>(half_filter::Init);
+        reshade::register_event<reshade::addon_event::destroy_device>(half_filter::Destroy);
+        reshade::register_event<reshade::addon_event::destroy_swapchain>(half_filter::DestroySwapchain);
+        reshade::register_event<reshade::addon_event::present>(half_filter::Present);
         // D3D9 upgraded-resource readback compatibility. The native GPU blit
         // refreshes the game's original SDR resource immediately before a
         // qualifying readback; CPU conversion remains only as a safety fallback.
@@ -4741,8 +6546,6 @@ for (const auto old_format : scene_intermediate_formats) {
             OnInitDeviceDX9NativeReadback);
         reshade::register_event<reshade::addon_event::destroy_device>(
             OnDestroyDeviceDX9NativeReadback);
-        reshade::register_event<reshade::addon_event::copy_texture_to_buffer>(
-            OnDX9CopyTextureToBuffer);
         reshade::register_event<reshade::addon_event::copy_resource>(
             OnDX9CopyResource);
         reshade::register_event<reshade::addon_event::copy_texture_region>(
@@ -4750,11 +6553,37 @@ for (const auto old_format : scene_intermediate_formats) {
         reshade::register_event<reshade::addon_event::resolve_texture_region>(
             OnDX9ResolveTextureRegion);
 
+
+        reshade::log::message(
+            reshade::log::level::info,
+            "[MW3 V7 Integrated] V36 runtime + adaptive deadline finish + half-resolution filters ON; no Tracy.");
+
         initialized = true;
       }
       break;
-    case DLL_PROCESS_DETACH:
-      mw3_microstutter::Shutdown();
+    case DLL_PROCESS_DETACH: {
+      g_reshade_overlay_open.store(false, std::memory_order_release);
+
+      // ExitProcess terminates the other process threads before DLL detach, and
+      // the OS is about to discard the entire address space. Restoring executable
+      // code bytes, IAT hooks, Raw Input registrations or thread-local timer
+      // handles here is unnecessary and can race ReShade/driver teardown.
+      //
+      // A true FreeLibrary/hot-unload has lpv_reserved == nullptr, so retain the
+      // full reversible cleanup only for that case.
+      const bool process_terminating = (lpv_reserved != nullptr);
+      if (!process_terminating) {
+        cod_high_polling_mouse::Shutdown();
+        mw3_smooth_frame_pacing::Shutdown();
+        mw3_proxy_latency::Shutdown();
+        mw3_microstutter::Shutdown();
+      }
+
+      // Restore profiler hooks only for a true hot-unload. On normal process
+      // termination avoid invasive teardown while other threads are already gone.
+      mw3_deep_profiler::Shutdown(process_terminating);
+
+
       ClearDX9ReadbackStagingCache();
       ClearDX9NativeReadbackCache();
 #if 0  // Automatic DX9 output unclamper disabled
@@ -4768,8 +6597,6 @@ for (const auto old_format : scene_intermediate_formats) {
           OnDX9CopyTextureRegion);
       reshade::unregister_event<reshade::addon_event::copy_resource>(
           OnDX9CopyResource);
-      reshade::unregister_event<reshade::addon_event::copy_texture_to_buffer>(
-          OnDX9CopyTextureToBuffer);
       reshade::unregister_event<reshade::addon_event::destroy_device>(
           OnDestroyDeviceDX9NativeReadback);
       reshade::unregister_event<reshade::addon_event::init_device>(
@@ -4777,9 +6604,12 @@ for (const auto old_format : scene_intermediate_formats) {
       reshade::unregister_overlay(
           "MW3 Command Console",
           DrawMW3CommandConsole);
+      reshade::unregister_event<reshade::addon_event::reshade_open_overlay>(
+          OnReShadeOpenOverlay);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
+    }
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);

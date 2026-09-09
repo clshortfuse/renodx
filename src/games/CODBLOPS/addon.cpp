@@ -12,14 +12,23 @@
 #include <include/reshade.hpp>
 #include <Windows.h>
 
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+#include <d3d9.h>
+#include <d3dcompiler.h>
+
 #include <embed/shaders.h>
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstring>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <ranges>
@@ -28,6 +37,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <intrin.h>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
@@ -40,6 +50,2183 @@
 #endif
 
 namespace {
+
+// ============================================================================
+// Black Ops High Polling Mouse Fix
+// High-polling-rate mouse / Raw Input bridge
+// ============================================================================
+//
+// Goals:
+//   * Preserve every physical relative mouse delta. There is no 125/500/1000 Hz
+//     resampling and no artificial polling cap.
+//   * Keep the game's native sensitivity, ADS, m_yaw/m_pitch, m_filter and aim
+//     math by continuing to feed movement through its GetCursorPos/SetCursorPos
+//     relative-mouse path.
+//   * Avoid making the old Win32 message loop process thousands of individual
+//     WM_MOUSEMOVE/WM_INPUT messages per second. While the game is recentering
+//     the cursor for gameplay, raw reports are accumulated and input-only bursts
+//     are drained in one PeekMessage/GetMessage hook invocation.
+//   * Do not suppress legacy button/wheel messages. Raw Input is registered
+//     WITHOUT RIDEV_NOLEGACY, so mouse buttons, wheel and menus remain native.
+//   * Automatically fall back to the original cursor path in menus, after focus
+//     loss, and while the ReShade overlay wants the mouse.
+//
+// The stock WaW/BO1/IW5 executables all import GetCursorPos, SetCursorPos,
+// PeekMessageA and GetMessageA and do not import the Windows Raw Input APIs.
+// This bridge therefore patches only those four main-EXE IAT slots. Calls made
+// by ReShade or other DLLs are not redirected.
+
+namespace cod_high_polling_mouse {
+
+using GetCursorPosFn = BOOL(WINAPI*)(LPPOINT);
+using SetCursorPosFn = BOOL(WINAPI*)(int, int);
+using PeekMessageAFn = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT, UINT);
+using GetMessageAFn = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT);
+
+struct IATHook {
+  uintptr_t* slot = nullptr;
+  uintptr_t original = 0u;
+  uintptr_t replacement = 0u;
+};
+
+inline std::atomic<bool> g_enabled{true};
+inline std::atomic<bool> g_overlay_capturing_mouse{false};
+inline std::atomic<uintptr_t> g_game_hwnd{0u};
+inline std::atomic<bool> g_hooks_installed{false};
+inline std::atomic<bool> g_raw_registered{false};
+inline std::atomic<bool> g_logged_capture{false};
+inline std::atomic<bool> g_logged_install_failure{false};
+
+inline std::atomic<int64_t> g_raw_total_x{0};
+inline std::atomic<int64_t> g_raw_total_y{0};
+inline std::atomic<int64_t> g_raw_base_x{0};
+inline std::atomic<int64_t> g_raw_base_y{0};
+inline std::atomic<long> g_anchor_x{0};
+inline std::atomic<long> g_anchor_y{0};
+inline std::atomic<bool> g_anchor_valid{false};
+
+inline std::atomic<uint64_t> g_last_center_set_tick{0u};
+inline std::atomic<uint32_t> g_center_set_streak{0u};
+inline std::atomic<long> g_last_center_x{0};
+inline std::atomic<long> g_last_center_y{0};
+
+inline GetCursorPosFn g_original_get_cursor_pos = nullptr;
+inline SetCursorPosFn g_original_set_cursor_pos = nullptr;
+inline PeekMessageAFn g_original_peek_message_a = nullptr;
+inline GetMessageAFn g_original_get_message_a = nullptr;
+
+inline IATHook g_get_cursor_hook = {};
+inline IATHook g_set_cursor_hook = {};
+inline IATHook g_peek_message_hook = {};
+inline IATHook g_get_message_hook = {};
+
+inline bool g_saved_raw_registration_valid = false;
+inline RAWINPUTDEVICE g_saved_raw_registration = {};
+inline HWND g_registered_hwnd = nullptr;
+
+constexpr uint64_t kRelativeModeHoldMs = 120u;
+constexpr uint64_t kRecenterSequenceGapMs = 100u;
+constexpr uint32_t kRecenterStreakRequired = 2u;
+constexpr int kCenterTolerancePixels = 96;
+constexpr uint32_t kMaxInputMessagesDrainedPerCall = 512u;
+
+void LogInfo(const char* text) {
+  reshade::log::message(
+      reshade::log::level::info,
+      text != nullptr ? text : "[CoD Mouse Fix] (null)");
+}
+
+void LogWarning(const char* text) {
+  reshade::log::message(
+      reshade::log::level::warning,
+      text != nullptr ? text : "[CoD Mouse Fix] (null)");
+}
+
+bool EqualAsciiInsensitive(const char* a, const char* b) {
+  if (a == nullptr || b == nullptr) return false;
+  while (*a != '\0' && *b != '\0') {
+    char ca = *a++;
+    char cb = *b++;
+    if (ca >= 'A' && ca <= 'Z') ca = static_cast<char>(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = static_cast<char>(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
+bool FindAndPatchMainExeIAT(
+    const char* imported_dll,
+    const char* imported_name,
+    void* replacement,
+    IATHook& hook) {
+  if (imported_dll == nullptr || imported_name == nullptr || replacement == nullptr) {
+    return false;
+  }
+
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+
+  const auto& directory =
+      nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (directory.VirtualAddress == 0u || directory.Size < sizeof(IMAGE_IMPORT_DESCRIPTOR)) {
+    return false;
+  }
+
+  auto* descriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(
+      module + directory.VirtualAddress);
+
+  for (; descriptor->Name != 0u; ++descriptor) {
+    const char* dll_name = reinterpret_cast<const char*>(module + descriptor->Name);
+    if (!EqualAsciiInsensitive(dll_name, imported_dll)) continue;
+    if (descriptor->OriginalFirstThunk == 0u || descriptor->FirstThunk == 0u) {
+      return false;
+    }
+
+    auto* name_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->OriginalFirstThunk);
+    auto* iat_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->FirstThunk);
+
+    for (; name_thunk->u1.AddressOfData != 0u; ++name_thunk, ++iat_thunk) {
+      if (IMAGE_SNAP_BY_ORDINAL(name_thunk->u1.Ordinal)) continue;
+
+      auto* import = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(
+          module + static_cast<uintptr_t>(name_thunk->u1.AddressOfData));
+      const char* function_name = reinterpret_cast<const char*>(import->Name);
+      if (std::strcmp(function_name, imported_name) != 0) continue;
+
+      auto* slot = reinterpret_cast<uintptr_t*>(&iat_thunk->u1.Function);
+      const uintptr_t original = *slot;
+      const uintptr_t replacement_value = reinterpret_cast<uintptr_t>(replacement);
+
+      DWORD old_protect = 0u;
+      if (!VirtualProtect(slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+        return false;
+      }
+
+      *slot = replacement_value;
+      FlushInstructionCache(GetCurrentProcess(), slot, sizeof(uintptr_t));
+
+      DWORD ignored = 0u;
+      VirtualProtect(slot, sizeof(uintptr_t), old_protect, &ignored);
+
+      hook.slot = slot;
+      hook.original = original;
+      hook.replacement = replacement_value;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void RestoreIATHook(IATHook& hook) {
+  if (hook.slot == nullptr || hook.original == 0u) {
+    hook = {};
+    return;
+  }
+
+  DWORD old_protect = 0u;
+  if (VirtualProtect(hook.slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+    // Only undo our own pointer. If another component changed the slot after us,
+    // leave its newer hook intact.
+    if (*hook.slot == hook.replacement) {
+      *hook.slot = hook.original;
+      FlushInstructionCache(GetCurrentProcess(), hook.slot, sizeof(uintptr_t));
+    }
+    DWORD ignored = 0u;
+    VirtualProtect(hook.slot, sizeof(uintptr_t), old_protect, &ignored);
+  }
+
+  hook = {};
+}
+
+HWND GameWindow() {
+  return reinterpret_cast<HWND>(
+      g_game_hwnd.load(std::memory_order_acquire));
+}
+
+bool IsGameForeground() {
+  const HWND hwnd = GameWindow();
+  return hwnd != nullptr && GetForegroundWindow() == hwnd;
+}
+
+bool IsNearClientCenter(HWND hwnd, int x, int y) {
+  if (hwnd == nullptr) return false;
+
+  RECT client = {};
+  if (!GetClientRect(hwnd, &client)) return false;
+
+  POINT center = {
+      (client.left + client.right) / 2,
+      (client.top + client.bottom) / 2,
+  };
+  if (!ClientToScreen(hwnd, &center)) return false;
+
+  const long long dx = static_cast<long long>(x) - center.x;
+  const long long dy = static_cast<long long>(y) - center.y;
+  return dx >= -kCenterTolerancePixels && dx <= kCenterTolerancePixels
+      && dy >= -kCenterTolerancePixels && dy <= kCenterTolerancePixels;
+}
+
+bool RelativeCaptureActive() {
+  if (!g_enabled.load(std::memory_order_acquire)) return false;
+  if (!g_raw_registered.load(std::memory_order_acquire)) return false;
+  if (g_overlay_capturing_mouse.load(std::memory_order_acquire)) return false;
+  if (!g_anchor_valid.load(std::memory_order_acquire)) return false;
+  if (!IsGameForeground()) return false;
+  if (g_center_set_streak.load(std::memory_order_acquire)
+      < kRecenterStreakRequired) {
+    return false;
+  }
+
+  const uint64_t last =
+      g_last_center_set_tick.load(std::memory_order_acquire);
+  const uint64_t now = GetTickCount64();
+  return last != 0u && now >= last && (now - last) <= kRelativeModeHoldMs;
+}
+
+void SnapshotExistingRawMouseRegistration() {
+  g_saved_raw_registration_valid = false;
+  g_saved_raw_registration = {};
+
+  UINT count = 0u;
+  // With a null buffer Windows may report ERROR_INSUFFICIENT_BUFFER while still
+  // returning the required count through puiNumDevices. The count is what matters
+  // for this sizing query.
+  GetRegisteredRawInputDevices(nullptr, &count, sizeof(RAWINPUTDEVICE));
+  if (count == 0u) return;
+
+  std::vector<RAWINPUTDEVICE> devices(count);
+  UINT actual = count;
+  if (GetRegisteredRawInputDevices(
+          devices.data(),
+          &actual,
+          sizeof(RAWINPUTDEVICE)) == static_cast<UINT>(-1)) {
+    return;
+  }
+
+  for (UINT index = 0u; index < actual; ++index) {
+    const auto& device = devices[index];
+    if (device.usUsagePage == 0x01u && device.usUsage == 0x02u) {
+      g_saved_raw_registration = device;
+      g_saved_raw_registration_valid = true;
+      return;
+    }
+  }
+}
+
+bool RegisterRawMouse(HWND hwnd) {
+  if (hwnd == nullptr) return false;
+
+  if (!g_raw_registered.load(std::memory_order_acquire)) {
+    SnapshotExistingRawMouseRegistration();
+  }
+
+  RAWINPUTDEVICE mouse = {};
+  mouse.usUsagePage = 0x01u;
+  mouse.usUsage = 0x02u;
+  // Deliberately DO NOT use RIDEV_NOLEGACY. The native engine continues to get
+  // button/wheel messages; only high-rate movement messages are filtered while
+  // relative gameplay capture is active.
+  mouse.dwFlags = 0u;
+  mouse.hwndTarget = hwnd;
+
+  if (!RegisterRawInputDevices(&mouse, 1u, sizeof(mouse))) {
+    return false;
+  }
+
+  g_registered_hwnd = hwnd;
+  g_raw_registered.store(true, std::memory_order_release);
+  return true;
+}
+
+void RestoreRawMouseRegistration() {
+  if (!g_raw_registered.exchange(false, std::memory_order_acq_rel)) return;
+
+  if (g_saved_raw_registration_valid) {
+    RegisterRawInputDevices(
+        &g_saved_raw_registration,
+        1u,
+        sizeof(g_saved_raw_registration));
+  } else {
+    RAWINPUTDEVICE remove = {};
+    remove.usUsagePage = 0x01u;
+    remove.usUsage = 0x02u;
+    remove.dwFlags = RIDEV_REMOVE;
+    remove.hwndTarget = nullptr;
+    RegisterRawInputDevices(&remove, 1u, sizeof(remove));
+  }
+
+  g_registered_hwnd = nullptr;
+  g_saved_raw_registration_valid = false;
+  g_saved_raw_registration = {};
+}
+
+void ProcessRawInput(HRAWINPUT handle) {
+  if (handle == nullptr) return;
+
+  alignas(RAWINPUT) std::array<uint8_t, 512u> storage = {};
+  UINT size = static_cast<UINT>(storage.size());
+  const UINT result = GetRawInputData(
+      handle,
+      RID_INPUT,
+      storage.data(),
+      &size,
+      sizeof(RAWINPUTHEADER));
+  if (result == static_cast<UINT>(-1) || result < sizeof(RAWINPUTHEADER)) return;
+
+  const auto* raw = reinterpret_cast<const RAWINPUT*>(storage.data());
+  if (raw->header.dwType != RIM_TYPEMOUSE) return;
+
+  const RAWMOUSE& mouse = raw->data.mouse;
+  if ((mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0u) {
+    // Standard gaming mice report relative movement. Ignore absolute devices
+    // rather than guessing a coordinate transform (touch/tablet/light-gun).
+    return;
+  }
+
+  if (mouse.lLastX != 0) {
+    g_raw_total_x.fetch_add(
+        static_cast<int64_t>(mouse.lLastX),
+        std::memory_order_relaxed);
+  }
+  if (mouse.lLastY != 0) {
+    g_raw_total_y.fetch_add(
+        static_cast<int64_t>(mouse.lLastY),
+        std::memory_order_relaxed);
+  }
+}
+
+void ConsumeDroppedInputMessage(const MSG& message) {
+  if (message.message == WM_INPUT) {
+    ProcessRawInput(reinterpret_cast<HRAWINPUT>(message.lParam));
+    // Foreground WM_INPUT cleanup normally happens through DefWindowProc after
+    // DispatchMessage. We intentionally consume this message, so perform that
+    // cleanup here.
+    if (message.hwnd != nullptr) {
+      DefWindowProcA(
+          message.hwnd,
+          message.message,
+          message.wParam,
+          message.lParam);
+    }
+  }
+  // WM_MOUSEMOVE is intentionally discarded in relative gameplay mode. Its
+  // movement is already represented by the accumulated WM_INPUT deltas.
+}
+
+bool IsMovementOnlyMessage(const MSG& message) {
+  return message.message == WM_INPUT || message.message == WM_MOUSEMOVE;
+}
+
+BOOL WINAPI HookGetCursorPos(LPPOINT point) {
+  if (point == nullptr || !RelativeCaptureActive()) {
+    return g_original_get_cursor_pos != nullptr
+        ? g_original_get_cursor_pos(point)
+        : FALSE;
+  }
+
+  const int64_t dx =
+      g_raw_total_x.load(std::memory_order_relaxed)
+      - g_raw_base_x.load(std::memory_order_relaxed);
+  const int64_t dy =
+      g_raw_total_y.load(std::memory_order_relaxed)
+      - g_raw_base_y.load(std::memory_order_relaxed);
+
+  constexpr int64_t kMaximumVirtualDelta = 32767;
+  const int64_t safe_dx = std::clamp(
+      dx,
+      -kMaximumVirtualDelta,
+      kMaximumVirtualDelta);
+  const int64_t safe_dy = std::clamp(
+      dy,
+      -kMaximumVirtualDelta,
+      kMaximumVirtualDelta);
+
+  point->x = static_cast<LONG>(
+      static_cast<int64_t>(g_anchor_x.load(std::memory_order_relaxed)) + safe_dx);
+  point->y = static_cast<LONG>(
+      static_cast<int64_t>(g_anchor_y.load(std::memory_order_relaxed)) + safe_dy);
+  return TRUE;
+}
+
+BOOL WINAPI HookSetCursorPos(int x, int y) {
+  const HWND hwnd = GameWindow();
+  const uint64_t now = GetTickCount64();
+
+  if (g_enabled.load(std::memory_order_acquire)
+      && hwnd != nullptr
+      && GetForegroundWindow() == hwnd
+      && IsNearClientCenter(hwnd, x, y)) {
+    const uint64_t previous_tick =
+        g_last_center_set_tick.load(std::memory_order_relaxed);
+    const long previous_x = g_last_center_x.load(std::memory_order_relaxed);
+    const long previous_y = g_last_center_y.load(std::memory_order_relaxed);
+
+    const bool close_to_previous =
+        previous_tick != 0u
+        && now >= previous_tick
+        && (now - previous_tick) <= kRecenterSequenceGapMs
+        && (static_cast<long long>(x) - previous_x) >= -4
+        && (static_cast<long long>(x) - previous_x) <= 4
+        && (static_cast<long long>(y) - previous_y) >= -4
+        && (static_cast<long long>(y) - previous_y) <= 4;
+
+    uint32_t streak = close_to_previous
+        ? g_center_set_streak.load(std::memory_order_relaxed) + 1u
+        : 1u;
+    streak = std::min<uint32_t>(streak, 1000u);
+
+    g_center_set_streak.store(streak, std::memory_order_release);
+    g_last_center_set_tick.store(now, std::memory_order_release);
+    g_last_center_x.store(x, std::memory_order_relaxed);
+    g_last_center_y.store(y, std::memory_order_relaxed);
+    g_anchor_x.store(x, std::memory_order_relaxed);
+    g_anchor_y.store(y, std::memory_order_relaxed);
+    g_anchor_valid.store(true, std::memory_order_release);
+
+    // A recenter marks the exact point at which the native engine considers all
+    // prior movement consumed. Preserve that behavior with raw cumulative totals.
+    g_raw_base_x.store(
+        g_raw_total_x.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
+    g_raw_base_y.store(
+        g_raw_total_y.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
+
+    if (streak >= kRecenterStreakRequired
+        && !g_logged_capture.exchange(true, std::memory_order_acq_rel)) {
+      LogInfo(
+          "[CoD Mouse Fix] Relative gameplay capture detected; raw deltas are now accumulated and high-rate movement messages are batch-drained.");
+    }
+  } else if (hwnd != nullptr && GetForegroundWindow() != hwnd) {
+    g_center_set_streak.store(0u, std::memory_order_release);
+    g_anchor_valid.store(false, std::memory_order_release);
+  }
+
+  return g_original_set_cursor_pos != nullptr
+      ? g_original_set_cursor_pos(x, y)
+      : FALSE;
+}
+
+BOOL WINAPI HookPeekMessageA(
+    LPMSG message,
+    HWND hwnd,
+    UINT min_filter,
+    UINT max_filter,
+    UINT remove_message) {
+  if (g_original_peek_message_a == nullptr) return FALSE;
+
+  const BOOL first = g_original_peek_message_a(
+      message,
+      hwnd,
+      min_filter,
+      max_filter,
+      remove_message);
+
+  if (!first
+      || message == nullptr
+      || (remove_message & PM_REMOVE) == 0u
+      || min_filter != 0u
+      || max_filter != 0u
+      || !RelativeCaptureActive()) {
+    return first;
+  }
+
+  if (!IsMovementOnlyMessage(*message)) return first;
+
+  ConsumeDroppedInputMessage(*message);
+
+  for (uint32_t drained = 1u;
+       drained < kMaxInputMessagesDrainedPerCall;
+       ++drained) {
+    MSG next = {};
+    if (!g_original_peek_message_a(
+            &next,
+            hwnd,
+            0u,
+            0u,
+            PM_REMOVE)) {
+      return FALSE;
+    }
+
+    if (!IsMovementOnlyMessage(next)) {
+      *message = next;
+      return TRUE;
+    }
+
+    ConsumeDroppedInputMessage(next);
+  }
+
+  // Leave any remaining queue entries for the next engine pump iteration rather
+  // than spending unbounded time inside one call.
+  return FALSE;
+}
+
+BOOL WINAPI HookGetMessageA(
+    LPMSG message,
+    HWND hwnd,
+    UINT min_filter,
+    UINT max_filter) {
+  if (g_original_get_message_a == nullptr) return -1;
+
+  const BOOL first = g_original_get_message_a(
+      message,
+      hwnd,
+      min_filter,
+      max_filter);
+
+  if (first <= 0
+      || message == nullptr
+      || min_filter != 0u
+      || max_filter != 0u
+      || !RelativeCaptureActive()
+      || !IsMovementOnlyMessage(*message)) {
+    return first;
+  }
+
+  ConsumeDroppedInputMessage(*message);
+
+  // A classic idTech/CoD pump often does PeekMessage(PM_NOREMOVE) followed by
+  // GetMessage. After consuming the mouse burst, never block here waiting for a
+  // non-mouse message: drain with the original PeekMessage and return WM_NULL if
+  // the queue becomes empty so the engine can continue its frame.
+  for (uint32_t drained = 1u;
+       drained < kMaxInputMessagesDrainedPerCall;
+       ++drained) {
+    MSG next = {};
+    if (g_original_peek_message_a == nullptr
+        || !g_original_peek_message_a(
+            &next,
+            hwnd,
+            0u,
+            0u,
+            PM_REMOVE)) {
+      *message = {};
+      message->hwnd = GameWindow();
+      message->message = WM_NULL;
+      return TRUE;
+    }
+
+    if (next.message == WM_QUIT) {
+      *message = next;
+      return FALSE;
+    }
+
+    if (!IsMovementOnlyMessage(next)) {
+      *message = next;
+      return TRUE;
+    }
+
+    ConsumeDroppedInputMessage(next);
+  }
+
+  *message = {};
+  message->hwnd = GameWindow();
+  message->message = WM_NULL;
+  return TRUE;
+}
+
+bool InstallHooks() {
+  if (g_hooks_installed.load(std::memory_order_acquire)) return true;
+
+  const bool got_cursor = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "GetCursorPos",
+      reinterpret_cast<void*>(&HookGetCursorPos),
+      g_get_cursor_hook);
+  if (got_cursor) {
+    g_original_get_cursor_pos = reinterpret_cast<GetCursorPosFn>(
+        g_get_cursor_hook.original);
+  }
+
+  const bool set_cursor = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "SetCursorPos",
+      reinterpret_cast<void*>(&HookSetCursorPos),
+      g_set_cursor_hook);
+  if (set_cursor) {
+    g_original_set_cursor_pos = reinterpret_cast<SetCursorPosFn>(
+        g_set_cursor_hook.original);
+  }
+
+  const bool peek_message = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "PeekMessageA",
+      reinterpret_cast<void*>(&HookPeekMessageA),
+      g_peek_message_hook);
+  if (peek_message) {
+    g_original_peek_message_a = reinterpret_cast<PeekMessageAFn>(
+        g_peek_message_hook.original);
+  }
+
+  const bool get_message = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "GetMessageA",
+      reinterpret_cast<void*>(&HookGetMessageA),
+      g_get_message_hook);
+  if (get_message) {
+    g_original_get_message_a = reinterpret_cast<GetMessageAFn>(
+        g_get_message_hook.original);
+  }
+
+  const bool complete =
+      got_cursor && set_cursor && peek_message && get_message;
+  if (!complete) {
+    RestoreIATHook(g_get_message_hook);
+    RestoreIATHook(g_peek_message_hook);
+    RestoreIATHook(g_set_cursor_hook);
+    RestoreIATHook(g_get_cursor_hook);
+    g_original_get_cursor_pos = nullptr;
+    g_original_set_cursor_pos = nullptr;
+    g_original_peek_message_a = nullptr;
+    g_original_get_message_a = nullptr;
+
+    if (!g_logged_install_failure.exchange(true, std::memory_order_acq_rel)) {
+      LogWarning(
+          "[CoD Mouse Fix] Could not find all four stock user32 IAT entries (GetCursorPos/SetCursorPos/PeekMessageA/GetMessageA); high-polling fix left disabled rather than partially hooking input.");
+    }
+    return false;
+  }
+
+  g_hooks_installed.store(true, std::memory_order_release);
+  LogInfo(
+      "[CoD Mouse Fix] High-polling-rate input hooks installed: Raw Input accumulation + gameplay-only WM_INPUT/WM_MOUSEMOVE burst draining + native cursor-delta bridge.");
+  return true;
+}
+
+void SetEnabled(bool enabled) {
+  g_enabled.store(enabled, std::memory_order_release);
+  if (!enabled) {
+    g_center_set_streak.store(0u, std::memory_order_release);
+    g_anchor_valid.store(false, std::memory_order_release);
+  }
+}
+
+void Update(HWND hwnd, bool enabled, bool overlay_capturing_mouse) {
+  SetEnabled(enabled);
+
+  const bool previous_overlay_state =
+      g_overlay_capturing_mouse.exchange(
+          overlay_capturing_mouse,
+          std::memory_order_acq_rel);
+
+  // Do not carry mouse motion accumulated while the ReShade UI was open back
+  // into gameplay. Re-anchor the raw-delta bridge on both overlay transitions.
+  if (previous_overlay_state != overlay_capturing_mouse) {
+    const int64_t total_x = g_raw_total_x.load(std::memory_order_relaxed);
+    const int64_t total_y = g_raw_total_y.load(std::memory_order_relaxed);
+    g_raw_base_x.store(total_x, std::memory_order_relaxed);
+    g_raw_base_y.store(total_y, std::memory_order_relaxed);
+    g_anchor_valid.store(false, std::memory_order_release);
+    g_center_set_streak.store(0u, std::memory_order_release);
+  }
+
+  const uintptr_t previous_hwnd =
+      g_game_hwnd.exchange(
+          reinterpret_cast<uintptr_t>(hwnd),
+          std::memory_order_acq_rel);
+
+  if (!enabled || hwnd == nullptr) {
+    if (g_raw_registered.load(std::memory_order_acquire)) {
+      RestoreRawMouseRegistration();
+    }
+    return;
+  }
+
+  if (!InstallHooks()) return;
+
+  if (!g_raw_registered.load(std::memory_order_acquire)
+      || previous_hwnd != reinterpret_cast<uintptr_t>(hwnd)
+      || g_registered_hwnd != hwnd) {
+    if (g_raw_registered.load(std::memory_order_acquire)) {
+      RestoreRawMouseRegistration();
+    }
+    if (!RegisterRawMouse(hwnd)) {
+      LogWarning(
+          "[CoD Mouse Fix] RegisterRawInputDevices failed; native mouse path remains active.");
+      return;
+    }
+
+    g_raw_total_x.store(0, std::memory_order_relaxed);
+    g_raw_total_y.store(0, std::memory_order_relaxed);
+    g_raw_base_x.store(0, std::memory_order_relaxed);
+    g_raw_base_y.store(0, std::memory_order_relaxed);
+    g_anchor_valid.store(false, std::memory_order_release);
+    g_center_set_streak.store(0u, std::memory_order_release);
+  }
+}
+
+void Shutdown() {
+  g_enabled.store(false, std::memory_order_release);
+  g_overlay_capturing_mouse.store(false, std::memory_order_release);
+  g_center_set_streak.store(0u, std::memory_order_release);
+  g_anchor_valid.store(false, std::memory_order_release);
+
+  RestoreRawMouseRegistration();
+
+  RestoreIATHook(g_get_message_hook);
+  RestoreIATHook(g_peek_message_hook);
+  RestoreIATHook(g_set_cursor_hook);
+  RestoreIATHook(g_get_cursor_hook);
+
+  g_original_get_cursor_pos = nullptr;
+  g_original_set_cursor_pos = nullptr;
+  g_original_peek_message_a = nullptr;
+  g_original_get_message_a = nullptr;
+  g_hooks_installed.store(false, std::memory_order_release);
+  g_game_hwnd.store(0u, std::memory_order_release);
+}
+
+}  // namespace cod_high_polling_mouse
+
+float cod_high_polling_mouse_fix = 1.f;
+
+// Track the ReShade overlay through the add-on API instead of calling
+// ImGui::GetCurrentContext() from Present. The RenoDX target does not export
+// that ImGui symbol, which caused an lld-link failure in the full-smoothness
+// builds. Returning false preserves ReShade's normal open/close behavior.
+std::atomic<bool> g_reshade_overlay_open{false};
+
+bool OnReShadeOpenOverlay(
+    reshade::api::effect_runtime* runtime,
+    bool open,
+    reshade::api::input_source source) {
+  (void)runtime;
+  (void)source;
+  g_reshade_overlay_open.store(open, std::memory_order_release);
+  return false;
+}
+
+
+// ============================================================================
+// Call of Duty: Black Ops — Plutonium-style frame wait + native console + focus-safe maxfps
+// ============================================================================
+//
+// FPS work is based on a direct comparison of the supplied Steam BlackOps.exe,
+// Plutonium t5sp.exe, and Plutonium's injected bootstrapper code.
+//
+// Important findings:
+// V6.2 HARD-UNLIMITED UPDATE:
+//  * In addition to forcing the com_maxfps read to 0, patch 0x82C8F1 from
+//    `jg done` to `jmp done`. This removes the final stock Sleep/retry gate.
+//  * The two decisive unlimited code patches are verified every Present and
+//    re-applied if late renderer/config initialization restores stock bytes.
+//
+//  * t5sp.exe keeps the stock com_maxfps registration default (85) and the stock
+//    renderer limiter instructions unchanged on disk.
+//  * Plutonium's bootstrapper executes "com_maxfps 0" after its config setup.
+//  * Plutonium injects custom frame-end busy-wait logic around the stock T5
+//    R_WaitEndTime loop (stock continuation points 0x82C8C8/0x82C8F1/0x82C90E)
+//    and uses Sleep(0)-style yielding instead of relying on the vanilla Sleep(1)
+//    loop when its busy-wait fix is active.
+//  * Plutonium also protects saved/archived dvars from server-side setclientdvar
+//    changes, which is why simply hooking one stock dvar setter did not fully
+//    reproduce its behavior.
+//
+// This build is intentionally DRIVER-ONLY rather than duplicating Plutonium's
+// configurable in-engine cap:
+//  1. com_maxfps registration default 85 -> 0.
+//  2. The stock renderer cap read is forced down the native unlimited path, while the frame-end loop itself remains structurally intact.
+//  3. The vanilla frame-end wait loop is preserved, but its Sleep(1) retry becomes Sleep(0), matching Plutonium busy-wait behavior.
+//  4. The central Dvar_SetVariant path is hooked so every typed com_maxfps write
+//     is converted to 0 BEFORE the engine applies it. Present-time repair remains
+//     only as a safety net for direct-memory writers that bypass dvar APIs.
+//  5. The retail native console is enabled by forcing ui_allowConsole=1,
+//     monkeytoy=0 and sv_disableClientConsole=0.
+// Use the NVIDIA driver Max Frame Rate setting for the real cap.
+//
+// Renderer scheduling ports the proven MW3 V8 timeout-recovery strategy to the
+// exact BO1 renderer handoff identified by profiling:
+//  * exact Present-thread WaitForSingleObject(handle, 0), caller RVA 0x211BE2;
+//  * correlation qualification is retained before changing the 0 ms poll;
+//  * after qualification, real 1/2/4 ms event waits are used (BO1-specific,
+//    deliberately shorter than MW3's 8/12/20 because the original BO1 site is
+//    a poll, not a 1 ms blocking wait);
+//  * the first real timeout activates producer recovery;
+//  * matching producer threads join MMCSS "Games" when available, otherwise
+//    ABOVE_NORMAL baseline / HIGHEST burst priority is used;
+//  * real SetEvent and real wait return values are always preserved;
+//  * no Sleep hook, no fake WAIT_OBJECT_0, and no periodic hot-path stats logs.
+
+constexpr DWORD CODBO_SYNC_TARGET_TIMESTAMP = 0x4E601011u;
+constexpr DWORD CODBO_SYNC_TARGET_SIZE_OF_IMAGE = 0x04277000u;
+constexpr DWORD CODBO_SYNC_TARGET_ENTRY_RVA = 0x0056DA57u;
+constexpr uint64_t CODBO_SYNC_ARM_AFTER_PRESENTS = 120u;
+constexpr uintptr_t CODBO_ZERO_POLL_TARGET_RVA = 0x00211BE2u;
+constexpr DWORD CODBO_ZERO_POLL_ORIGINAL_WAIT_MS = 0u;
+constexpr DWORD CODBO_V8_WAIT_BASE_MS = 1u;
+constexpr DWORD CODBO_V8_WAIT_STAGE2_MS = 2u;
+constexpr DWORD CODBO_V8_WAIT_BURST_MS = 4u;
+constexpr uint64_t CODBO_ZERO_POLL_MIN_CALLS = 512u;
+constexpr uint64_t CODBO_ZERO_POLL_MIN_TIMEOUTS = 128u;
+constexpr uint64_t CODBO_ZERO_POLL_MIN_OBJECT0 = 64u;
+constexpr uint64_t CODBO_ZERO_POLL_MIN_SIGNALS = 64u;
+constexpr uint64_t CODBO_ZERO_POLL_MIN_TIMEOUT_PERCENT = 25u;
+constexpr uint32_t CODBO_V8_TIMEOUT_PRESSURE_ADD = 4u;
+constexpr uint32_t CODBO_V8_TIMEOUT_PRESSURE_MAX = 12u;
+constexpr uint32_t CODBO_V8_PRESSURE_BURST_THRESHOLD = 3u;
+constexpr uint32_t CODBO_V8_BURST_RELEASE_SUCCESSES = 12u;
+constexpr uint64_t CODBO_V8_BURST_MIN_HOLD_PRESENTS = 4u;
+constexpr uint64_t CODBO_V8_BURST_FORCE_RELEASE_PRESENTS = 10u;
+constexpr size_t CODBO_SYNC_MAX_PRODUCERS = 8u;
+
+// Exact stock FPS sites in the supplied BlackOps.exe.
+constexpr uintptr_t CODBO_FPS_DEFAULT_RVA = 0x0042BC53u;
+constexpr std::array<uint8_t, 2> CODBO_FPS_DEFAULT_ORIGINAL = {0x6Au, 0x55u};
+constexpr std::array<uint8_t, 2> CODBO_FPS_DEFAULT_PATCHED = {0x6Au, 0x00u};
+constexpr uintptr_t CODBO_FPS_READ_RVA = 0x0042C875u;
+constexpr std::array<uint8_t, 3> CODBO_FPS_READ_ORIGINAL = {0x8Bu, 0x4Au, 0x18u};
+constexpr std::array<uint8_t, 3> CODBO_FPS_READ_PATCHED = {0x33u, 0xC9u, 0x90u};
+// Final stock frame-wait gate. Retail BO1 only enters the Sleep/retry loop when
+// this conditional branch is not taken. V6.2 changes it to an unconditional jump
+// to the frame-end continuation, so no later com_maxfps/config rewrite can restore
+// an in-game frame wait. This is intentionally stronger than stock Plutonium: the
+// user's requested policy is no BO1-imposed FPS cap at all.
+constexpr uintptr_t CODBO_FPS_WAIT_BRANCH_RVA = 0x0042C8F1u;
+constexpr std::array<uint8_t, 2> CODBO_FPS_WAIT_BRANCH_ORIGINAL = {0x7Fu, 0x1Bu};
+constexpr std::array<uint8_t, 2> CODBO_FPS_WAIT_BRANCH_PATCHED = {0xEBu, 0x1Bu};
+// Plutonium-style T5 frame-end wait behavior. Retail BO1 enters a Sleep(1)
+// retry loop at 0x82C8F3. Plutonium's busy-wait path yields with 0 ms
+// instead of sleeping for a full millisecond. We keep the stock loop/clock
+// bookkeeping intact and only change that yield argument.
+constexpr uintptr_t CODBO_FPS_SLEEP_ARG_RVA = 0x0042C8F3u;
+constexpr std::array<uint8_t, 2> CODBO_FPS_SLEEP_ARG_ORIGINAL = {0x6Au, 0x01u};
+constexpr std::array<uint8_t, 2> CODBO_FPS_SLEEP_ARG_PATCHED = {0x6Au, 0x00u};
+
+// Retail T5 command buffer (verified in the supplied Steam t5sp/BlackOps build).
+// VA 0x0049B930 / RVA 0x0009B930: Cbuf_AddText(int localClientNum, const char* text).
+constexpr uintptr_t CODBO_CBUF_ADD_TEXT_RVA = 0x0009B930u;
+constexpr std::array<uint8_t, 14> CODBO_CBUF_ADD_TEXT_PROLOGUE = {
+    0x6Au, 0x35u, 0xE8u, 0x29u, 0x31u, 0x16u, 0x00u,
+    0x8Bu, 0x4Cu, 0x24u, 0x0Cu, 0x83u, 0xC4u, 0x04u};
+
+// Plutonium T5 SP busy-wait implementation recovered from the supplied
+// bootstrapper. It detours the stock R_WaitEndTime decision at 0x82C8EB.
+constexpr uintptr_t CODBO_PLUTO_WAIT_HOOK_RVA = 0x0042C8EBu;
+constexpr std::array<uint8_t, 6> CODBO_PLUTO_WAIT_HOOK_ORIGINAL = {
+    0x8Bu, 0xD0u, 0x2Bu, 0xD1u, 0x85u, 0xD2u};  // mov edx,eax; sub edx,ecx; test edx,edx
+constexpr uintptr_t CODBO_PLUTO_WAIT_LOOP_RVA = 0x0042C8C8u;
+constexpr uintptr_t CODBO_PLUTO_WAIT_BRANCH_RVA = 0x0042C8F1u;
+constexpr uintptr_t CODBO_PLUTO_WAIT_DONE_RVA = 0x0042C90Eu;
+constexpr uintptr_t CODBO_SYS_SLEEP_RVA = 0x000AAE60u;  // game wrapper around Sleep
+constexpr std::array<uint8_t, 7> CODBO_SYS_SLEEP_PROLOGUE = {
+    0x8Bu, 0x44u, 0x24u, 0x04u, 0x50u, 0xFFu, 0x15u};
+
+// Stock T5 dvar locations/functions used by Plutonium's helper.
+constexpr uintptr_t CODBO_R_VSYNC_DVAR_PTR_RVA = 0x0371FACCu;  // VA 0x03B1FACC
+constexpr uintptr_t CODBO_DVAR_REGISTER_BOOL_RVA = 0x0005BB20u; // VA 0x0045BB20
+constexpr std::array<uint8_t, 12> CODBO_DVAR_REGISTER_BOOL_PROLOGUE = {
+    0x83u, 0xECu, 0x10u, 0x8Bu, 0x4Cu, 0x24u,
+    0x20u, 0x8Au, 0x44u, 0x24u, 0x18u, 0x8Bu};
+constexpr uint32_t CODBO_PLUTO_BUSYWAIT_FLAGS = 0x00100001u;
+
+// Plutonium-style protection of com_maxfps from server/listen-server
+// SetClientDvar while leaving local console/config writes native.
+constexpr uintptr_t CODBO_SETCLIENTDVAR_RVA = 0x0022A0B0u;
+constexpr std::array<uint8_t, 14> CODBO_SETCLIENTDVAR_SIGNATURE = {
+    0x8Bu, 0x44u, 0x24u, 0x08u, 0x8Bu, 0x4Cu, 0x24u,
+    0x04u, 0x6Au, 0x00u, 0x6Au, 0x00u, 0x50u, 0x51u};
+constexpr size_t CODBO_SETCLIENTDVAR_PATCH_SIZE = 8u;
+constexpr uintptr_t CODBO_COM_MAXFPS_DVAR_PTR_RVA = 0x02081760u;
+constexpr uintptr_t CODBO_DVAR_CURRENT_OFFSET = 0x18u;
+constexpr uintptr_t CODBO_DVAR_LATCHED_OFFSET = 0x28u;
+constexpr uintptr_t CODBO_DVAR_RESET_OFFSET = 0x38u;
+constexpr uintptr_t CODBO_DVAR_SAVED_OFFSET = 0x48u;
+constexpr uintptr_t CODBO_DVAR_TYPE_OFFSET = 0x10u;
+constexpr size_t CODBO_DVAR_VALUE_SIZE = 16u;
+constexpr uint8_t CODBO_DVAR_TYPE_BOOL = 0x00u;
+constexpr uint8_t CODBO_DVAR_TYPE_INT = 0x05u;
+
+constexpr uintptr_t CODBO_DVAR_SET_VARIANT_RVA = 0x00461DE0u;
+constexpr std::array<uint8_t, 6> CODBO_DVAR_SET_VARIANT_PROLOGUE = {
+    0x81u, 0xECu, 0x20u, 0x04u, 0x00u, 0x00u};
+constexpr size_t CODBO_DVAR_SET_VARIANT_PATCH_SIZE = 6u;
+constexpr uint64_t CODBO_FPS_SUPPRESSED_WRITE_LOG_LIMIT = 2u;
+
+constexpr uintptr_t CODBO_UI_ALLOW_CONSOLE_DEFAULT_RVA = 0x001F17FBu;
+constexpr std::array<uint8_t, 2> CODBO_UI_ALLOW_CONSOLE_DEFAULT_ORIGINAL = {0x6Au, 0x00u};
+constexpr std::array<uint8_t, 2> CODBO_UI_ALLOW_CONSOLE_DEFAULT_PATCHED  = {0x6Au, 0x01u};
+constexpr uintptr_t CODBO_MONKEYTOY_DEFAULT_RVA = 0x000A11C8u;
+constexpr std::array<uint8_t, 2> CODBO_MONKEYTOY_DEFAULT_ORIGINAL = {0x6Au, 0x01u};
+constexpr std::array<uint8_t, 2> CODBO_MONKEYTOY_DEFAULT_PATCHED  = {0x6Au, 0x00u};
+constexpr uintptr_t CODBO_DVAR_FIND_VAR_RVA = 0x001AE810u;
+constexpr std::array<uint8_t, 8> CODBO_DVAR_FIND_VAR_PROLOGUE = {
+    0x8Bu, 0x44u, 0x24u, 0x04u, 0x85u, 0xC0u, 0x74u, 0x1Au};
+
+float codbo_renderer_sync_fix = 1.f;
+std::atomic<bool> g_codbo_renderer_sync_enabled{true};
+std::atomic<bool> g_codbo_fps_patch_installed{false};
+std::atomic<bool> g_codbo_fps_patch_attempted{false};
+std::atomic<uint64_t> g_codbo_fps_state_repairs{0u};
+std::atomic<uint64_t> g_codbo_fps_suppressed_writes{0u};
+std::atomic<uint64_t> g_codbo_fps_code_repairs{0u};
+std::atomic<uint64_t> g_codbo_fps_code_unknowns{0u};
+std::atomic<bool> g_codbo_fps_setter_hook_installed{false};
+void* g_codbo_fps_setter_trampoline = nullptr;
+std::array<uint8_t, CODBO_DVAR_SET_VARIANT_PATCH_SIZE> g_codbo_fps_setter_saved = {};
+
+std::atomic<bool> g_codbo_console_installed{false};
+std::atomic<bool> g_codbo_console_install_attempted{false};
+std::atomic<bool> g_codbo_console_ui_patch_applied{false};
+std::atomic<bool> g_codbo_console_monkey_patch_applied{false};
+void* g_codbo_ui_allow_console_dvar = nullptr;
+void* g_codbo_monkeytoy_dvar = nullptr;
+void* g_codbo_disable_client_console_dvar = nullptr;
+
+using BlackOpsDvarSetVariantRawFn = void(__cdecl*)(
+    void*, uint32_t, uint32_t, uint32_t, uint32_t, int);
+using BlackOpsDvarFindVarFn = void*(__cdecl*)(const char*);
+using BlackOpsCbufAddTextFn = void(__cdecl*)(int, const char*);
+
+std::atomic<bool> g_codbo_startup_commands_submitted{false};
+std::atomic<bool> g_codbo_last_foreground{false};
+std::atomic<uint64_t> g_codbo_focus_reasserts{0u};
+bool g_codbo_cbuf_signature_error_logged = false;
+
+using BlackOpsDvarRegisterBoolFn = void*(__cdecl*)(
+    const char*, bool, uint32_t, const char*);
+using BlackOpsGameSleepFn = void(__cdecl*)(int);
+using BlackOpsSetClientDvarFn = void(__cdecl*)(const char*, const char*);
+
+void* g_codbo_busy_wait_dvar = nullptr;
+std::atomic<bool> g_codbo_pluto_wait_hook_installed{false};
+void* g_codbo_pluto_wait_stub = nullptr;
+std::array<uint8_t, CODBO_PLUTO_WAIT_HOOK_ORIGINAL.size()> g_codbo_pluto_wait_saved = {};
+
+std::atomic<bool> g_codbo_setclient_guard_installed{false};
+void* g_codbo_setclient_trampoline = nullptr;
+std::array<uint8_t, CODBO_SETCLIENTDVAR_PATCH_SIZE> g_codbo_setclient_saved = {};
+std::atomic<uint64_t> g_codbo_setclient_blocked{0u};
+
+using BlackOpsWaitForSingleObjectFn = DWORD(WINAPI*)(HANDLE, DWORD);
+using BlackOpsSetEventFn = BOOL(WINAPI*)(HANDLE);
+using BlackOpsAvSetMmThreadCharacteristicsWFn = HANDLE(WINAPI*)(LPCWSTR, LPDWORD);
+
+BlackOpsWaitForSingleObjectFn g_codbo_original_wait = nullptr;
+BlackOpsSetEventFn g_codbo_original_set_event = nullptr;
+void** g_codbo_wait_iat_slot = nullptr;
+void** g_codbo_set_event_iat_slot = nullptr;
+std::atomic<bool> g_codbo_sync_hooks_installed{false};
+std::atomic<bool> g_codbo_sync_install_attempted{false};
+std::atomic<DWORD> g_codbo_present_thread_id{0u};
+std::atomic<uint64_t> g_codbo_present_count{0u};
+
+std::atomic<uintptr_t> g_codbo_candidate_event{0u};
+std::atomic<uintptr_t> g_codbo_renderer_event{0u};
+std::atomic<uint64_t> g_codbo_candidate_calls{0u};
+std::atomic<uint64_t> g_codbo_candidate_object0{0u};
+std::atomic<uint64_t> g_codbo_candidate_timeouts{0u};
+std::atomic<uint64_t> g_codbo_candidate_signals{0u};
+std::atomic<uint32_t> g_codbo_timeout_streak{0u};
+std::atomic<uint32_t> g_codbo_timeout_pressure{0u};
+std::atomic<uint32_t> g_codbo_successes_since_timeout{0u};
+std::atomic<bool> g_codbo_producer_burst{false};
+std::atomic<uint64_t> g_codbo_burst_hold_until{0u};
+std::atomic<uint64_t> g_codbo_last_timeout_present{0u};
+
+HMODULE g_codbo_avrt_module = nullptr;
+BlackOpsAvSetMmThreadCharacteristicsWFn g_codbo_av_set_mm = nullptr;
+
+struct BlackOpsProducerThread {
+  DWORD thread_id = 0u;
+  HANDLE handle = nullptr;
+  int original_priority = THREAD_PRIORITY_NORMAL;
+  int base_priority = THREAD_PRIORITY_ABOVE_NORMAL;
+  BOOL original_boost_disabled = FALSE;
+  bool have_original_boost = false;
+};
+SRWLOCK g_codbo_producer_lock = SRWLOCK_INIT;
+std::array<BlackOpsProducerThread, CODBO_SYNC_MAX_PRODUCERS> g_codbo_producers = {};
+
+void LogBlackOpsSync(reshade::log::level level, const std::string& message) {
+  reshade::log::message(level, message.c_str());
+}
+
+uintptr_t BlackOpsExeBase() {
+  return reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+}
+
+uintptr_t BlackOpsReturnAddressToExeRva(const void* return_address) {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u || return_address == nullptr) return 0u;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0u;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return 0u;
+  const uintptr_t address = reinterpret_cast<uintptr_t>(return_address);
+  if (address < base || address >= base + nt->OptionalHeader.SizeOfImage) return 0u;
+  return address - base;
+}
+
+bool VerifyBlackOpsSyncTargetBuild(bool log_result = true) {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return false;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+  const bool machine_ok = nt->FileHeader.Machine == IMAGE_FILE_MACHINE_I386;
+  const bool ok = machine_ok
+      && nt->FileHeader.TimeDateStamp == CODBO_SYNC_TARGET_TIMESTAMP
+      && nt->OptionalHeader.SizeOfImage == CODBO_SYNC_TARGET_SIZE_OF_IMAGE
+      && nt->OptionalHeader.AddressOfEntryPoint == CODBO_SYNC_TARGET_ENTRY_RVA;
+  if (log_result) {
+    std::stringstream s;
+    s << "[BlackOps V6.2] EXE verification: timestamp=0x" << std::hex << std::uppercase
+      << nt->FileHeader.TimeDateStamp << " sizeOfImage=0x" << nt->OptionalHeader.SizeOfImage
+      << " entryRVA=0x" << nt->OptionalHeader.AddressOfEntryPoint << std::dec
+      << " machine=" << (machine_ok ? "x86" : "other") << " result=" << (ok ? "OK" : "REFUSED");
+    LogBlackOpsSync(ok ? reshade::log::level::info : reshade::log::level::warning, s.str());
+  }
+  return ok;
+}
+
+template <size_t N>
+bool PatchBlackOpsBytes(uintptr_t rva,
+                        const std::array<uint8_t, N>& expected,
+                        const std::array<uint8_t, N>& replacement) {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  auto* address = reinterpret_cast<uint8_t*>(base + rva);
+  if (std::memcmp(address, replacement.data(), N) == 0) return true;
+  if (std::memcmp(address, expected.data(), N) != 0) return false;
+  DWORD old_protect = 0u;
+  if (!VirtualProtect(address, N, PAGE_EXECUTE_READWRITE, &old_protect)) return false;
+  std::memcpy(address, replacement.data(), N);
+  FlushInstructionCache(GetCurrentProcess(), address, N);
+  DWORD ignored = 0u;
+  VirtualProtect(address, N, old_protect, &ignored);
+  return true;
+}
+
+
+const char* BlackOpsDvarSourceName(int source) {
+  switch (source) {
+    case 0: return "INTERNAL";
+    case 1: return "EXTERNAL";
+    case 2: return "SCRIPT";
+    case 3: return "DEVGUI";
+    default: return "UNKNOWN";
+  }
+}
+
+bool IsBlackOpsComMaxFpsDvar(void* dvar) {
+  if (dvar == nullptr) return false;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  const uintptr_t active = *reinterpret_cast<const uintptr_t*>(
+      base + CODBO_COM_MAXFPS_DVAR_PTR_RVA);
+  if (active != 0u && reinterpret_cast<uintptr_t>(dvar) == active) return true;
+  const char* name = *reinterpret_cast<const char* const*>(dvar);
+  return name != nullptr && std::strcmp(name, "com_maxfps") == 0;
+}
+
+bool WriteBlackOpsExecutableBytes(uint8_t* target, const uint8_t* bytes, size_t size) {
+  if (target == nullptr || bytes == nullptr || size == 0u) return false;
+  DWORD old_protect = 0u;
+  if (!VirtualProtect(target, size, PAGE_EXECUTE_READWRITE, &old_protect)) return false;
+  std::memcpy(target, bytes, size);
+  FlushInstructionCache(GetCurrentProcess(), target, size);
+  DWORD ignored = 0u;
+  VirtualProtect(target, size, old_protect, &ignored);
+  return true;
+}
+
+template <size_t N>
+bool MaintainBlackOpsUnlimitedPatch(
+    uintptr_t rva,
+    const std::array<uint8_t, N>& original,
+    const std::array<uint8_t, N>& patched,
+    const char* label) {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  auto* address = reinterpret_cast<uint8_t*>(base + rva);
+  if (std::memcmp(address, patched.data(), N) == 0) return true;
+
+  if (std::memcmp(address, original.data(), N) == 0) {
+    if (!WriteBlackOpsExecutableBytes(address, patched.data(), N)) return false;
+    const uint64_t repair = g_codbo_fps_code_repairs.fetch_add(
+        1u, std::memory_order_relaxed) + 1u;
+    if (repair <= 8u) {
+      std::stringstream stream;
+      stream << "[BlackOps FPS] V6.2 self-healed " << label
+             << " at RVA 0x" << std::hex << std::uppercase << rva << std::dec
+             << " after the game restored the stock bytes (repair #" << repair << ").";
+      LogBlackOpsSync(reshade::log::level::info, stream.str());
+    }
+    return true;
+  }
+
+  const uint64_t unknown = g_codbo_fps_code_unknowns.fetch_add(
+      1u, std::memory_order_relaxed) + 1u;
+  if (unknown <= 4u) {
+    std::stringstream stream;
+    stream << "[BlackOps FPS] V6.2 WARNING: " << label
+           << " at RVA 0x" << std::hex << std::uppercase << rva << std::dec
+           << " contains neither stock nor RenoDX bytes; leaving it untouched.";
+    LogBlackOpsSync(reshade::log::level::warning, stream.str());
+  }
+  return false;
+}
+
+void MaintainBlackOpsHardUnlimitedCode() {
+  if (!g_codbo_fps_patch_installed.load(std::memory_order_acquire)) return;
+
+  // The read bypass removes com_maxfps from the calculation. The branch bypass
+  // is the decisive fallback: even if the dvar or read instruction is rewritten
+  // after renderer/config initialization, BO1 cannot enter its Sleep/retry cap.
+  MaintainBlackOpsUnlimitedPatch(
+      CODBO_FPS_READ_RVA, CODBO_FPS_READ_ORIGINAL, CODBO_FPS_READ_PATCHED,
+      "native com_maxfps read bypass");
+  MaintainBlackOpsUnlimitedPatch(
+      CODBO_FPS_WAIT_BRANCH_RVA, CODBO_FPS_WAIT_BRANCH_ORIGINAL,
+      CODBO_FPS_WAIT_BRANCH_PATCHED, "R_WaitEndTime final wait-branch bypass");
+}
+
+bool ReadBlackOpsBoolDvar(void* dvar) {
+  if (dvar == nullptr) return false;
+  const auto* bytes = reinterpret_cast<const uint8_t*>(dvar);
+  return bytes[CODBO_DVAR_CURRENT_OFFSET] != 0u;
+}
+
+int ReadBlackOpsIntDvar(void* dvar) {
+  if (dvar == nullptr) return 0;
+  const auto* bytes = reinterpret_cast<const uint8_t*>(dvar);
+  return *reinterpret_cast<const int32_t*>(bytes + CODBO_DVAR_CURRENT_OFFSET);
+}
+
+void* ReadBlackOpsDvarGlobal(uintptr_t rva) {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return nullptr;
+  return *reinterpret_cast<void* const*>(base + rva);
+}
+
+bool EnsureBlackOpsPlutoniumBusyWaitDvar() {
+  if (g_codbo_busy_wait_dvar != nullptr) return true;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+
+  // Prefer an already-created dvar (e.g. another compatible client component).
+  const auto* find_bytes = reinterpret_cast<const uint8_t*>(base + CODBO_DVAR_FIND_VAR_RVA);
+  if (std::memcmp(find_bytes, CODBO_DVAR_FIND_VAR_PROLOGUE.data(),
+                  CODBO_DVAR_FIND_VAR_PROLOGUE.size()) == 0) {
+    const auto find_var = reinterpret_cast<BlackOpsDvarFindVarFn>(
+        base + CODBO_DVAR_FIND_VAR_RVA);
+    g_codbo_busy_wait_dvar = find_var("com_busyWait");
+    if (g_codbo_busy_wait_dvar != nullptr) return true;
+  }
+
+  const auto* reg_bytes = reinterpret_cast<const uint8_t*>(
+      base + CODBO_DVAR_REGISTER_BOOL_RVA);
+  if (std::memcmp(reg_bytes, CODBO_DVAR_REGISTER_BOOL_PROLOGUE.data(),
+                  CODBO_DVAR_REGISTER_BOOL_PROLOGUE.size()) != 0) {
+    LogBlackOpsSync(reshade::log::level::warning,
+        "[BlackOps Plutonium Sync] Dvar_RegisterBool signature mismatch; com_busyWait was not registered.");
+    return false;
+  }
+
+  const auto register_bool = reinterpret_cast<BlackOpsDvarRegisterBoolFn>(
+      base + CODBO_DVAR_REGISTER_BOOL_RVA);
+  // V7 enables the smooth limiter from the first frame when this dvar has not
+  // already been created. The delayed command pass still reasserts the setting
+  // after config loading without touching com_maxfps itself.
+  g_codbo_busy_wait_dvar = register_bool(
+      "com_busyWait", true, CODBO_PLUTO_BUSYWAIT_FLAGS,
+      "Uses the RenoDX smooth internal frame limiter instead of the stock Sleep(1) loop.");
+  return g_codbo_busy_wait_dvar != nullptr;
+}
+
+
+// ============================================================================
+// BO1 smooth internal frame limiter (V7)
+// ============================================================================
+// Stock T5/BO1 paces com_maxfps with a millisecond clock plus a Sleep(1) retry
+// loop. V7 keeps com_maxfps as the user-facing target, but replaces that coarse
+// wait with an absolute QPC schedule. Most of the wait is spent in a high-
+// resolution waitable timer; only the final few hundred microseconds use
+// Sleep(0)/SwitchToThread and a very small YieldProcessor finish. Deadlines are
+// advanced from the previous deadline rather than from the current time, which
+// prevents accumulated drift and the long/short sawtooth common to relative
+// Sleep(1) frame caps.
+struct BlackOpsSmoothLimiterState {
+  uint64_t qpc_frequency = 0u;
+  double next_deadline = 0.0;
+  int target_fps = 0;
+  HANDLE timer = nullptr;
+  double wake_error_us = 250.0;
+  bool initialized = false;
+};
+thread_local BlackOpsSmoothLimiterState g_codbo_smooth_limiter;
+
+uint64_t BlackOpsQpcNow() {
+  LARGE_INTEGER value = {};
+  QueryPerformanceCounter(&value);
+  return static_cast<uint64_t>(value.QuadPart);
+}
+
+uint64_t BlackOpsQpcFrequency() {
+  if (g_codbo_smooth_limiter.qpc_frequency != 0u)
+    return g_codbo_smooth_limiter.qpc_frequency;
+  LARGE_INTEGER value = {};
+  if (!QueryPerformanceFrequency(&value) || value.QuadPart <= 0) return 0u;
+  g_codbo_smooth_limiter.qpc_frequency = static_cast<uint64_t>(value.QuadPart);
+  return g_codbo_smooth_limiter.qpc_frequency;
+}
+
+void ResetBlackOpsSmoothLimiter() {
+  g_codbo_smooth_limiter.next_deadline = 0.0;
+  g_codbo_smooth_limiter.target_fps = 0;
+  g_codbo_smooth_limiter.initialized = false;
+  g_codbo_smooth_limiter.wake_error_us = 250.0;
+}
+
+HANDLE GetBlackOpsSmoothLimiterTimer() {
+  if (g_codbo_smooth_limiter.timer != nullptr)
+    return g_codbo_smooth_limiter.timer;
+
+  HANDLE timer = CreateWaitableTimerExW(
+      nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+      TIMER_MODIFY_STATE | SYNCHRONIZE);
+  if (timer == nullptr)
+    timer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+  g_codbo_smooth_limiter.timer = timer;
+  return timer;
+}
+
+void BlackOpsSmoothLimitFrame(int target_fps) {
+  if (target_fps <= 0 || target_fps > 1000) {
+    ResetBlackOpsSmoothLimiter();
+    return;
+  }
+
+  const uint64_t frequency = BlackOpsQpcFrequency();
+  if (frequency == 0u) return;
+
+  const double period_ticks = static_cast<double>(frequency)
+      / static_cast<double>(target_fps);
+  uint64_t now = BlackOpsQpcNow();
+
+  auto& state = g_codbo_smooth_limiter;
+  if (!state.initialized || state.target_fps != target_fps) {
+    state.initialized = true;
+    state.target_fps = target_fps;
+    state.next_deadline = static_cast<double>(now) + period_ticks;
+  } else {
+    const double candidate_deadline = state.next_deadline + period_ticks;
+
+    // MW3-style late-frame re-anchor. The old V7 path tolerated up to three
+    // missed periods before resetting phase, which could turn a small overrun
+    // into one or more catch-up short frames. If this frame has already missed
+    // its candidate deadline, pass it immediately and use this real late point
+    // as the phase anchor. The next BO1 frame then gets one clean full period.
+    if (candidate_deadline <= static_cast<double>(now)) {
+      state.next_deadline = static_cast<double>(now);
+      return;
+    }
+
+    // Normal on-time frames still advance from the previous absolute phase, so
+    // ordinary timer wake jitter cannot accumulate into long/short sawtooth.
+    state.next_deadline = candidate_deadline;
+  }
+
+  const double ticks_per_us = static_cast<double>(frequency) / 1000000.0;
+  const double coarse_floor_us = 650.0;
+  const double spin_finish_us = 100.0;
+
+  for (;;) {
+    now = BlackOpsQpcNow();
+    const double remaining_ticks = state.next_deadline - static_cast<double>(now);
+    if (remaining_ticks <= 0.0) break;
+    const double remaining_us = remaining_ticks / ticks_per_us;
+
+    // Use a kernel wait for the long portion. The adaptive headroom absorbs
+    // normal timer wake jitter without permanently busy-spinning a CPU core.
+    const double adaptive_headroom_us = std::clamp(
+        state.wake_error_us + 200.0, coarse_floor_us, 1800.0);
+    if (remaining_us > adaptive_headroom_us + 250.0) {
+      HANDLE timer = GetBlackOpsSmoothLimiterTimer();
+      if (timer != nullptr) {
+        const double sleep_us = remaining_us - adaptive_headroom_us;
+        LARGE_INTEGER due = {};
+        due.QuadPart = -static_cast<LONGLONG>(sleep_us * 10.0);
+        const uint64_t before = BlackOpsQpcNow();
+        if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+          WaitForSingleObject(timer, INFINITE);
+          const uint64_t after = BlackOpsQpcNow();
+          const double actual_us = static_cast<double>(after - before) / ticks_per_us;
+          const double error = std::max(0.0, actual_us - sleep_us);
+          state.wake_error_us = state.wake_error_us * 0.90 + error * 0.10;
+          continue;
+        }
+      }
+      // Compatibility fallback if a waitable timer is unavailable.
+      Sleep(0);
+      continue;
+    }
+
+    if (remaining_us > 300.0) {
+      if (!SwitchToThread()) Sleep(0);
+      continue;
+    }
+
+    if (remaining_us > spin_finish_us) {
+      Sleep(0);
+      continue;
+    }
+
+    // Keep the pure spin tiny. At 100 us this is at most ~1.2% of one logical
+    // core at 120 FPS, and usually much less because scheduler yields consume
+    // most of the final phase.
+    YieldProcessor();
+  }
+}
+
+int __cdecl BlackOpsPlutoniumWaitDecision(
+    int current_time, int target_time, int /*unused_ebx*/) {
+  (void)current_time;
+  (void)target_time;
+
+  // V7 keeps com_maxfps as the actual internal cap. com_maxfps <= 0 remains
+  // unlimited. We no longer hard-force the renderer read to zero and no longer
+  // patch the final wait branch.
+  if (!EnsureBlackOpsPlutoniumBusyWaitDvar()
+      || !ReadBlackOpsBoolDvar(g_codbo_busy_wait_dvar)) {
+    return 0;  // exact retail path when the smooth limiter is disabled
+  }
+
+  const int max_fps = ReadBlackOpsIntDvar(
+      ReadBlackOpsDvarGlobal(CODBO_COM_MAXFPS_DVAR_PTR_RVA));
+  if (max_fps <= 0 || max_fps > 1000) {
+    ResetBlackOpsSmoothLimiter();
+    return 1;
+  }
+
+  BlackOpsSmoothLimitFrame(max_fps);
+  return 1;  // our absolute-time limiter completed the frame wait
+}
+
+bool InstallBlackOpsPlutoniumWaitHook() {
+  if (g_codbo_pluto_wait_hook_installed.load(std::memory_order_acquire)) return true;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  auto* target = reinterpret_cast<uint8_t*>(base + CODBO_PLUTO_WAIT_HOOK_RVA);
+  if (std::memcmp(target, CODBO_PLUTO_WAIT_HOOK_ORIGINAL.data(),
+                  CODBO_PLUTO_WAIT_HOOK_ORIGINAL.size()) != 0) {
+    LogBlackOpsSync(reshade::log::level::warning,
+        "[BlackOps Plutonium Sync] R_WaitEndTime hook signature mismatch at RVA 0x42C8EB.");
+    return false;
+  }
+  if (!EnsureBlackOpsPlutoniumBusyWaitDvar()) return false;
+
+  std::memcpy(g_codbo_pluto_wait_saved.data(), target,
+              g_codbo_pluto_wait_saved.size());
+
+  // Runtime x86 stub that reproduces Plutonium's register-preserving wrapper.
+  // It calls BlackOpsPlutoniumWaitDecision(eax, ecx, ebx), then dispatches to
+  // the same three stock continuation addresses used by the bootstrapper.
+  auto* stub = reinterpret_cast<uint8_t*>(VirtualAlloc(
+      nullptr, 96u, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+  if (stub == nullptr) return false;
+  size_t o = 0u;
+  auto b = [&](uint8_t v) { stub[o++] = v; };
+  auto d = [&](uint32_t v) {
+    std::memcpy(stub + o, &v, sizeof(v));
+    o += sizeof(v);
+  };
+  auto abs_jump = [&](uintptr_t address) {
+    b(0x68u); d(static_cast<uint32_t>(address)); b(0xC3u); // push imm32 / ret
+  };
+
+  b(0x52u);                    // push edx
+  b(0x60u);                    // pushad
+  b(0x53u); b(0x51u); b(0x50u); // push ebx, ecx, eax
+  b(0xB8u); d(static_cast<uint32_t>(
+      reinterpret_cast<uintptr_t>(&BlackOpsPlutoniumWaitDecision)));
+  b(0xFFu); b(0xD0u);         // call eax
+  b(0x83u); b(0xC4u); b(0x0Cu);
+  b(0x89u); b(0x44u); b(0x24u); b(0x20u); // save decision over outer edx
+  b(0x61u);                    // popad
+  b(0x5Au);                    // pop edx = decision
+  b(0x83u); b(0xFAu); b(0x02u);
+  b(0x74u); const size_t je_wait = o++;     // je wait
+  b(0x83u); b(0xFAu); b(0x01u);
+  b(0x74u); const size_t je_done = o++;     // je done
+  // Decision 0: execute the exact overwritten retail instructions.
+  for (const uint8_t v : CODBO_PLUTO_WAIT_HOOK_ORIGINAL) b(v);
+  abs_jump(base + CODBO_PLUTO_WAIT_BRANCH_RVA);
+  const size_t done_label = o;
+  abs_jump(base + CODBO_PLUTO_WAIT_DONE_RVA);
+  const size_t wait_label = o;
+  abs_jump(base + CODBO_PLUTO_WAIT_LOOP_RVA);
+
+  const auto rel8 = [](size_t from_next, size_t to) -> uint8_t {
+    return static_cast<uint8_t>(static_cast<int8_t>(
+        static_cast<intptr_t>(to) - static_cast<intptr_t>(from_next)));
+  };
+  stub[je_wait] = rel8(je_wait + 1u, wait_label);
+  stub[je_done] = rel8(je_done + 1u, done_label);
+  FlushInstructionCache(GetCurrentProcess(), stub, o);
+
+  std::array<uint8_t, CODBO_PLUTO_WAIT_HOOK_ORIGINAL.size()> hook = {};
+  hook[0] = 0xE9u;
+  const intptr_t delta = reinterpret_cast<intptr_t>(stub)
+      - reinterpret_cast<intptr_t>(target + 5u);
+  *reinterpret_cast<int32_t*>(hook.data() + 1u) = static_cast<int32_t>(delta);
+  hook[5] = 0x90u;
+  if (!WriteBlackOpsExecutableBytes(target, hook.data(), hook.size())) {
+    VirtualFree(stub, 0u, MEM_RELEASE);
+    return false;
+  }
+
+  g_codbo_pluto_wait_stub = stub;
+  g_codbo_pluto_wait_hook_installed.store(true, std::memory_order_release);
+  LogBlackOpsSync(reshade::log::level::info,
+      "[BlackOps Frame Pacing] V7 smooth R_WaitEndTime hook active at RVA 0x42C8EB; com_maxfps is paced with absolute QPC deadlines, high-resolution timer coarse waits, and a tiny yield/spin finish.");
+  return true;
+}
+
+void ShutdownBlackOpsPlutoniumWaitHook() {
+  if (!g_codbo_pluto_wait_hook_installed.exchange(
+          false, std::memory_order_acq_rel)) return;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base != 0u) {
+    auto* target = reinterpret_cast<uint8_t*>(base + CODBO_PLUTO_WAIT_HOOK_RVA);
+    WriteBlackOpsExecutableBytes(target, g_codbo_pluto_wait_saved.data(),
+                                 g_codbo_pluto_wait_saved.size());
+  }
+  if (g_codbo_pluto_wait_stub != nullptr) {
+    VirtualFree(g_codbo_pluto_wait_stub, 0u, MEM_RELEASE);
+    g_codbo_pluto_wait_stub = nullptr;
+  }
+}
+
+void __cdecl HookBlackOpsSetClientDvar(const char* name, const char* value) {
+  const auto original = reinterpret_cast<BlackOpsSetClientDvarFn>(
+      g_codbo_setclient_trampoline);
+  if (name != nullptr && _stricmp(name, "com_maxfps") == 0) {
+    const uint64_t n = g_codbo_setclient_blocked.fetch_add(
+        1u, std::memory_order_relaxed) + 1u;
+    if (n <= 3u) {
+      std::stringstream stream;
+      stream << "[BlackOps Plutonium Sync] blocked SetClientDvar(com_maxfps, "
+             << (value != nullptr ? value : "<null>")
+             << ") callerRVA=0x" << std::hex << std::uppercase
+             << BlackOpsReturnAddressToExeRva(_ReturnAddress()) << std::dec << ".";
+      LogBlackOpsSync(reshade::log::level::info, stream.str());
+    }
+    return;
+  }
+  if (original != nullptr) original(name, value);
+}
+
+bool InstallBlackOpsSetClientDvarGuard() {
+  if (g_codbo_setclient_guard_installed.load(std::memory_order_acquire)) return true;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  auto* target = reinterpret_cast<uint8_t*>(base + CODBO_SETCLIENTDVAR_RVA);
+  if (std::memcmp(target, CODBO_SETCLIENTDVAR_SIGNATURE.data(),
+                  CODBO_SETCLIENTDVAR_SIGNATURE.size()) != 0) {
+    LogBlackOpsSync(reshade::log::level::warning,
+        "[BlackOps Plutonium Sync] SetClientDvar signature mismatch at RVA 0x22A0B0; protection not installed.");
+    return false;
+  }
+
+  std::memcpy(g_codbo_setclient_saved.data(), target,
+              g_codbo_setclient_saved.size());
+  auto* trampoline = reinterpret_cast<uint8_t*>(VirtualAlloc(
+      nullptr, 16u, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+  if (trampoline == nullptr) return false;
+  std::memcpy(trampoline, g_codbo_setclient_saved.data(),
+              CODBO_SETCLIENTDVAR_PATCH_SIZE);
+  trampoline[CODBO_SETCLIENTDVAR_PATCH_SIZE] = 0xE9u;
+  const intptr_t back = reinterpret_cast<intptr_t>(
+      target + CODBO_SETCLIENTDVAR_PATCH_SIZE)
+      - reinterpret_cast<intptr_t>(
+          trampoline + CODBO_SETCLIENTDVAR_PATCH_SIZE + 5u);
+  *reinterpret_cast<int32_t*>(
+      trampoline + CODBO_SETCLIENTDVAR_PATCH_SIZE + 1u) = static_cast<int32_t>(back);
+
+  std::array<uint8_t, CODBO_SETCLIENTDVAR_PATCH_SIZE> patch = {};
+  patch.fill(0x90u);
+  patch[0] = 0xE9u;
+  const intptr_t hook_delta = reinterpret_cast<intptr_t>(&HookBlackOpsSetClientDvar)
+      - reinterpret_cast<intptr_t>(target + 5u);
+  *reinterpret_cast<int32_t*>(patch.data() + 1u) = static_cast<int32_t>(hook_delta);
+  if (!WriteBlackOpsExecutableBytes(target, patch.data(), patch.size())) {
+    VirtualFree(trampoline, 0u, MEM_RELEASE);
+    return false;
+  }
+  g_codbo_setclient_trampoline = trampoline;
+  g_codbo_setclient_guard_installed.store(true, std::memory_order_release);
+  return true;
+}
+
+void ShutdownBlackOpsSetClientDvarGuard() {
+  if (!g_codbo_setclient_guard_installed.exchange(
+          false, std::memory_order_acq_rel)) return;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base != 0u) {
+    auto* target = reinterpret_cast<uint8_t*>(base + CODBO_SETCLIENTDVAR_RVA);
+    WriteBlackOpsExecutableBytes(target, g_codbo_setclient_saved.data(),
+                                 g_codbo_setclient_saved.size());
+  }
+  if (g_codbo_setclient_trampoline != nullptr) {
+    VirtualFree(g_codbo_setclient_trampoline, 0u, MEM_RELEASE);
+    g_codbo_setclient_trampoline = nullptr;
+  }
+}
+
+void __cdecl HookBlackOpsHardMaxFpsDvarSetVariant(
+    void* dvar,
+    uint32_t value0,
+    uint32_t value1,
+    uint32_t value2,
+    uint32_t value3,
+    int source) {
+  const auto original = reinterpret_cast<BlackOpsDvarSetVariantRawFn>(
+      g_codbo_fps_setter_trampoline);
+  if (original == nullptr) return;
+
+  if (dvar != nullptr
+      && *reinterpret_cast<const uint8_t*>(
+             reinterpret_cast<uintptr_t>(dvar) + CODBO_DVAR_TYPE_OFFSET)
+          == CODBO_DVAR_TYPE_INT
+      && IsBlackOpsComMaxFpsDvar(dvar)) {
+    const int32_t requested = static_cast<int32_t>(value0);
+    if (requested != 0) {
+      const uint64_t n = g_codbo_fps_suppressed_writes.fetch_add(
+          1u, std::memory_order_relaxed) + 1u;
+      if (n <= CODBO_FPS_SUPPRESSED_WRITE_LOG_LIMIT) {
+        std::stringstream s;
+        s << "[BlackOps FPS] V6.2 blocked com_maxfps write "
+          << requested << " -> 0 source=" << BlackOpsDvarSourceName(source)
+          << "(" << source << ") callerRVA=0x" << std::hex << std::uppercase
+          << BlackOpsReturnAddressToExeRva(_ReturnAddress()) << std::dec << ".";
+        LogBlackOpsSync(reshade::log::level::info, s.str());
+      }
+    }
+    value0 = value1 = value2 = value3 = 0u;
+  }
+
+  original(dvar, value0, value1, value2, value3, source);
+}
+
+bool InstallBlackOpsHardMaxFpsSetterHook() {
+  if (g_codbo_fps_setter_hook_installed.load(std::memory_order_acquire)) return true;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  auto* target = reinterpret_cast<uint8_t*>(base + CODBO_DVAR_SET_VARIANT_RVA);
+  if (std::memcmp(target, CODBO_DVAR_SET_VARIANT_PROLOGUE.data(),
+                  CODBO_DVAR_SET_VARIANT_PROLOGUE.size()) != 0) return false;
+
+  std::memcpy(g_codbo_fps_setter_saved.data(), target,
+              CODBO_DVAR_SET_VARIANT_PATCH_SIZE);
+
+  auto* trampoline = reinterpret_cast<uint8_t*>(VirtualAlloc(
+      nullptr, 16u, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+  if (trampoline == nullptr) return false;
+
+  std::memcpy(trampoline, g_codbo_fps_setter_saved.data(),
+              CODBO_DVAR_SET_VARIANT_PATCH_SIZE);
+  trampoline[6] = 0xE9u;
+  const intptr_t back_delta =
+      reinterpret_cast<intptr_t>(target + CODBO_DVAR_SET_VARIANT_PATCH_SIZE)
+      - reinterpret_cast<intptr_t>(trampoline + 11u);
+  *reinterpret_cast<int32_t*>(trampoline + 7u) = static_cast<int32_t>(back_delta);
+
+  g_codbo_fps_setter_trampoline = trampoline;
+
+  std::array<uint8_t, CODBO_DVAR_SET_VARIANT_PATCH_SIZE> hook = {};
+  hook[0] = 0xE9u;
+  const intptr_t hook_delta =
+      reinterpret_cast<intptr_t>(&HookBlackOpsHardMaxFpsDvarSetVariant)
+      - reinterpret_cast<intptr_t>(target + 5u);
+  *reinterpret_cast<int32_t*>(hook.data() + 1u) = static_cast<int32_t>(hook_delta);
+  hook[5] = 0x90u;
+
+  if (!WriteBlackOpsExecutableBytes(target, hook.data(), hook.size())) {
+    g_codbo_fps_setter_trampoline = nullptr;
+    VirtualFree(trampoline, 0u, MEM_RELEASE);
+    return false;
+  }
+  g_codbo_fps_setter_hook_installed.store(true, std::memory_order_release);
+  return true;
+}
+
+void ShutdownBlackOpsHardMaxFpsSetterHook() {
+  if (!g_codbo_fps_setter_hook_installed.exchange(
+          false, std::memory_order_acq_rel)) return;
+  const uintptr_t base = BlackOpsExeBase();
+  if (base != 0u) {
+    auto* target = reinterpret_cast<uint8_t*>(base + CODBO_DVAR_SET_VARIANT_RVA);
+    WriteBlackOpsExecutableBytes(target, g_codbo_fps_setter_saved.data(),
+                                 g_codbo_fps_setter_saved.size());
+  }
+  if (g_codbo_fps_setter_trampoline != nullptr) {
+    VirtualFree(g_codbo_fps_setter_trampoline, 0u, MEM_RELEASE);
+    g_codbo_fps_setter_trampoline = nullptr;
+  }
+}
+
+void SetBlackOpsBoolDvarState(void* dvar, bool value) {
+  if (dvar == nullptr) return;
+  auto* bytes = reinterpret_cast<uint8_t*>(dvar);
+  const std::array<uintptr_t, 4> offsets = {
+      CODBO_DVAR_CURRENT_OFFSET, CODBO_DVAR_LATCHED_OFFSET,
+      CODBO_DVAR_RESET_OFFSET, CODBO_DVAR_SAVED_OFFSET};
+  for (const uintptr_t offset : offsets) {
+    std::memset(bytes + offset, 0, CODBO_DVAR_VALUE_SIZE);
+    bytes[offset] = value ? 1u : 0u;
+  }
+}
+
+bool IsBlackOpsForegroundProcess() {
+  HWND foreground = GetForegroundWindow();
+  if (foreground == nullptr) return false;
+  DWORD process_id = 0u;
+  GetWindowThreadProcessId(foreground, &process_id);
+  return process_id == GetCurrentProcessId();
+}
+
+bool IsSupportedBlackOpsCbufAddText() {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  const auto* code = reinterpret_cast<const uint8_t*>(base + CODBO_CBUF_ADD_TEXT_RVA);
+  return std::memcmp(code, CODBO_CBUF_ADD_TEXT_PROLOGUE.data(),
+                     CODBO_CBUF_ADD_TEXT_PROLOGUE.size()) == 0;
+}
+
+bool SubmitBlackOpsCommandText(const char* text) {
+  if (text == nullptr || text[0] == '\0') return false;
+  if (!IsSupportedBlackOpsCbufAddText()) {
+    if (!g_codbo_cbuf_signature_error_logged) {
+      g_codbo_cbuf_signature_error_logged = true;
+      LogBlackOpsSync(reshade::log::level::warning,
+          "[BlackOps Commands] Cbuf_AddText signature mismatch at RVA 0x9B930; command injection disabled.");
+    }
+    return false;
+  }
+  const uintptr_t base = BlackOpsExeBase();
+  const auto add_text = reinterpret_cast<BlackOpsCbufAddTextFn>(
+      base + CODBO_CBUF_ADD_TEXT_RVA);
+  add_text(0, text);
+  return true;
+}
+
+void SubmitBlackOpsPlutoniumStartupCommands(bool focus_reassert) {
+  // Run through the engine command buffer, not raw dvar writes. The delayed
+  // initial submission is intentionally after config initialization, and focus
+  // regain gets a tiny reassert because this retail build can restore its
+  // foreground max-FPS state when activation changes.
+  static constexpr const char* kInitialCommands =
+      "com_busyWait 1\n"
+      "ui_allowConsole 1\n"
+      "monkeytoy 0\n"
+      "sv_disableClientConsole 0\n"
+      "bind ~ \"toggleconsole\"\n"
+      "bind ` \"toggleconsole\"\n";
+  static constexpr const char* kFocusCommands =
+      "com_busyWait 1\n"
+      "ui_allowConsole 1\n"
+      "monkeytoy 0\n"
+      "sv_disableClientConsole 0\n";
+
+  if (!SubmitBlackOpsCommandText(focus_reassert ? kFocusCommands : kInitialCommands))
+    return;
+
+  if (focus_reassert) {
+    const uint64_t count = g_codbo_focus_reasserts.fetch_add(
+        1u, std::memory_order_relaxed) + 1u;
+    if (count <= 2u) {
+      LogBlackOpsSync(reshade::log::level::info,
+          "[BlackOps Commands] foreground focus regained: queued com_busyWait 1 and console-state reassert through Cbuf_AddText; com_maxfps is left at the user-selected value.");
+    }
+  } else {
+    LogBlackOpsSync(reshade::log::level::info,
+        "[BlackOps Commands] post-config command pass queued through Cbuf_AddText: com_busyWait 1 + native console binds/state; com_maxfps is preserved as the smooth internal cap target.");
+  }
+}
+
+bool ResolveBlackOpsConsoleDvars() {
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  const auto* p = reinterpret_cast<const uint8_t*>(base + CODBO_DVAR_FIND_VAR_RVA);
+  if (std::memcmp(p, CODBO_DVAR_FIND_VAR_PROLOGUE.data(),
+                  CODBO_DVAR_FIND_VAR_PROLOGUE.size()) != 0) return false;
+
+  const auto find_var = reinterpret_cast<BlackOpsDvarFindVarFn>(
+      base + CODBO_DVAR_FIND_VAR_RVA);
+  if (g_codbo_ui_allow_console_dvar == nullptr)
+    g_codbo_ui_allow_console_dvar = find_var("ui_allowConsole");
+  if (g_codbo_monkeytoy_dvar == nullptr)
+    g_codbo_monkeytoy_dvar = find_var("monkeytoy");
+  if (g_codbo_disable_client_console_dvar == nullptr)
+    g_codbo_disable_client_console_dvar = find_var("sv_disableClientConsole");
+
+  return g_codbo_ui_allow_console_dvar != nullptr
+      && g_codbo_monkeytoy_dvar != nullptr
+      && g_codbo_disable_client_console_dvar != nullptr;
+}
+
+void RepairBlackOpsNativeConsoleState() {
+  if (!g_codbo_console_installed.load(std::memory_order_acquire)) return;
+  if (!ResolveBlackOpsConsoleDvars()) return;
+  SetBlackOpsBoolDvarState(g_codbo_ui_allow_console_dvar, true);
+  SetBlackOpsBoolDvarState(g_codbo_monkeytoy_dvar, false);
+  SetBlackOpsBoolDvarState(g_codbo_disable_client_console_dvar, false);
+}
+
+bool InstallBlackOpsNativeConsole() {
+  if (g_codbo_console_installed.load(std::memory_order_acquire)) return true;
+  if (g_codbo_console_install_attempted.exchange(true, std::memory_order_acq_rel))
+    return false;
+  if (!VerifyBlackOpsSyncTargetBuild(false)) return false;
+
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return false;
+  if (std::memcmp(reinterpret_cast<const void*>(
+          base + CODBO_UI_ALLOW_CONSOLE_DEFAULT_RVA),
+          CODBO_UI_ALLOW_CONSOLE_DEFAULT_ORIGINAL.data(),
+          CODBO_UI_ALLOW_CONSOLE_DEFAULT_ORIGINAL.size()) != 0
+      || std::memcmp(reinterpret_cast<const void*>(
+          base + CODBO_MONKEYTOY_DEFAULT_RVA),
+          CODBO_MONKEYTOY_DEFAULT_ORIGINAL.data(),
+          CODBO_MONKEYTOY_DEFAULT_ORIGINAL.size()) != 0
+      || std::memcmp(reinterpret_cast<const void*>(
+          base + CODBO_DVAR_FIND_VAR_RVA),
+          CODBO_DVAR_FIND_VAR_PROLOGUE.data(),
+          CODBO_DVAR_FIND_VAR_PROLOGUE.size()) != 0) {
+    LogBlackOpsSync(reshade::log::level::warning,
+        "[BlackOps Console] exact retail-console signatures did not match; enable refused.");
+    return false;
+  }
+
+  if (!PatchBlackOpsBytes(CODBO_UI_ALLOW_CONSOLE_DEFAULT_RVA,
+          CODBO_UI_ALLOW_CONSOLE_DEFAULT_ORIGINAL,
+          CODBO_UI_ALLOW_CONSOLE_DEFAULT_PATCHED)) return false;
+  g_codbo_console_ui_patch_applied.store(true, std::memory_order_release);
+
+  if (!PatchBlackOpsBytes(CODBO_MONKEYTOY_DEFAULT_RVA,
+          CODBO_MONKEYTOY_DEFAULT_ORIGINAL,
+          CODBO_MONKEYTOY_DEFAULT_PATCHED)) {
+    PatchBlackOpsBytes(CODBO_UI_ALLOW_CONSOLE_DEFAULT_RVA,
+        CODBO_UI_ALLOW_CONSOLE_DEFAULT_PATCHED,
+        CODBO_UI_ALLOW_CONSOLE_DEFAULT_ORIGINAL);
+    g_codbo_console_ui_patch_applied.store(false, std::memory_order_release);
+    return false;
+  }
+  g_codbo_console_monkey_patch_applied.store(true, std::memory_order_release);
+  g_codbo_console_installed.store(true, std::memory_order_release);
+  RepairBlackOpsNativeConsoleState();
+
+  LogBlackOpsSync(reshade::log::level::info,
+      "[BlackOps Console] native retail console enabled: ui_allowConsole=1, monkeytoy=0, sv_disableClientConsole=0. Use grave/tilde; Shift+tilde opens the full console.");
+  return true;
+}
+
+void ShutdownBlackOpsNativeConsole() {
+  g_codbo_console_installed.store(false, std::memory_order_release);
+  const uintptr_t base = BlackOpsExeBase();
+  if (base != 0u) {
+    if (g_codbo_console_monkey_patch_applied.exchange(
+            false, std::memory_order_acq_rel)) {
+      PatchBlackOpsBytes(CODBO_MONKEYTOY_DEFAULT_RVA,
+          CODBO_MONKEYTOY_DEFAULT_PATCHED,
+          CODBO_MONKEYTOY_DEFAULT_ORIGINAL);
+    }
+    if (g_codbo_console_ui_patch_applied.exchange(
+            false, std::memory_order_acq_rel)) {
+      PatchBlackOpsBytes(CODBO_UI_ALLOW_CONSOLE_DEFAULT_RVA,
+          CODBO_UI_ALLOW_CONSOLE_DEFAULT_PATCHED,
+          CODBO_UI_ALLOW_CONSOLE_DEFAULT_ORIGINAL);
+    }
+  }
+  g_codbo_ui_allow_console_dvar = nullptr;
+  g_codbo_monkeytoy_dvar = nullptr;
+  g_codbo_disable_client_console_dvar = nullptr;
+}
+
+void RepairBlackOpsComMaxFpsState() {
+  // Belt-and-suspenders repair for code paths that write the dvar storage
+  // directly instead of going through Dvar_SetVariant. This does NOT own frame
+  // pacing: the native renderer read is separately forced to its unlimited path.
+  const uintptr_t base = BlackOpsExeBase();
+  if (base == 0u) return;
+  void* dvar = *reinterpret_cast<void**>(base + CODBO_COM_MAXFPS_DVAR_PTR_RVA);
+  if (dvar == nullptr) return;
+  const uintptr_t address = reinterpret_cast<uintptr_t>(dvar);
+  if (*reinterpret_cast<const uint8_t*>(address + CODBO_DVAR_TYPE_OFFSET)
+      != CODBO_DVAR_TYPE_INT) return;
+
+  const int32_t current = *reinterpret_cast<const int32_t*>(
+      address + CODBO_DVAR_CURRENT_OFFSET);
+  const int32_t latched = *reinterpret_cast<const int32_t*>(
+      address + CODBO_DVAR_LATCHED_OFFSET);
+  const int32_t reset = *reinterpret_cast<const int32_t*>(
+      address + CODBO_DVAR_RESET_OFFSET);
+  const int32_t saved = *reinterpret_cast<const int32_t*>(
+      address + CODBO_DVAR_SAVED_OFFSET);
+  if (current == 0 && latched == 0 && reset == 0 && saved == 0) return;
+
+  std::memset(reinterpret_cast<void*>(address + CODBO_DVAR_CURRENT_OFFSET),
+              0, CODBO_DVAR_VALUE_SIZE);
+  std::memset(reinterpret_cast<void*>(address + CODBO_DVAR_LATCHED_OFFSET),
+              0, CODBO_DVAR_VALUE_SIZE);
+  std::memset(reinterpret_cast<void*>(address + CODBO_DVAR_RESET_OFFSET),
+              0, CODBO_DVAR_VALUE_SIZE);
+  std::memset(reinterpret_cast<void*>(address + CODBO_DVAR_SAVED_OFFSET),
+              0, CODBO_DVAR_VALUE_SIZE);
+
+  const uint64_t repair = g_codbo_fps_state_repairs.fetch_add(
+      1u, std::memory_order_relaxed) + 1u;
+  if (repair <= 4u) {
+    std::stringstream stream;
+    stream << "[BlackOps FPS] V6.2 repaired direct com_maxfps state: current="
+           << current << " latched=" << latched << " reset=" << reset
+           << " saved=" << saved << " -> all 0.";
+    LogBlackOpsSync(reshade::log::level::info, stream.str());
+  }
+}
+
+bool InstallBlackOpsSmoothFPSFix() {
+  if (g_codbo_fps_patch_installed.load(std::memory_order_acquire)) return true;
+  if (g_codbo_fps_patch_attempted.exchange(true, std::memory_order_acq_rel)) return false;
+  if (!VerifyBlackOpsSyncTargetBuild(false)) return false;
+
+  // V7 deliberately restores stock com_maxfps semantics. We do not patch the
+  // registration default, renderer read or final branch. Only the timing method
+  // inside R_WaitEndTime is replaced.
+  if (!InstallBlackOpsPlutoniumWaitHook()) {
+    LogBlackOpsSync(reshade::log::level::warning,
+        "[BlackOps Frame Pacing] V7 could not install the smooth R_WaitEndTime hook.");
+    return false;
+  }
+
+  // Keep server/listen-server code from silently changing the local user's cap.
+  // Local console/config writes still remain native, so com_maxfps 85/120/144/etc.
+  // are all valid targets for the smooth limiter.
+  InstallBlackOpsSetClientDvarGuard();
+
+  g_codbo_fps_patch_installed.store(true, std::memory_order_release);
+  LogBlackOpsSync(reshade::log::level::info,
+      "[BlackOps Frame Pacing] V7.0 SMOOTH INTERNAL CAP active: com_maxfps remains the user-facing game cap, but stock Sleep(1) pacing is replaced by an absolute QPC deadline limiter with high-resolution coarse waits, scheduler yields near the deadline, a <=100us fine finish, and MW3-style immediate late-frame re-anchoring. No hard-unlimited byte patches or per-Present dvar rewrites are active.");
+  return true;
+}
+
+void ShutdownBlackOpsSmoothFPSFix() {
+  g_codbo_fps_patch_installed.store(false, std::memory_order_release);
+  ShutdownBlackOpsSetClientDvarGuard();
+  ShutdownBlackOpsPlutoniumWaitHook();
+  ResetBlackOpsSmoothLimiter();
+}
+
+bool PatchBlackOpsMainExeIAT(const char* function_name, void* replacement,
+                             void** original_out, void*** slot_out) {
+  if (!function_name || !replacement || !original_out || !slot_out) return false;
+  const uintptr_t base = BlackOpsExeBase();
+  if (!base) return false;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return false;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+  const auto& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (!dir.VirtualAddress) return false;
+  auto* desc = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress);
+  for (; desc->Name; ++desc) {
+    auto* iat = reinterpret_cast<IMAGE_THUNK_DATA*>(base + desc->FirstThunk);
+    auto* names = desc->OriginalFirstThunk
+        ? reinterpret_cast<IMAGE_THUNK_DATA*>(base + desc->OriginalFirstThunk) : iat;
+    for (; names->u1.AddressOfData; ++names, ++iat) {
+      if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
+      const auto* n = reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
+      if (std::strcmp(reinterpret_cast<const char*>(n->Name), function_name) != 0) continue;
+      auto** slot = reinterpret_cast<void**>(&iat->u1.Function);
+      DWORD oldp = 0u;
+      if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &oldp)) return false;
+      *original_out = *slot;
+      *slot_out = slot;
+      InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(slot), replacement);
+      DWORD ignored = 0u;
+      VirtualProtect(slot, sizeof(void*), oldp, &ignored);
+      FlushInstructionCache(GetCurrentProcess(), slot, sizeof(void*));
+      return true;
+    }
+  }
+  return false;
+}
+
+void RestoreBlackOpsIATSlot(void** slot, void* hook, void* original) {
+  if (!slot || !hook || !original || *slot != hook) return;
+  DWORD oldp = 0u;
+  if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &oldp)) return;
+  InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(slot), original);
+  DWORD ignored = 0u;
+  VirtualProtect(slot, sizeof(void*), oldp, &ignored);
+  FlushInstructionCache(GetCurrentProcess(), slot, sizeof(void*));
+}
+
+void InitializeBlackOpsMmcss() {
+  if (g_codbo_av_set_mm) return;
+  HMODULE module = LoadLibraryW(L"avrt.dll");
+  if (!module) return;
+  auto fn = reinterpret_cast<BlackOpsAvSetMmThreadCharacteristicsWFn>(
+      GetProcAddress(module, "AvSetMmThreadCharacteristicsW"));
+  if (!fn) return;
+  g_codbo_avrt_module = module; // kept loaded for process lifetime, like MW3 V8
+  g_codbo_av_set_mm = fn;
+}
+
+int BlackOpsMaxPriority(int a, int b) { return a > b ? a : b; }
+
+void SetBlackOpsProducerBurst(bool enable) {
+  const bool previous = g_codbo_producer_burst.exchange(enable, std::memory_order_acq_rel);
+  if (previous == enable) return;
+  AcquireSRWLockExclusive(&g_codbo_producer_lock);
+  for (auto& p : g_codbo_producers) {
+    if (!p.handle) continue;
+    const int target = enable
+        ? BlackOpsMaxPriority(p.base_priority, THREAD_PRIORITY_HIGHEST)
+        : p.base_priority;
+    SetThreadPriority(p.handle, target);
+  }
+  ReleaseSRWLockExclusive(&g_codbo_producer_lock);
+}
+
+void RestoreBlackOpsProducerPriorities() {
+  SetBlackOpsProducerBurst(false);
+  AcquireSRWLockExclusive(&g_codbo_producer_lock);
+  for (auto& p : g_codbo_producers) {
+    if (p.handle) {
+      SetThreadPriority(p.handle, p.original_priority);
+      if (p.have_original_boost) SetThreadPriorityBoost(p.handle, p.original_boost_disabled);
+      CloseHandle(p.handle);
+    }
+    p = {};
+  }
+  ReleaseSRWLockExclusive(&g_codbo_producer_lock);
+}
+
+void MaybeEnrollBlackOpsProducer(HANDLE event_handle) {
+  const uintptr_t learned = g_codbo_renderer_event.load(std::memory_order_acquire);
+  if (!learned || reinterpret_cast<uintptr_t>(event_handle) != learned) return;
+  const DWORD tid = GetCurrentThreadId();
+  if (!tid || tid == g_codbo_present_thread_id.load(std::memory_order_relaxed)) return;
+
+  // MMCSS must be registered by the producer thread itself. Keep this path
+  // one-shot per producer/event so the normal SetEvent hot path stays tiny.
+  thread_local uintptr_t tls_event = 0u;
+  if (tls_event == learned) return;
+  if (g_codbo_av_set_mm) {
+    DWORD task_index = 0u;
+    HANDLE mmcss = g_codbo_av_set_mm(L"Games", &task_index);
+    if (mmcss) {
+      tls_event = learned;
+      return;
+    }
+  }
+
+  AcquireSRWLockExclusive(&g_codbo_producer_lock);
+  for (const auto& p : g_codbo_producers) {
+    if (p.thread_id == tid) {
+      tls_event = learned;
+      ReleaseSRWLockExclusive(&g_codbo_producer_lock);
+      return;
+    }
+  }
+  BlackOpsProducerThread* free_slot = nullptr;
+  for (auto& p : g_codbo_producers) if (!p.thread_id) { free_slot = &p; break; }
+  if (!free_slot) { ReleaseSRWLockExclusive(&g_codbo_producer_lock); return; }
+  HANDLE th = OpenThread(THREAD_QUERY_INFORMATION | THREAD_SET_INFORMATION, FALSE, tid);
+  if (!th) { ReleaseSRWLockExclusive(&g_codbo_producer_lock); return; }
+  const int original = GetThreadPriority(th);
+  if (original == THREAD_PRIORITY_ERROR_RETURN) {
+    CloseHandle(th); ReleaseSRWLockExclusive(&g_codbo_producer_lock); return;
+  }
+  BOOL boost_disabled = FALSE;
+  const bool have_boost = GetThreadPriorityBoost(th, &boost_disabled) != FALSE;
+  const int base_priority = BlackOpsMaxPriority(original, THREAD_PRIORITY_ABOVE_NORMAL);
+  const int requested = g_codbo_producer_burst.load(std::memory_order_relaxed)
+      ? BlackOpsMaxPriority(base_priority, THREAD_PRIORITY_HIGHEST) : base_priority;
+  SetThreadPriority(th, requested);
+  SetThreadPriorityBoost(th, FALSE);
+  free_slot->thread_id = tid;
+  free_slot->handle = th;
+  free_slot->original_priority = original;
+  free_slot->base_priority = base_priority;
+  free_slot->original_boost_disabled = boost_disabled;
+  free_slot->have_original_boost = have_boost;
+  tls_event = learned;
+  ReleaseSRWLockExclusive(&g_codbo_producer_lock);
+}
+
+void BlackOpsAddTimeoutPressure(uint32_t amount) {
+  uint32_t cur = g_codbo_timeout_pressure.load(std::memory_order_relaxed);
+  for (;;) {
+    const uint32_t desired = cur >= CODBO_V8_TIMEOUT_PRESSURE_MAX - amount
+        ? CODBO_V8_TIMEOUT_PRESSURE_MAX : cur + amount;
+    if (g_codbo_timeout_pressure.compare_exchange_weak(cur, desired,
+        std::memory_order_relaxed, std::memory_order_relaxed)) return;
+  }
+}
+
+bool BlackOpsCandidateQualified() {
+  const uint64_t calls = g_codbo_candidate_calls.load(std::memory_order_relaxed);
+  const uint64_t obj0 = g_codbo_candidate_object0.load(std::memory_order_relaxed);
+  const uint64_t timeouts = g_codbo_candidate_timeouts.load(std::memory_order_relaxed);
+  const uint64_t signals = g_codbo_candidate_signals.load(std::memory_order_relaxed);
+  return calls >= CODBO_ZERO_POLL_MIN_CALLS
+      && obj0 >= CODBO_ZERO_POLL_MIN_OBJECT0
+      && timeouts >= CODBO_ZERO_POLL_MIN_TIMEOUTS
+      && signals >= CODBO_ZERO_POLL_MIN_SIGNALS
+      && timeouts * 100u >= calls * CODBO_ZERO_POLL_MIN_TIMEOUT_PERCENT;
+}
+
+DWORD WINAPI HookBlackOpsWaitForSingleObject(HANDLE handle, DWORD milliseconds) {
+  const auto original = g_codbo_original_wait;
+  if (!original) return WAIT_FAILED;
+  if (!g_codbo_renderer_sync_enabled.load(std::memory_order_acquire))
+    return original(handle, milliseconds);
+  if (GetCurrentThreadId() != g_codbo_present_thread_id.load(std::memory_order_relaxed)
+      || milliseconds != CODBO_ZERO_POLL_ORIGINAL_WAIT_MS || !handle)
+    return original(handle, milliseconds);
+  const uintptr_t caller = BlackOpsReturnAddressToExeRva(_ReturnAddress());
+  if (caller != CODBO_ZERO_POLL_TARGET_RVA) return original(handle, milliseconds);
+
+  const uintptr_t hv = reinterpret_cast<uintptr_t>(handle);
+  uintptr_t learned = g_codbo_renderer_event.load(std::memory_order_acquire);
+  if (!learned) {
+    uintptr_t candidate = g_codbo_candidate_event.load(std::memory_order_relaxed);
+    if (candidate != hv) {
+      g_codbo_candidate_event.store(hv, std::memory_order_relaxed);
+      g_codbo_candidate_calls.store(0u, std::memory_order_relaxed);
+      g_codbo_candidate_object0.store(0u, std::memory_order_relaxed);
+      g_codbo_candidate_timeouts.store(0u, std::memory_order_relaxed);
+      g_codbo_candidate_signals.store(0u, std::memory_order_relaxed);
+    }
+    const DWORD result = original(handle, 0u);
+    g_codbo_candidate_calls.fetch_add(1u, std::memory_order_relaxed);
+    if (result == WAIT_OBJECT_0) g_codbo_candidate_object0.fetch_add(1u, std::memory_order_relaxed);
+    else if (result == WAIT_TIMEOUT) g_codbo_candidate_timeouts.fetch_add(1u, std::memory_order_relaxed);
+    if (BlackOpsCandidateQualified()) {
+      uintptr_t zero = 0u;
+      if (g_codbo_renderer_event.compare_exchange_strong(zero, hv, std::memory_order_release)) {
+        LogBlackOpsSync(reshade::log::level::info,
+            "[BlackOps Sync Fix] V8 scheduler learned exact renderer event at callerRVA 0x211BE2; retail 0ms poll preserved; producer MMCSS Games/priority scheduling enabled; no wait extension and no periodic stats logging.");
+      }
+    }
+    return result;
+  }
+  if (hv != learned) return original(handle, milliseconds);
+
+  // V7 ports only the producer-scheduling lesson from MW3 V8. BO1's profiled
+  // site is a real 0 ms poll, so changing it to 1/2/4 ms can itself alter frame
+  // pacing. Preserve the exact retail timeout and use the correlated SetEvent
+  // solely to enroll the producer in MMCSS Games / ABOVE_NORMAL fallback.
+  const DWORD result = original(handle, 0u);
+  if (result == WAIT_OBJECT_0) {
+    if (g_codbo_producer_burst.load(std::memory_order_relaxed)) {
+      const uint32_t successes = g_codbo_successes_since_timeout.fetch_add(1u, std::memory_order_relaxed) + 1u;
+      const uint64_t present = g_codbo_present_count.load(std::memory_order_relaxed);
+      if (successes >= CODBO_V8_BURST_RELEASE_SUCCESSES
+          && present >= g_codbo_burst_hold_until.load(std::memory_order_relaxed))
+        SetBlackOpsProducerBurst(false);
+    }
+  } else if (result == WAIT_TIMEOUT) {
+    // A 0 ms poll timing out is normal in BO1 and is not a stall by itself.
+    // Do not extend the wait and do not trigger a priority burst from a normal poll.
+    g_codbo_successes_since_timeout.store(0u, std::memory_order_relaxed);
+  }
+  return result;
+}
+
+BOOL WINAPI HookBlackOpsSetEvent(HANDLE handle) {
+  const auto original = g_codbo_original_set_event;
+  if (!original) return FALSE;
+  const BOOL result = original(handle); // signal first: instrumentation never delays wake-up
+  if (!g_codbo_renderer_sync_enabled.load(std::memory_order_acquire) || result == FALSE)
+    return result;
+  const uintptr_t hv = reinterpret_cast<uintptr_t>(handle);
+  const uintptr_t candidate = g_codbo_candidate_event.load(std::memory_order_relaxed);
+  if (candidate && hv == candidate)
+    g_codbo_candidate_signals.fetch_add(1u, std::memory_order_relaxed);
+  const uintptr_t learned = g_codbo_renderer_event.load(std::memory_order_acquire);
+  if (learned && hv == learned) MaybeEnrollBlackOpsProducer(handle);
+  return result;
+}
+
+bool InstallBlackOpsSyncHooks() {
+  if (g_codbo_sync_hooks_installed.load(std::memory_order_acquire)) return true;
+  if (g_codbo_sync_install_attempted.exchange(true, std::memory_order_acq_rel)) return false;
+  if (!VerifyBlackOpsSyncTargetBuild()) return false;
+  InitializeBlackOpsMmcss();
+  void *ow = nullptr, *os = nullptr; void **sw = nullptr, **ss = nullptr;
+  const bool a = PatchBlackOpsMainExeIAT("WaitForSingleObject",
+      reinterpret_cast<void*>(&HookBlackOpsWaitForSingleObject), &ow, &sw);
+  const bool b = PatchBlackOpsMainExeIAT("SetEvent",
+      reinterpret_cast<void*>(&HookBlackOpsSetEvent), &os, &ss);
+  if (!a || !b) {
+    if (a) RestoreBlackOpsIATSlot(sw, reinterpret_cast<void*>(&HookBlackOpsWaitForSingleObject), ow);
+    if (b) RestoreBlackOpsIATSlot(ss, reinterpret_cast<void*>(&HookBlackOpsSetEvent), os);
+    return false;
+  }
+  g_codbo_original_wait = reinterpret_cast<BlackOpsWaitForSingleObjectFn>(ow);
+  g_codbo_original_set_event = reinterpret_cast<BlackOpsSetEventFn>(os);
+  g_codbo_wait_iat_slot = sw; g_codbo_set_event_iat_slot = ss;
+  g_codbo_sync_hooks_installed.store(true, std::memory_order_release);
+  LogBlackOpsSync(reshade::log::level::info,
+      "[BlackOps Sync Fix] V7 producer scheduler installed: exact 0x211BE2 renderer poll remains 0ms; only the matching producer scheduling policy is changed.");
+  return true;
+}
+
+void ShutdownBlackOpsSyncFix() {
+  g_codbo_sync_hooks_installed.store(false, std::memory_order_release);
+  RestoreBlackOpsIATSlot(g_codbo_wait_iat_slot,
+      reinterpret_cast<void*>(&HookBlackOpsWaitForSingleObject),
+      reinterpret_cast<void*>(g_codbo_original_wait));
+  RestoreBlackOpsIATSlot(g_codbo_set_event_iat_slot,
+      reinterpret_cast<void*>(&HookBlackOpsSetEvent),
+      reinterpret_cast<void*>(g_codbo_original_set_event));
+  g_codbo_wait_iat_slot = nullptr; g_codbo_set_event_iat_slot = nullptr;
+  g_codbo_original_wait = nullptr; g_codbo_original_set_event = nullptr;
+  RestoreBlackOpsProducerPriorities();
+}
+
+void NotifyBlackOpsD3D9Present() {
+  g_codbo_present_thread_id.store(GetCurrentThreadId(), std::memory_order_relaxed);
+  const uint64_t present = g_codbo_present_count.fetch_add(1u, std::memory_order_relaxed) + 1u;
+
+  if (!g_codbo_fps_patch_installed.load(std::memory_order_acquire)
+      && !g_codbo_fps_patch_attempted.load(std::memory_order_acquire))
+    InstallBlackOpsSmoothFPSFix();
+  // V7 leaves com_maxfps storage untouched. The R_WaitEndTime hook reads the
+  // actual user-selected value and paces it precisely.
+  if (g_codbo_renderer_sync_enabled.load(std::memory_order_acquire)
+      && present >= CODBO_SYNC_ARM_AFTER_PRESENTS
+      && !g_codbo_sync_hooks_installed.load(std::memory_order_acquire)
+      && !g_codbo_sync_install_attempted.load(std::memory_order_acquire))
+    InstallBlackOpsSyncHooks();
+
+  if (present >= 180u
+      && !g_codbo_startup_commands_submitted.exchange(true, std::memory_order_acq_rel)) {
+    SubmitBlackOpsPlutoniumStartupCommands(false);
+  }
+
+  const bool foreground = IsBlackOpsForegroundProcess();
+  const bool was_foreground = g_codbo_last_foreground.exchange(
+      foreground, std::memory_order_acq_rel);
+  if (foreground && !was_foreground && present >= 180u) {
+    SubmitBlackOpsPlutoniumStartupCommands(true);
+  }
+}
+
 #define UpgradeRTVReplaceShader(value)       \
   {                                          \
       value,                                 \
@@ -1775,6 +3962,212 @@ struct DX9CopyEndpoint {
   bool clone_enabled = false;
 };
 
+// Fast reverse lookup for callbacks that arrive with the clone handle itself.
+// The key is the FP16 clone handle. The cached original is validated against
+// RenoDX live tracking before it is used, so stale mappings are discarded.
+struct DX9CloneLookupCacheEntry {
+  reshade::api::resource original = {0u};
+};
+
+std::mutex g_dx9_clone_lookup_cache_mutex;
+std::unordered_map<uint64_t, DX9CloneLookupCacheEntry>
+    g_dx9_clone_lookup_cache;
+
+
+// Reusable CPU-visible FP16 staging surface for GetRenderTargetData.
+// The old implementation allocated and destroyed this surface for every
+// incompatible FP16 -> 8-bit readback.
+struct DX9ReadbackStagingCache {
+  reshade::api::device* device = nullptr;
+  reshade::api::resource resource = {0u};
+  reshade::api::resource_desc desc = {};
+};
+
+std::mutex g_dx9_readback_staging_mutex;
+DX9ReadbackStagingCache g_dx9_readback_staging_cache;
+
+uint32_t g_dx9_clone_cache_hits = 0u;
+uint32_t g_dx9_clone_cache_misses = 0u;
+uint32_t g_dx9_staging_reuses = 0u;
+uint32_t g_dx9_staging_creates = 0u;
+
+
+void RememberDX9CloneMapping(const DX9CopyEndpoint& endpoint) {
+  if (!endpoint.has_clone
+      || endpoint.clone.handle == 0u
+      || endpoint.original.handle == 0u
+      || endpoint.clone.handle == endpoint.original.handle) {
+    return;
+  }
+
+  std::scoped_lock lock(g_dx9_clone_lookup_cache_mutex);
+
+  g_dx9_clone_lookup_cache[
+      static_cast<uint64_t>(endpoint.clone.handle)] = {
+          .original = endpoint.original,
+      };
+}
+
+
+bool TryResolveDX9CloneFromCache(
+    reshade::api::device* device,
+    reshade::api::resource input,
+    DX9CopyEndpoint& endpoint) {
+  if (device == nullptr || input.handle == 0u) return false;
+
+  DX9CloneLookupCacheEntry cached = {};
+
+  {
+    std::scoped_lock lock(g_dx9_clone_lookup_cache_mutex);
+
+    const auto it = g_dx9_clone_lookup_cache.find(
+        static_cast<uint64_t>(input.handle));
+
+    if (it == g_dx9_clone_lookup_cache.end()) {
+      ++g_dx9_clone_cache_misses;
+      return false;
+    }
+
+    cached = it->second;
+  }
+
+  if (cached.original.handle == 0u) return false;
+
+  bool valid = false;
+
+  renodx::utils::resource::GetLiveResourceInfo(
+      cached.original,
+      [&](const renodx::utils::resource::ResourceInfo& info) {
+        if (info.destroyed
+            || info.resource.handle == 0u
+            || info.clone.handle != input.handle) {
+          return;
+        }
+
+        endpoint.has_live_tracking = true;
+        endpoint.input_is_clone = true;
+        endpoint.original = info.resource;
+        endpoint.original_desc =
+            info.desc.type != reshade::api::resource_type::unknown
+                ? info.desc
+                : endpoint.original_desc;
+        endpoint.clone = input;
+        endpoint.clone_desc =
+            info.clone_desc.type != reshade::api::resource_type::unknown
+                ? info.clone_desc
+                : endpoint.input_desc;
+        endpoint.has_clone = true;
+        endpoint.clone_enabled = info.clone_enabled;
+
+        valid = true;
+      });
+
+  if (valid) {
+    ++g_dx9_clone_cache_hits;
+    return true;
+  }
+
+  // Resource was destroyed/recreated or the handle was reused.
+  {
+    std::scoped_lock lock(g_dx9_clone_lookup_cache_mutex);
+    g_dx9_clone_lookup_cache.erase(
+        static_cast<uint64_t>(input.handle));
+  }
+
+  ++g_dx9_clone_cache_misses;
+  return false;
+}
+
+
+bool DX9StagingDescMatches(
+    const reshade::api::resource_desc& cached,
+    const reshade::api::resource_desc& wanted) {
+  if (cached.type == reshade::api::resource_type::unknown
+      || wanted.type == reshade::api::resource_type::unknown) {
+    return false;
+  }
+
+  return cached.type == wanted.type
+      && cached.heap == wanted.heap
+      && cached.usage == wanted.usage
+      && cached.texture.format == wanted.texture.format
+      && cached.texture.width == wanted.texture.width
+      && cached.texture.height == wanted.texture.height
+      && cached.texture.depth_or_layers
+          == wanted.texture.depth_or_layers
+      && cached.texture.levels == wanted.texture.levels
+      && cached.texture.samples == wanted.texture.samples;
+}
+
+
+bool EnsureDX9ReadbackStaging(
+    reshade::api::device* device,
+    const reshade::api::resource_desc& wanted_desc,
+    reshade::api::resource& staging) {
+  if (device == nullptr) return false;
+
+  auto& cache = g_dx9_readback_staging_cache;
+
+  if (cache.device == device
+      && cache.resource.handle != 0u
+      && DX9StagingDescMatches(cache.desc, wanted_desc)) {
+    staging = cache.resource;
+    ++g_dx9_staging_reuses;
+    return true;
+  }
+
+  // Same live D3D9 device but dimensions/format changed: release the old cached
+  // surface before replacing it. If the device itself changed, simply forget the
+  // old handle; the old D3D9 device owns and reclaims its resources on teardown.
+  if (cache.device == device && cache.resource.handle != 0u) {
+    device->destroy_resource(cache.resource);
+  }
+
+  cache = {};
+  cache.device = device;
+
+  if (!device->create_resource(
+          wanted_desc,
+          nullptr,
+          reshade::api::resource_usage::copy_dest,
+          &cache.resource)) {
+    cache = {};
+    return false;
+  }
+
+  cache.desc = wanted_desc;
+  staging = cache.resource;
+  ++g_dx9_staging_creates;
+  return true;
+}
+
+
+void InvalidateDX9ReadbackStaging(
+    reshade::api::device* device) {
+  auto& cache = g_dx9_readback_staging_cache;
+
+  if (device != nullptr
+      && cache.device == device
+      && cache.resource.handle != 0u) {
+    device->destroy_resource(cache.resource);
+  }
+
+  cache = {};
+}
+
+
+void ClearDX9ReadbackOptimizationCaches() {
+  {
+    std::scoped_lock lock(g_dx9_clone_lookup_cache_mutex);
+    g_dx9_clone_lookup_cache.clear();
+  }
+
+  // Do not call through a possibly-destroyed D3D9 device from DLL detach.
+  // The device owns the cached staging allocation and frees it during teardown.
+  g_dx9_readback_staging_cache = {};
+}
+
+
 bool IsTextureResource(const reshade::api::resource_desc& desc) {
   return desc.type == reshade::api::resource_type::surface
       || desc.type == reshade::api::resource_type::texture_1d
@@ -1835,15 +4228,11 @@ DX9CopyEndpoint ResolveDX9CopyEndpoint(
             endpoint.clone_enabled = info.clone_enabled;
           });
 
-  // RenoDX generally tracks the parent/original entry. If ReShade gives this
-  // callback the clone handle itself, locate the parent whose clone matches it.
-  //
-  // PERFORMANCE: the old condition scanned the complete tracked-resource list for
-  // every ordinary non-cloned D3D9 surface because has_clone was false. RenoDX
-  // clones created by these BO1 upgrade rules are R16G16B16A16_FLOAT, so only a
-  // float16 input can plausibly be a clone handle that needs the reverse lookup.
-  // Original B8G8R8A8_UNORM/R16G16B16A16_UNORM resources still use the direct
-  // GetLiveResourceInfo path above and keep the exact same cloning behavior.
+  // Any normal original-resource lookup gives us the clone handle essentially
+  // for free. Remember that pair now so a later callback that arrives with the
+  // FP16 clone handle can resolve it without scanning every tracked resource.
+  RememberDX9CloneMapping(endpoint);
+
   const bool may_be_clone_handle =
       endpoint.input_desc.type != reshade::api::resource_type::unknown
       && endpoint.input_desc.texture.format
@@ -1851,7 +4240,18 @@ DX9CopyEndpoint ResolveDX9CopyEndpoint(
 
   if (may_be_clone_handle
       && (!endpoint.has_clone || endpoint.input_is_clone)) {
+    // Fast path: validate the cached original through RenoDX's direct live lookup.
+    if (TryResolveDX9CloneFromCache(
+            device,
+            input,
+            endpoint)) {
+      RememberDX9CloneMapping(endpoint);
+      return endpoint;
+    }
+
+    // Slow path only for the first encounter of a clone or after invalidation.
     bool found_parent = false;
+
     renodx::utils::resource::ForEachResourceInfo(
         [&](const renodx::utils::resource::ResourceInfo& info) {
           if (found_parent) return;
@@ -1870,6 +4270,8 @@ DX9CopyEndpoint ResolveDX9CopyEndpoint(
           endpoint.has_clone = true;
           endpoint.clone_enabled = info.clone_enabled;
         });
+
+    RememberDX9CloneMapping(endpoint);
   }
 
   return endpoint;
@@ -1941,6 +4343,892 @@ bool IsCPUVisibleReadbackHeap(reshade::api::memory_heap heap) {
       || heap == reshade::api::memory_heap::cpu_only;
 }
 
+
+// ============================================================================
+// D3D9 GPU HDR -> SDR readback blit
+// ============================================================================
+//
+// The game asks D3D9 GetRenderTargetData to copy what it thinks is its original
+// 8-bit render target into a CPU-visible surface. RenoDX resource cloning means
+// the current image may instead live in an R16G16B16A16_FLOAT clone.
+//
+// The old compatibility fallback solved that by reading FP16 back to the CPU and
+// converting every pixel there. That is correct, but the synchronous readback +
+// per-pixel half conversion + sRGB pow() work can create large frametime spikes.
+//
+// This path keeps resource cloning intact and moves the conversion back to the
+// GPU:
+//
+//   FP16 clone -> fullscreen ps_3_0 blit -> original 8-bit render target
+//              -> normal same-format GetRenderTargetData copy -> game surface
+//
+// The existing CPU converter remains below this path as a correctness fallback.
+
+constexpr bool DX9_GPU_READBACK_BLIT_ENABLED = true;
+
+uint32_t g_dx9_gpu_blit_success_logs = 0u;
+uint32_t g_dx9_gpu_blit_failure_logs = 0u;
+
+struct DX9GPUReadbackBlitVertex {
+  float x;
+  float y;
+  float z;
+  float w;
+  float u;
+  float v;
+};
+
+struct DX9GPUReadbackBlitCache {
+  IDirect3DDevice9* device = nullptr;  // Borrowed; owned by ReShade/D3D9.
+  IDirect3DVertexShader9* vertex_shader = nullptr;
+  IDirect3DPixelShader9* pixel_shader = nullptr;
+  IDirect3DVertexDeclaration9* vertex_declaration = nullptr;
+  IDirect3DStateBlock9* state_block = nullptr;
+
+  // Only needed when the FP16 clone is a plain render-target surface rather than
+  // an IDirect3DTexture9. It is reused instead of allocated on every readback.
+  IDirect3DTexture9* source_scratch_texture = nullptr;
+  uint32_t source_scratch_width = 0u;
+  uint32_t source_scratch_height = 0u;
+};
+
+std::mutex g_dx9_gpu_blit_mutex;
+DX9GPUReadbackBlitCache g_dx9_gpu_blit_cache;
+
+template <typename T>
+void ReleaseDX9COM(T*& object) {
+  if (object != nullptr) {
+    object->Release();
+    object = nullptr;
+  }
+}
+
+void DestroyDX9GPUReadbackBlitCacheLocked() {
+  auto& cache = g_dx9_gpu_blit_cache;
+
+  ReleaseDX9COM(cache.source_scratch_texture);
+  ReleaseDX9COM(cache.state_block);
+  ReleaseDX9COM(cache.vertex_declaration);
+  ReleaseDX9COM(cache.pixel_shader);
+  ReleaseDX9COM(cache.vertex_shader);
+
+  cache = {};
+}
+
+void DestroyDX9GPUReadbackBlitCache(reshade::api::device* device = nullptr) {
+  std::scoped_lock lock(g_dx9_gpu_blit_mutex);
+
+  if (device != nullptr) {
+    if (device->get_api() != reshade::api::device_api::d3d9) return;
+
+    auto* native_device =
+        reinterpret_cast<IDirect3DDevice9*>(device->get_native());
+    if (native_device == nullptr
+        || g_dx9_gpu_blit_cache.device != native_device) {
+      return;
+    }
+  }
+
+  DestroyDX9GPUReadbackBlitCacheLocked();
+}
+
+void OnDX9ReadbackDestroyDevice(reshade::api::device* device) {
+  DestroyDX9GPUReadbackBlitCache(device);
+}
+
+void OnDX9ReadbackDestroySwapchain(
+    reshade::api::swapchain* swapchain,
+    bool resize) {
+  (void)resize;
+  if (swapchain == nullptr) return;
+
+  // D3D9 Reset requires addon-owned default-pool resources to be released.
+  DestroyDX9GPUReadbackBlitCache(swapchain->get_device());
+}
+
+void LogDX9GPUBlitFailure(const char* reason) {
+  if (g_dx9_gpu_blit_failure_logs >= 8u) return;
+  ++g_dx9_gpu_blit_failure_logs;
+
+  std::stringstream stream;
+  stream << "[RenoDX DX9 Readback GPU Blit] " << reason;
+  reshade::log::message(
+      reshade::log::level::warning,
+      stream.str().c_str());
+}
+
+struct ScopedDX9NativeSurface {
+  IDirect3DSurface9* surface = nullptr;
+  bool owns_reference = false;
+
+  ~ScopedDX9NativeSurface() {
+    if (owns_reference && surface != nullptr) {
+      surface->Release();
+    }
+  }
+
+  ScopedDX9NativeSurface() = default;
+  ScopedDX9NativeSurface(const ScopedDX9NativeSurface&) = delete;
+  ScopedDX9NativeSurface& operator=(const ScopedDX9NativeSurface&) = delete;
+};
+
+bool AcquireDX9NativeSurface(
+    reshade::api::resource resource,
+    const reshade::api::resource_desc& desc,
+    uint32_t subresource,
+    ScopedDX9NativeSurface& output) {
+  if (resource.handle == 0u) return false;
+
+  if (desc.type == reshade::api::resource_type::surface) {
+    output.surface =
+        reinterpret_cast<IDirect3DSurface9*>(resource.handle);
+    output.owns_reference = false;
+    return output.surface != nullptr && subresource == 0u;
+  }
+
+  if (desc.type == reshade::api::resource_type::texture_2d) {
+    auto* texture =
+        reinterpret_cast<IDirect3DTexture9*>(resource.handle);
+    if (texture == nullptr) return false;
+
+    IDirect3DSurface9* surface = nullptr;
+    const HRESULT hr = texture->GetSurfaceLevel(subresource, &surface);
+    if (FAILED(hr) || surface == nullptr) return false;
+
+    output.surface = surface;
+    output.owns_reference = true;
+    return true;
+  }
+
+  return false;
+}
+
+struct ScopedDX9NativeTexture {
+  IDirect3DTexture9* texture = nullptr;
+  bool owns_reference = false;
+
+  ~ScopedDX9NativeTexture() {
+    if (owns_reference && texture != nullptr) {
+      texture->Release();
+    }
+  }
+
+  ScopedDX9NativeTexture() = default;
+  ScopedDX9NativeTexture(const ScopedDX9NativeTexture&) = delete;
+  ScopedDX9NativeTexture& operator=(const ScopedDX9NativeTexture&) = delete;
+};
+
+bool TryAcquireDX9TextureContainer(
+    reshade::api::resource resource,
+    const reshade::api::resource_desc& desc,
+    ScopedDX9NativeTexture& output) {
+  if (resource.handle == 0u) return false;
+
+  if (desc.type == reshade::api::resource_type::texture_2d) {
+    output.texture =
+        reinterpret_cast<IDirect3DTexture9*>(resource.handle);
+    output.owns_reference = false;
+    return output.texture != nullptr;
+  }
+
+  if (desc.type != reshade::api::resource_type::surface) return false;
+
+  auto* surface =
+      reinterpret_cast<IDirect3DSurface9*>(resource.handle);
+  if (surface == nullptr) return false;
+
+  IDirect3DTexture9* texture = nullptr;
+  const HRESULT hr = surface->GetContainer(
+      __uuidof(IDirect3DTexture9),
+      reinterpret_cast<void**>(&texture));
+  if (FAILED(hr) || texture == nullptr) return false;
+
+  output.texture = texture;
+  output.owns_reference = true;
+  return true;
+}
+
+
+// Self-contained D3D9 readback blit shaders.
+// These are compiled once on demand through d3dcompiler_47.dll (or an older
+// compatible Windows compiler DLL) so this addon does not depend on RenoDX's
+// generated __dx9_readback_blit_* embed symbols.
+static constexpr char DX9_READBACK_BLIT_VERTEX_HLSL[] = R"hlsl(
+float4 gInvTargetSize : register(c0);
+
+struct VSInput {
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+};
+
+struct VSOutput {
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+};
+
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = input.position;
+    output.position.xy += float2(-gInvTargetSize.x, gInvTargetSize.y)
+                        * output.position.w;
+    output.texcoord = input.texcoord;
+    return output;
+}
+)hlsl";
+
+static constexpr char DX9_READBACK_BLIT_PIXEL_HLSL[] = R"hlsl(
+sampler2D gSource : register(s0);
+
+float3 LinearToSRGB(float3 linearColor) {
+    linearColor = saturate(linearColor);
+    const float3 low = linearColor * 12.92f;
+    const float3 high = 1.055f * pow(linearColor, 1.0f / 2.4f) - 0.055f;
+    const float3 useHigh = step(0.0031308f, linearColor);
+    return lerp(low, high, useHigh);
+}
+
+float4 main(float2 texcoord : TEXCOORD0) : COLOR0 {
+    const float4 source = tex2D(gSource, texcoord);
+    return float4(LinearToSRGB(source.rgb), saturate(source.a));
+}
+)hlsl";
+
+using DX9D3DCompileFn = HRESULT(WINAPI*)(
+    LPCVOID,
+    SIZE_T,
+    LPCSTR,
+    const D3D_SHADER_MACRO*,
+    ID3DInclude*,
+    LPCSTR,
+    LPCSTR,
+    UINT,
+    UINT,
+    ID3DBlob**,
+    ID3DBlob**);
+
+DX9D3DCompileFn LoadDX9D3DCompiler(HMODULE& module_out) {
+  module_out = nullptr;
+
+  static constexpr const wchar_t* COMPILER_DLLS[] = {
+      L"d3dcompiler_47.dll",
+      L"d3dcompiler_46.dll",
+      L"d3dcompiler_43.dll",
+  };
+
+  for (const wchar_t* dll_name : COMPILER_DLLS) {
+    HMODULE module = LoadLibraryW(dll_name);
+    if (module == nullptr) continue;
+
+    auto compile = reinterpret_cast<DX9D3DCompileFn>(
+        GetProcAddress(module, "D3DCompile"));
+    if (compile != nullptr) {
+      module_out = module;
+      return compile;
+    }
+
+    FreeLibrary(module);
+  }
+
+  return nullptr;
+}
+
+bool CompileDX9ReadbackShader(
+    const char* source,
+    const char* profile,
+    std::vector<DWORD>& bytecode_out) {
+  bytecode_out.clear();
+  if (source == nullptr || profile == nullptr) return false;
+
+  HMODULE compiler_module = nullptr;
+  DX9D3DCompileFn compile = LoadDX9D3DCompiler(compiler_module);
+  if (compile == nullptr || compiler_module == nullptr) {
+    LogDX9GPUBlitFailure(
+        "Could not load d3dcompiler_47/46/43.dll for the cached blit shader");
+    return false;
+  }
+
+  ID3DBlob* code_blob = nullptr;
+  ID3DBlob* error_blob = nullptr;
+  const HRESULT hr = compile(
+      source,
+      std::strlen(source),
+      "RenoDX DX9 readback blit",
+      nullptr,
+      nullptr,
+      "main",
+      profile,
+      D3DCOMPILE_OPTIMIZATION_LEVEL3,
+      0u,
+      &code_blob,
+      &error_blob);
+
+  if (FAILED(hr) || code_blob == nullptr) {
+    if (error_blob != nullptr && error_blob->GetBufferPointer() != nullptr) {
+      std::string message = "D3DCompile failed for ";
+      message += profile;
+      message += ": ";
+      message.append(
+          static_cast<const char*>(error_blob->GetBufferPointer()),
+          error_blob->GetBufferSize());
+      LogDX9GPUBlitFailure(message.c_str());
+    } else {
+      std::string message = "D3DCompile failed for ";
+      message += profile;
+      LogDX9GPUBlitFailure(message.c_str());
+    }
+
+    if (error_blob != nullptr) error_blob->Release();
+    if (code_blob != nullptr) code_blob->Release();
+    FreeLibrary(compiler_module);
+    return false;
+  }
+
+  const size_t byte_size = code_blob->GetBufferSize();
+  if (byte_size == 0u || (byte_size % sizeof(DWORD)) != 0u) {
+    LogDX9GPUBlitFailure("D3DCompile returned invalid DX9 shader bytecode");
+    if (error_blob != nullptr) error_blob->Release();
+    code_blob->Release();
+    FreeLibrary(compiler_module);
+    return false;
+  }
+
+  bytecode_out.resize(byte_size / sizeof(DWORD));
+  std::memcpy(
+      bytecode_out.data(),
+      code_blob->GetBufferPointer(),
+      byte_size);
+
+  if (error_blob != nullptr) error_blob->Release();
+  code_blob->Release();
+  FreeLibrary(compiler_module);
+  return true;
+}
+
+
+bool EnsureDX9GPUReadbackPipelineLocked(IDirect3DDevice9* device) {
+  if (device == nullptr) return false;
+
+  auto& cache = g_dx9_gpu_blit_cache;
+
+  if (cache.device != nullptr && cache.device != device) {
+    DestroyDX9GPUReadbackBlitCacheLocked();
+  }
+
+  cache.device = device;
+
+  if (cache.vertex_shader == nullptr) {
+    std::vector<DWORD> bytecode;
+    if (!CompileDX9ReadbackShader(
+            DX9_READBACK_BLIT_VERTEX_HLSL,
+            "vs_3_0",
+            bytecode)) {
+      return false;
+    }
+
+    const HRESULT hr = device->CreateVertexShader(
+        bytecode.data(),
+        &cache.vertex_shader);
+    if (FAILED(hr) || cache.vertex_shader == nullptr) {
+      LogDX9GPUBlitFailure("Could not create the cached vs_3_0 blit shader");
+      return false;
+    }
+  }
+
+  if (cache.pixel_shader == nullptr) {
+    std::vector<DWORD> bytecode;
+    if (!CompileDX9ReadbackShader(
+            DX9_READBACK_BLIT_PIXEL_HLSL,
+            "ps_3_0",
+            bytecode)) {
+      return false;
+    }
+
+    const HRESULT hr = device->CreatePixelShader(
+        bytecode.data(),
+        &cache.pixel_shader);
+    if (FAILED(hr) || cache.pixel_shader == nullptr) {
+      LogDX9GPUBlitFailure("Could not create the cached ps_3_0 SDR conversion shader");
+      return false;
+    }
+  }
+
+  if (cache.vertex_declaration == nullptr) {
+    static const D3DVERTEXELEMENT9 declaration[] = {
+        {0u, 0u, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT,
+         D3DDECLUSAGE_POSITION, 0u},
+        {0u, 16u, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT,
+         D3DDECLUSAGE_TEXCOORD, 0u},
+        D3DDECL_END(),
+    };
+
+    const HRESULT hr = device->CreateVertexDeclaration(
+        declaration,
+        &cache.vertex_declaration);
+    if (FAILED(hr) || cache.vertex_declaration == nullptr) {
+      LogDX9GPUBlitFailure("Could not create the cached fullscreen vertex declaration");
+      return false;
+    }
+  }
+
+  if (cache.state_block == nullptr) {
+    const HRESULT hr = device->CreateStateBlock(
+        D3DSBT_ALL,
+        &cache.state_block);
+    if (FAILED(hr) || cache.state_block == nullptr) {
+      LogDX9GPUBlitFailure("Could not create the cached D3D9 state block");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool EnsureDX9GPUReadbackScratchTextureLocked(
+    IDirect3DDevice9* device,
+    uint32_t width,
+    uint32_t height) {
+  auto& cache = g_dx9_gpu_blit_cache;
+
+  if (cache.source_scratch_texture != nullptr
+      && cache.source_scratch_width == width
+      && cache.source_scratch_height == height) {
+    return true;
+  }
+
+  ReleaseDX9COM(cache.source_scratch_texture);
+  cache.source_scratch_width = 0u;
+  cache.source_scratch_height = 0u;
+
+  const HRESULT hr = device->CreateTexture(
+      width,
+      height,
+      1u,
+      D3DUSAGE_RENDERTARGET,
+      D3DFMT_A16B16G16R16F,
+      D3DPOOL_DEFAULT,
+      &cache.source_scratch_texture,
+      nullptr);
+
+  if (FAILED(hr) || cache.source_scratch_texture == nullptr) {
+    LogDX9GPUBlitFailure("Could not create/reuse the FP16 sampling scratch texture");
+    return false;
+  }
+
+  cache.source_scratch_width = width;
+  cache.source_scratch_height = height;
+  return true;
+}
+
+bool PrepareDX9GPUReadbackSourceTextureLocked(
+    IDirect3DDevice9* device,
+    reshade::api::resource source,
+    const reshade::api::resource_desc& source_desc,
+    IDirect3DTexture9*& texture_out,
+    ScopedDX9NativeTexture& direct_texture) {
+  texture_out = nullptr;
+
+  // Fastest case: RenoDX clone is already a texture (or a surface belonging to
+  // one), so it can be sampled directly with no extra copy.
+  if (TryAcquireDX9TextureContainer(
+          source,
+          source_desc,
+          direct_texture)) {
+    texture_out = direct_texture.texture;
+    return texture_out != nullptr;
+  }
+
+  // D3D9 can also expose swapchain/render-target clones as plain surfaces. Those
+  // cannot be sampled by ps_3_0, so copy the FP16 surface into one reusable FP16
+  // render-target texture, then sample that texture.
+  if (!EnsureDX9GPUReadbackScratchTextureLocked(
+          device,
+          source_desc.texture.width,
+          source_desc.texture.height)) {
+    return false;
+  }
+
+  ScopedDX9NativeSurface source_surface;
+  if (!AcquireDX9NativeSurface(
+          source,
+          source_desc,
+          0u,
+          source_surface)) {
+    return false;
+  }
+
+  IDirect3DSurface9* scratch_surface = nullptr;
+  const HRESULT get_surface_hr =
+      g_dx9_gpu_blit_cache.source_scratch_texture->GetSurfaceLevel(
+          0u,
+          &scratch_surface);
+  if (FAILED(get_surface_hr) || scratch_surface == nullptr) {
+    return false;
+  }
+
+  const HRESULT blit_hr = device->StretchRect(
+      source_surface.surface,
+      nullptr,
+      scratch_surface,
+      nullptr,
+      D3DTEXF_NONE);
+
+  scratch_surface->Release();
+
+  if (FAILED(blit_hr)) {
+    LogDX9GPUBlitFailure("Could not copy the FP16 surface into the sampling texture");
+    return false;
+  }
+
+  texture_out = g_dx9_gpu_blit_cache.source_scratch_texture;
+  return true;
+}
+
+struct ScopedDX9RenderStateRestore {
+  IDirect3DDevice9* device = nullptr;
+  IDirect3DStateBlock9* state_block = nullptr;
+  std::array<IDirect3DSurface9*, 4u> render_targets = {};
+  std::array<bool, 4u> has_render_target = {};
+  IDirect3DSurface9* depth_stencil = nullptr;
+  bool has_depth_stencil = false;
+  uint32_t render_target_count = 1u;
+  bool captured = false;
+
+  bool Capture(
+      IDirect3DDevice9* native_device,
+      IDirect3DStateBlock9* cached_state_block) {
+    device = native_device;
+    state_block = cached_state_block;
+    if (device == nullptr || state_block == nullptr) return false;
+
+    D3DCAPS9 caps = {};
+    if (SUCCEEDED(device->GetDeviceCaps(&caps))) {
+      render_target_count =
+          std::clamp<uint32_t>(caps.NumSimultaneousRTs, 1u, 4u);
+    }
+
+    for (uint32_t slot = 0u; slot < render_target_count; ++slot) {
+      IDirect3DSurface9* target = nullptr;
+      if (SUCCEEDED(device->GetRenderTarget(slot, &target))
+          && target != nullptr) {
+        render_targets[slot] = target;
+        has_render_target[slot] = true;
+      }
+    }
+
+    IDirect3DSurface9* depth = nullptr;
+    if (SUCCEEDED(device->GetDepthStencilSurface(&depth))
+        && depth != nullptr) {
+      depth_stencil = depth;
+      has_depth_stencil = true;
+    }
+
+    if (FAILED(state_block->Capture())) {
+      return false;
+    }
+
+    captured = true;
+    return true;
+  }
+
+  ~ScopedDX9RenderStateRestore() {
+    if (device != nullptr && captured) {
+      for (uint32_t slot = 0u; slot < render_target_count; ++slot) {
+        if (slot == 0u || has_render_target[slot]) {
+          device->SetRenderTarget(
+              slot,
+              has_render_target[slot] ? render_targets[slot] : nullptr);
+        }
+      }
+
+      device->SetDepthStencilSurface(
+          has_depth_stencil ? depth_stencil : nullptr);
+
+      state_block->Apply();
+    }
+
+    for (auto*& target : render_targets) {
+      if (target != nullptr) {
+        target->Release();
+        target = nullptr;
+      }
+    }
+
+    if (depth_stencil != nullptr) {
+      depth_stencil->Release();
+      depth_stencil = nullptr;
+    }
+  }
+};
+
+bool BlitDX9HDRCloneToOriginalSDR(
+    reshade::api::device* device,
+    reshade::api::resource float_source,
+    const reshade::api::resource_desc& float_source_desc,
+    reshade::api::resource sdr_target,
+    const reshade::api::resource_desc& sdr_target_desc) {
+  if (!DX9_GPU_READBACK_BLIT_ENABLED
+      || device == nullptr
+      || device->get_api() != reshade::api::device_api::d3d9
+      || float_source.handle == 0u
+      || sdr_target.handle == 0u
+      || float_source.handle == sdr_target.handle) {
+    return false;
+  }
+
+  if (!IsFloat16RGBA(float_source_desc.texture.format)
+      || !IsSupportedSDRReadbackFormat(sdr_target_desc.texture.format)
+      || !SameTextureExtent(float_source_desc, sdr_target_desc)
+      || float_source_desc.texture.depth_or_layers != 1u
+      || sdr_target_desc.texture.depth_or_layers != 1u
+      || float_source_desc.texture.samples != 1u
+      || sdr_target_desc.texture.samples != 1u
+      || IsCPUVisibleReadbackHeap(sdr_target_desc.heap)) {
+    return false;
+  }
+
+  auto* native_device =
+      reinterpret_cast<IDirect3DDevice9*>(device->get_native());
+  if (native_device == nullptr) return false;
+
+  std::scoped_lock blit_lock(g_dx9_gpu_blit_mutex);
+
+  if (!EnsureDX9GPUReadbackPipelineLocked(native_device)) {
+    return false;
+  }
+
+  ScopedDX9NativeTexture direct_source_texture;
+  IDirect3DTexture9* source_texture = nullptr;
+  if (!PrepareDX9GPUReadbackSourceTextureLocked(
+          native_device,
+          float_source,
+          float_source_desc,
+          source_texture,
+          direct_source_texture)
+      || source_texture == nullptr) {
+    return false;
+  }
+
+  ScopedDX9NativeSurface target_surface;
+  if (!AcquireDX9NativeSurface(
+          sdr_target,
+          sdr_target_desc,
+          0u,
+          target_surface)
+      || target_surface.surface == nullptr) {
+    return false;
+  }
+
+  ScopedDX9RenderStateRestore restore;
+  if (!restore.Capture(
+          native_device,
+          g_dx9_gpu_blit_cache.state_block)) {
+    return false;
+  }
+
+  // Native calls bypass ReShade's state tracker, so explicitly remove any old
+  // texture bindings that could alias the original SDR render target. The state
+  // block restores them after the blit.
+  for (DWORD stage = 0u; stage < 16u; ++stage) {
+    native_device->SetTexture(stage, nullptr);
+  }
+
+  if (FAILED(native_device->SetRenderTarget(0u, target_surface.surface))) {
+    return false;
+  }
+
+  for (uint32_t slot = 1u; slot < restore.render_target_count; ++slot) {
+    native_device->SetRenderTarget(slot, nullptr);
+  }
+
+  native_device->SetDepthStencilSurface(nullptr);
+
+  D3DVIEWPORT9 viewport = {
+      0u,
+      0u,
+      sdr_target_desc.texture.width,
+      sdr_target_desc.texture.height,
+      0.0f,
+      1.0f,
+  };
+  if (FAILED(native_device->SetViewport(&viewport))) return false;
+
+  RECT scissor = {
+      0,
+      0,
+      static_cast<LONG>(sdr_target_desc.texture.width),
+      static_cast<LONG>(sdr_target_desc.texture.height),
+  };
+  native_device->SetScissorRect(&scissor);
+
+  native_device->SetRenderState(D3DRS_ZENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_FOGENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+  native_device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+  native_device->SetRenderState(
+      D3DRS_COLORWRITEENABLE,
+      D3DCOLORWRITEENABLE_RED
+          | D3DCOLORWRITEENABLE_GREEN
+          | D3DCOLORWRITEENABLE_BLUE
+          | D3DCOLORWRITEENABLE_ALPHA);
+
+  // The pixel shader performs the nonlinear encoding explicitly so the target
+  // should store its output literally, regardless of any game's prior sRGB state.
+  native_device->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+
+  native_device->SetSamplerState(0u, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+  native_device->SetSamplerState(0u, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+  native_device->SetSamplerState(0u, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+  native_device->SetSamplerState(0u, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+  native_device->SetSamplerState(0u, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+  native_device->SetSamplerState(0u, D3DSAMP_SRGBTEXTURE, 0u);
+
+  if (FAILED(native_device->SetVertexDeclaration(
+          g_dx9_gpu_blit_cache.vertex_declaration))) {
+    return false;
+  }
+  if (FAILED(native_device->SetVertexShader(
+          g_dx9_gpu_blit_cache.vertex_shader))) {
+    return false;
+  }
+  if (FAILED(native_device->SetPixelShader(
+          g_dx9_gpu_blit_cache.pixel_shader))) {
+    return false;
+  }
+  if (FAILED(native_device->SetTexture(0u, source_texture))) {
+    return false;
+  }
+
+  const float inv_size[4] = {
+      1.0f / static_cast<float>(sdr_target_desc.texture.width),
+      1.0f / static_cast<float>(sdr_target_desc.texture.height),
+      0.0f,
+      0.0f,
+  };
+  native_device->SetVertexShaderConstantF(0u, inv_size, 1u);
+
+  static const DX9GPUReadbackBlitVertex vertices[] = {
+      {-1.0f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f},
+      { 1.0f,  1.0f, 0.0f, 1.0f, 1.0f, 0.0f},
+      {-1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f},
+      { 1.0f, -1.0f, 0.0f, 1.0f, 1.0f, 1.0f},
+  };
+
+  const HRESULT draw_hr = native_device->DrawPrimitiveUP(
+      D3DPT_TRIANGLESTRIP,
+      2u,
+      vertices,
+      sizeof(DX9GPUReadbackBlitVertex));
+
+  native_device->SetTexture(0u, nullptr);
+
+  if (FAILED(draw_hr)) {
+    LogDX9GPUBlitFailure("Fullscreen HDR -> SDR DrawPrimitiveUP failed");
+    return false;
+  }
+
+  return true;
+}
+
+bool TryConvertDX9FloatReadbackWithGPUBlit(
+    reshade::api::command_list* cmd_list,
+    const DX9CopyEndpoint& source_endpoint,
+    reshade::api::resource dest,
+    const reshade::api::resource_desc& dest_desc) {
+  auto* device = cmd_list != nullptr ? cmd_list->get_device() : nullptr;
+  if (device == nullptr
+      || device->get_api() != reshade::api::device_api::d3d9
+      || dest.handle == 0u
+      || !IsCPUVisibleReadbackHeap(dest_desc.heap)) {
+    return false;
+  }
+
+  const reshade::api::resource float_source =
+      SelectCloneForCopy(source_endpoint);
+  const reshade::api::resource_desc float_source_desc =
+      SelectCloneDescForCopy(source_endpoint);
+
+  const reshade::api::resource sdr_original = source_endpoint.original;
+  const reshade::api::resource_desc& sdr_original_desc =
+      source_endpoint.original_desc;
+
+  if (float_source.handle == 0u
+      || sdr_original.handle == 0u
+      || float_source.handle == sdr_original.handle
+      || !IsFloat16RGBA(float_source_desc.texture.format)
+      || !IsSupportedSDRReadbackFormat(sdr_original_desc.texture.format)
+      || !IsSupportedSDRReadbackFormat(dest_desc.texture.format)
+      || sdr_original_desc.texture.format != dest_desc.texture.format
+      || !SameTextureExtent(float_source_desc, sdr_original_desc)
+      || !SameTextureExtent(sdr_original_desc, dest_desc)
+      || float_source_desc.texture.samples != 1u
+      || sdr_original_desc.texture.samples != 1u
+      || dest_desc.texture.samples != 1u) {
+    return false;
+  }
+
+  if (!BlitDX9HDRCloneToOriginalSDR(
+          device,
+          float_source,
+          float_source_desc,
+          sdr_original,
+          sdr_original_desc)) {
+    return false;
+  }
+
+  // The original 8-bit target now contains the current SDR representation.
+  // Finish with native GetRenderTargetData, which is the D3D9 operation the game
+  // originally wanted and avoids sending this replacement copy back through the
+  // ReShade callback stack.
+  auto* native_device =
+      reinterpret_cast<IDirect3DDevice9*>(device->get_native());
+  if (native_device == nullptr) return false;
+
+  ScopedDX9NativeSurface original_surface;
+  ScopedDX9NativeSurface readback_surface;
+  if (!AcquireDX9NativeSurface(
+          sdr_original,
+          sdr_original_desc,
+          0u,
+          original_surface)
+      || !AcquireDX9NativeSurface(
+          dest,
+          dest_desc,
+          0u,
+          readback_surface)) {
+    return false;
+  }
+
+  const HRESULT readback_hr = native_device->GetRenderTargetData(
+      original_surface.surface,
+      readback_surface.surface);
+  if (FAILED(readback_hr)) {
+    LogDX9GPUBlitFailure(
+        "GPU SDR blit succeeded but native GetRenderTargetData failed");
+    return false;
+  }
+
+  if (g_dx9_gpu_blit_success_logs < 8u) {
+    ++g_dx9_gpu_blit_success_logs;
+
+    std::stringstream stream;
+    stream << "[RenoDX DX9 Readback GPU Blit] GPU-converted FP16 -> SDR -> CPU (";
+    stream << float_source_desc.texture.width << "x";
+    stream << float_source_desc.texture.height << ", ";
+    stream << float_source_desc.texture.format << " -> ";
+    stream << sdr_original_desc.texture.format << ")";
+    reshade::log::message(
+        reshade::log::level::info,
+        stream.str().c_str());
+  }
+
+  return true;
+}
+
 float HalfToFloat(uint16_t value) {
   const uint32_t sign = (value >> 15u) & 0x1u;
   const uint32_t exponent = (value >> 10u) & 0x1Fu;
@@ -1981,8 +5269,39 @@ float LinearToSRGB(float linear) {
   return 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
 }
 
+// Small cached transfer-function LUT used only by the CPU readback fallback.
+// The GPU blit is preferred; if it cannot be used, this removes millions of
+// per-pixel std::pow() calls from a 4K FP16 -> SDR readback. 4096 entries are
+// enough for the 8-bit destination and cost only 4 KiB.
+const std::array<uint8_t, 4096u>& GetDX9SRGBEncodeLUT() {
+  static const std::array<uint8_t, 4096u> table = []() {
+    std::array<uint8_t, 4096u> result = {};
+    for (size_t i = 0u; i < result.size(); ++i) {
+      const float linear =
+          static_cast<float>(i) / static_cast<float>(result.size() - 1u);
+      const float srgb = LinearToSRGB(linear);
+      result[i] = static_cast<uint8_t>(
+          std::clamp(
+              static_cast<int>(std::lround(srgb * 255.0f)),
+              0,
+              255));
+    }
+    return result;
+  }();
+  return table;
+}
+
 uint8_t FloatToUNorm8(float value, bool encode_srgb) {
-  value = encode_srgb ? LinearToSRGB(value) : SanitizeUnit(value);
+  value = SanitizeUnit(value);
+  if (encode_srgb) {
+    const auto& table = GetDX9SRGBEncodeLUT();
+    const size_t index = static_cast<size_t>(std::clamp(
+        static_cast<int>(std::lround(
+            value * static_cast<float>(table.size() - 1u))),
+        0,
+        static_cast<int>(table.size() - 1u)));
+    return table[index];
+  }
   return static_cast<uint8_t>(
       std::clamp(
           static_cast<int>(std::lround(value * 255.0f)),
@@ -2126,112 +5445,6 @@ bool TryRedirectDX9CloneReadbackToOriginal(
   return true;
 }
 
-// Reusable CPU-visible FP16 staging surface for GetRenderTargetData.
-// The old path allocated and destroyed this surface for every incompatible
-// FP16 -> 8-bit readback. Caching it removes that repeated D3D9 resource churn.
-struct DX9ReadbackStagingCache {
-  reshade::api::device* device = nullptr;
-  reshade::api::resource resource = {0u};
-  reshade::api::resource_desc desc = {};
-};
-
-std::mutex g_dx9_readback_staging_mutex;
-DX9ReadbackStagingCache g_dx9_readback_staging_cache;
-
-bool DX9StagingDescMatches(
-    const reshade::api::resource_desc& cached,
-    const reshade::api::resource_desc& wanted) {
-  if (cached.type == reshade::api::resource_type::unknown
-      || wanted.type == reshade::api::resource_type::unknown) {
-    return false;
-  }
-
-  return cached.type == wanted.type
-      && cached.heap == wanted.heap
-      && cached.usage == wanted.usage
-      && cached.texture.format == wanted.texture.format
-      && cached.texture.width == wanted.texture.width
-      && cached.texture.height == wanted.texture.height
-      && cached.texture.depth_or_layers == wanted.texture.depth_or_layers
-      && cached.texture.levels == wanted.texture.levels
-      && cached.texture.samples == wanted.texture.samples;
-}
-
-bool EnsureDX9ReadbackStaging(
-    reshade::api::device* device,
-    const reshade::api::resource_desc& wanted_desc,
-    reshade::api::resource& staging) {
-  if (device == nullptr) return false;
-
-  auto& cache = g_dx9_readback_staging_cache;
-
-  if (cache.device == device && cache.resource.handle != 0u) {
-    // IMPORTANT: Do not trust only the descriptor we saved when the staging
-    // surface was created. A D3D9 Reset can invalidate the underlying surface
-    // while leaving this cached handle value non-zero (and handles may later be
-    // recycled). Re-query RenoDX's live resource tracker before every reuse.
-    const reshade::api::resource_desc live_desc =
-        renodx::utils::resource::GetResourceDesc(device, cache.resource);
-
-    if (live_desc.type != reshade::api::resource_type::unknown
-        && live_desc.heap == reshade::api::memory_heap::gpu_to_cpu
-        && DX9StagingDescMatches(live_desc, wanted_desc)) {
-      // Refresh the saved copy as well, then reuse only the proven-live surface.
-      cache.desc = live_desc;
-      staging = cache.resource;
-      return true;
-    }
-
-    // If it is still a live resource but no longer matches, explicitly release
-    // it. If tracking says it is already gone, never call destroy_resource on
-    // the stale handle -- just forget it and allocate a fresh staging surface.
-    if (live_desc.type != reshade::api::resource_type::unknown) {
-      device->destroy_resource(cache.resource);
-    }
-
-    cache = {};
-  } else if (cache.device != device) {
-    // Device changed/reset. The old device owns any old allocation; do not call
-    // through a potentially dead device pointer from this new callback.
-    cache = {};
-  }
-
-  cache.device = device;
-
-  if (!device->create_resource(
-          wanted_desc,
-          nullptr,
-          reshade::api::resource_usage::copy_dest,
-          &cache.resource)) {
-    cache = {};
-    return false;
-  }
-
-  cache.desc = wanted_desc;
-  staging = cache.resource;
-  return true;
-}
-
-// Called only while g_dx9_readback_staging_mutex is already held.
-void InvalidateDX9ReadbackStaging(reshade::api::device* device) {
-  auto& cache = g_dx9_readback_staging_cache;
-
-  if (device != nullptr
-      && cache.device == device
-      && cache.resource.handle != 0u) {
-    device->destroy_resource(cache.resource);
-  }
-
-  cache = {};
-}
-
-void ClearDX9ReadbackStagingCache() {
-  // DLL_PROCESS_DETACH runs under the loader lock, so do not wait on the staging
-  // mutex or call through a possibly-destroyed D3D9 device here. The D3D9 device
-  // owns the cached allocation and frees it during device/process teardown.
-  g_dx9_readback_staging_cache = {};
-}
-
 bool TryConvertDX9FloatReadbackToSDR(
     reshade::api::command_list* cmd_list,
     const DX9CopyEndpoint& source_endpoint,
@@ -2276,8 +5489,8 @@ bool TryConvertDX9FloatReadbackToSDR(
 
   reshade::api::resource staging = {0u};
 
-  // One cached staging surface is shared by D3D9 readbacks. Hold the lock across
-  // copy/map/CPU conversion so another callback cannot overwrite it mid-readback.
+  // Serialize use of the single cached staging resource. D3D9 is normally an
+  // immediate-context API, but this also keeps multi-threaded callback use safe.
   std::scoped_lock staging_lock(g_dx9_readback_staging_mutex);
 
   if (!EnsureDX9ReadbackStaging(
@@ -2416,6 +5629,18 @@ bool OnDX9CopyResource(
   // asking the resource tracker/device for the same description a second time.
   const reshade::api::resource_desc& dest_desc = dest_endpoint.input_desc;
 
+  // Preferred path: refresh the game's original 8-bit resource from the FP16
+  // clone with a GPU fullscreen blit, then issue a normal same-format readback.
+  if (TryConvertDX9FloatReadbackWithGPUBlit(
+          cmd_list,
+          source_endpoint,
+          dest,
+          dest_desc)) {
+    return true;
+  }
+
+  // Existing zero-conversion redirect remains as a compatibility fast path for
+  // cases where the original SDR resource is already current.
   if (TryRedirectDX9CloneReadbackToOriginal(
           cmd_list,
           source_endpoint,
@@ -2424,6 +5649,7 @@ bool OnDX9CopyResource(
     return true;
   }
 
+  // Last resort: the original cached CPU FP16 -> SDR conversion.
   if (TryConvertDX9FloatReadbackToSDR(
           cmd_list,
           source_endpoint,
@@ -3198,6 +6424,10 @@ void OnPresent(reshade::api::command_queue* queue,
   auto* device = queue->get_device();
   if (device == nullptr) return;
 
+  if (device->get_api() == reshade::api::device_api::d3d9) {
+    NotifyBlackOpsD3D9Present();
+  }
+
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
@@ -3206,6 +6436,13 @@ void OnPresent(reshade::api::command_queue* queue,
 
   HWND hwnd = reinterpret_cast<HWND>(swapchain->get_hwnd());
   if (hwnd == nullptr) return;
+
+  const bool overlay_capturing_mouse =
+      g_reshade_overlay_open.load(std::memory_order_acquire);
+  cod_high_polling_mouse::Update(
+      hwnd,
+      cod_high_polling_mouse_fix >= 0.5f,
+      overlay_capturing_mouse);
 
   uint32_t backbuffer_width = 0u;
   uint32_t backbuffer_height = 0u;
@@ -3267,6 +6504,38 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // Always register Present so Windowed Borderless works even when the
         // display proxy is disabled.
         reshade::register_event<reshade::addon_event::present>(OnPresent);
+        reshade::register_event<reshade::addon_event::reshade_open_overlay>(
+            OnReShadeOpenOverlay);
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "HighPollingMouseFix",
+              .binding = &cod_high_polling_mouse_fix,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "High Polling Rate Mouse Fix",
+              .section = "Performance",
+              .tooltip = "Uses Windows Raw Input to accumulate every relative mouse delta while preserving the game's native sensitivity/ADS/m_yaw/m_pitch path. During gameplay cursor recentering it batch-drains high-rate WM_INPUT/WM_MOUSEMOVE movement messages so 1000-8000 Hz mice do not force the old engine to process thousands of full mouse-message updates per second. Buttons, wheel, menus and overlay cursor input remain legacy/native. Disable to restore the stock mouse path.",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                cod_high_polling_mouse_fix = current;
+                cod_high_polling_mouse::SetEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          cod_high_polling_mouse_fix = setting->GetValue();
+          cod_high_polling_mouse::SetEnabled(
+              cod_high_polling_mouse_fix >= 0.5f);
+          settings.push_back(setting);
+        }
+
 
         {
           auto* setting = new renodx::utils::settings::Setting{
@@ -3307,6 +6576,44 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           force_windowed_borderless = setting->GetValue();
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "BlackOpsRendererSyncFix",
+              .binding = &codbo_renderer_sync_fix,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Smooth Frame Pacing",
+              .section = "Performance",
+              .tooltip = "Smooth BO1 internal FPS pacing. Keeps com_maxfps as the actual game cap, but replaces the stock millisecond Sleep(1) retry loop with absolute QPC deadlines, high-resolution coarse waits and a tiny fine finish. If a frame is late, MW3-style re-anchoring passes it immediately and prevents catch-up long/short cadence. The exact 0x211BE2 renderer poll remains 0ms.",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                codbo_renderer_sync_fix = current;
+                g_codbo_renderer_sync_enabled.store(
+                    current >= 0.5f,
+                    std::memory_order_release);
+                if (g_codbo_startup_commands_submitted.load(std::memory_order_acquire)) {
+                  SubmitBlackOpsCommandText(
+                      current >= 0.5f ? "com_busyWait 1\n"
+                                      : "com_busyWait 0\n");
+                }
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          codbo_renderer_sync_fix = setting->GetValue();
+          g_codbo_renderer_sync_enabled.store(
+              codbo_renderer_sync_fix >= 0.5f,
+              std::memory_order_release);
           settings.push_back(setting);
         }
 
@@ -3489,6 +6796,11 @@ for (const auto old_format : scene_intermediate_formats) {
         
         // D3D9 copy/readback interception. These callbacks are ignored for the
         // D3D11/D3D12 display-proxy side and are recursion-guarded internally.
+        // Release cached default-pool blit objects before Reset/device teardown.
+        reshade::register_event<reshade::addon_event::destroy_device>(
+            OnDX9ReadbackDestroyDevice);
+        reshade::register_event<reshade::addon_event::destroy_swapchain>(
+            OnDX9ReadbackDestroySwapchain);
         reshade::register_event<reshade::addon_event::copy_resource>(
             OnDX9CopyResource);
         reshade::register_event<reshade::addon_event::copy_texture_region>(
@@ -3500,7 +6812,12 @@ for (const auto old_format : scene_intermediate_formats) {
       }
       break;
     case DLL_PROCESS_DETACH:
-      ClearDX9ReadbackStagingCache();
+      g_reshade_overlay_open.store(false, std::memory_order_release);
+      cod_high_polling_mouse::Shutdown();
+      ShutdownBlackOpsNativeConsole();
+      ShutdownBlackOpsSmoothFPSFix();
+      ShutdownBlackOpsSyncFix();
+      ClearDX9ReadbackOptimizationCaches();
       reshade::unregister_event<reshade::addon_event::create_pipeline>(
           OnCreatePipelineDX9AutoOutputUnclamp);
       ClearDX9AutoOutputUnclampCache();
@@ -3510,8 +6827,13 @@ for (const auto old_format : scene_intermediate_formats) {
           OnDX9CopyTextureRegion);
       reshade::unregister_event<reshade::addon_event::copy_resource>(
           OnDX9CopyResource);
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(
+          OnDX9ReadbackDestroySwapchain);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(
+          OnDX9ReadbackDestroyDevice);
+      reshade::unregister_event<reshade::addon_event::reshade_open_overlay>(
+          OnReShadeOpenOverlay);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-      reshade::unregister_addon(h_module);
       break;
   }
 
@@ -3524,6 +6846,13 @@ for (const auto old_format : scene_intermediate_formats) {
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     reshade::register_event<reshade::addon_event::create_pipeline>(
         OnCreatePipelineDX9AutoOutputUnclamp);
+  }
+
+  // Keep the ReShade add-on registered until all RenoDX modules have processed
+  // DLL_PROCESS_DETACH. Unregistering it earlier makes their event cleanup fail
+  // (the BO1 log showed dozens of "Could not find associated add-on" errors).
+  if (fdw_reason == DLL_PROCESS_DETACH) {
+    reshade::unregister_addon(h_module);
   }
 
   return TRUE;

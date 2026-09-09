@@ -9,16 +9,22 @@
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 #define CODWAW_DX9_READBACK_CACHE_OPTIMIZED 1
 #define CODWAW_DX9_GPU_READBACK_BLIT 1
-#define RENODX_FPS_LIMIT_HR_TIMER
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 #include <Windows.h>
+
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
 #include <d3d9.h>
+#include <d3dcompiler.h>
 
 #include <embed/shaders.h>
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstring>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -32,12 +38,14 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <intrin.h>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/resource.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
+#include "./codwaw_frame_timing.hpp"
 
 #ifndef RENODX_PSYCHO_SLIDER_LAYOUT_VERSION
 #error "CODWAW: shared.h is missing the Psycho slider layout from this package."
@@ -47,6 +55,2079 @@
 #endif
 
 namespace {
+
+// ============================================================================
+// CoDWaW Raw Mouse Input
+// Raw Input relative-mouse bridge
+// ============================================================================
+//
+// Goals:
+//   * Preserve every physical relative mouse delta. There is no 125/500/1000 Hz
+//     resampling and no artificial polling cap.
+//   * Keep the game's native sensitivity, ADS, m_yaw/m_pitch, m_filter and aim
+//     math by continuing to feed movement through its GetCursorPos/SetCursorPos
+//     relative-mouse path.
+//   * Avoid making the old Win32 message loop process thousands of individual
+//     WM_MOUSEMOVE/WM_INPUT messages per second. While the game is recentering
+//     the cursor for gameplay, raw reports are accumulated and input-only bursts
+//     are drained in one PeekMessage/GetMessage hook invocation.
+//   * Do not suppress legacy button/wheel messages. Raw Input is registered
+//     WITHOUT RIDEV_NOLEGACY, so mouse buttons, wheel and menus remain native.
+//   * Automatically fall back to the original cursor path in menus, after focus
+//     loss, and while the ReShade overlay wants the mouse.
+//
+// The stock WaW/BO1/IW5 executables all import GetCursorPos, SetCursorPos,
+// PeekMessageA and GetMessageA and do not import the Windows Raw Input APIs.
+// This bridge therefore patches only those four main-EXE IAT slots. Calls made
+// by ReShade or other DLLs are not redirected.
+
+namespace cod_high_polling_mouse {
+
+using GetCursorPosFn = BOOL(WINAPI*)(LPPOINT);
+using SetCursorPosFn = BOOL(WINAPI*)(int, int);
+using PeekMessageAFn = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT, UINT);
+using GetMessageAFn = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT);
+
+struct IATHook {
+  uintptr_t* slot = nullptr;
+  uintptr_t original = 0u;
+  uintptr_t replacement = 0u;
+};
+
+inline std::atomic<bool> g_enabled{false};
+inline std::atomic<bool> g_overlay_capturing_mouse{false};
+inline std::atomic<uintptr_t> g_game_hwnd{0u};
+inline std::atomic<bool> g_hooks_installed{false};
+inline std::atomic<bool> g_raw_registered{false};
+inline std::atomic<bool> g_logged_capture{false};
+inline std::atomic<bool> g_logged_install_failure{false};
+
+inline std::atomic<int64_t> g_raw_total_x{0};
+inline std::atomic<int64_t> g_raw_total_y{0};
+inline std::atomic<int64_t> g_raw_base_x{0};
+inline std::atomic<int64_t> g_raw_base_y{0};
+inline std::atomic<long> g_anchor_x{0};
+inline std::atomic<long> g_anchor_y{0};
+inline std::atomic<bool> g_anchor_valid{false};
+
+inline std::atomic<uint64_t> g_last_center_set_tick{0u};
+inline std::atomic<uint32_t> g_center_set_streak{0u};
+inline std::atomic<long> g_last_center_x{0};
+inline std::atomic<long> g_last_center_y{0};
+
+inline GetCursorPosFn g_original_get_cursor_pos = nullptr;
+inline SetCursorPosFn g_original_set_cursor_pos = nullptr;
+inline PeekMessageAFn g_original_peek_message_a = nullptr;
+inline GetMessageAFn g_original_get_message_a = nullptr;
+
+inline IATHook g_get_cursor_hook = {};
+inline IATHook g_set_cursor_hook = {};
+inline IATHook g_peek_message_hook = {};
+inline IATHook g_get_message_hook = {};
+
+inline bool g_saved_raw_registration_valid = false;
+inline RAWINPUTDEVICE g_saved_raw_registration = {};
+inline HWND g_registered_hwnd = nullptr;
+
+constexpr uint64_t kRelativeModeHoldMs = 120u;
+constexpr uint64_t kRecenterSequenceGapMs = 100u;
+constexpr uint32_t kRecenterStreakRequired = 2u;
+constexpr int kCenterTolerancePixels = 96;
+constexpr uint32_t kMaxInputMessagesDrainedPerCall = 512u;
+
+void LogInfo(const char* text) {
+  reshade::log::message(
+      reshade::log::level::info,
+      text != nullptr ? text : "[CoD Mouse Fix] (null)");
+}
+
+void LogWarning(const char* text) {
+  reshade::log::message(
+      reshade::log::level::warning,
+      text != nullptr ? text : "[CoD Mouse Fix] (null)");
+}
+
+bool EqualAsciiInsensitive(const char* a, const char* b) {
+  if (a == nullptr || b == nullptr) return false;
+  while (*a != '\0' && *b != '\0') {
+    char ca = *a++;
+    char cb = *b++;
+    if (ca >= 'A' && ca <= 'Z') ca = static_cast<char>(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = static_cast<char>(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
+bool FindAndPatchMainExeIAT(
+    const char* imported_dll,
+    const char* imported_name,
+    void* replacement,
+    IATHook& hook) {
+  if (imported_dll == nullptr || imported_name == nullptr || replacement == nullptr) {
+    return false;
+  }
+
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+
+  const auto& directory =
+      nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (directory.VirtualAddress == 0u || directory.Size < sizeof(IMAGE_IMPORT_DESCRIPTOR)) {
+    return false;
+  }
+
+  auto* descriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(
+      module + directory.VirtualAddress);
+
+  for (; descriptor->Name != 0u; ++descriptor) {
+    const char* dll_name = reinterpret_cast<const char*>(module + descriptor->Name);
+    if (!EqualAsciiInsensitive(dll_name, imported_dll)) continue;
+    if (descriptor->OriginalFirstThunk == 0u || descriptor->FirstThunk == 0u) {
+      return false;
+    }
+
+    auto* name_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->OriginalFirstThunk);
+    auto* iat_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->FirstThunk);
+
+    for (; name_thunk->u1.AddressOfData != 0u; ++name_thunk, ++iat_thunk) {
+      if (IMAGE_SNAP_BY_ORDINAL(name_thunk->u1.Ordinal)) continue;
+
+      auto* import = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(
+          module + static_cast<uintptr_t>(name_thunk->u1.AddressOfData));
+      const char* function_name = reinterpret_cast<const char*>(import->Name);
+      if (std::strcmp(function_name, imported_name) != 0) continue;
+
+      auto* slot = reinterpret_cast<uintptr_t*>(&iat_thunk->u1.Function);
+      const uintptr_t original = *slot;
+      const uintptr_t replacement_value = reinterpret_cast<uintptr_t>(replacement);
+
+      DWORD old_protect = 0u;
+      if (!VirtualProtect(slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+        return false;
+      }
+
+      *slot = replacement_value;
+      FlushInstructionCache(GetCurrentProcess(), slot, sizeof(uintptr_t));
+
+      DWORD ignored = 0u;
+      VirtualProtect(slot, sizeof(uintptr_t), old_protect, &ignored);
+
+      hook.slot = slot;
+      hook.original = original;
+      hook.replacement = replacement_value;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void RestoreIATHook(IATHook& hook) {
+  if (hook.slot == nullptr || hook.original == 0u) {
+    hook = {};
+    return;
+  }
+
+  DWORD old_protect = 0u;
+  if (VirtualProtect(hook.slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+    // Only undo our own pointer. If another component changed the slot after us,
+    // leave its newer hook intact.
+    if (*hook.slot == hook.replacement) {
+      *hook.slot = hook.original;
+      FlushInstructionCache(GetCurrentProcess(), hook.slot, sizeof(uintptr_t));
+    }
+    DWORD ignored = 0u;
+    VirtualProtect(hook.slot, sizeof(uintptr_t), old_protect, &ignored);
+  }
+
+  hook = {};
+}
+
+HWND GameWindow() {
+  return reinterpret_cast<HWND>(
+      g_game_hwnd.load(std::memory_order_acquire));
+}
+
+bool IsGameForeground() {
+  const HWND hwnd = GameWindow();
+  return hwnd != nullptr && GetForegroundWindow() == hwnd;
+}
+
+bool IsNearClientCenter(HWND hwnd, int x, int y) {
+  if (hwnd == nullptr) return false;
+
+  RECT client = {};
+  if (!GetClientRect(hwnd, &client)) return false;
+
+  POINT center = {
+      (client.left + client.right) / 2,
+      (client.top + client.bottom) / 2,
+  };
+  if (!ClientToScreen(hwnd, &center)) return false;
+
+  const long long dx = static_cast<long long>(x) - center.x;
+  const long long dy = static_cast<long long>(y) - center.y;
+  return dx >= -kCenterTolerancePixels && dx <= kCenterTolerancePixels
+      && dy >= -kCenterTolerancePixels && dy <= kCenterTolerancePixels;
+}
+
+bool RelativeCaptureActive() {
+  if (!g_enabled.load(std::memory_order_acquire)) return false;
+  if (!g_raw_registered.load(std::memory_order_acquire)) return false;
+  if (g_overlay_capturing_mouse.load(std::memory_order_acquire)) return false;
+  if (!g_anchor_valid.load(std::memory_order_acquire)) return false;
+  if (!IsGameForeground()) return false;
+  if (g_center_set_streak.load(std::memory_order_acquire)
+      < kRecenterStreakRequired) {
+    return false;
+  }
+
+  const uint64_t last =
+      g_last_center_set_tick.load(std::memory_order_acquire);
+  const uint64_t now = GetTickCount64();
+  return last != 0u && now >= last && (now - last) <= kRelativeModeHoldMs;
+}
+
+void SnapshotExistingRawMouseRegistration() {
+  g_saved_raw_registration_valid = false;
+  g_saved_raw_registration = {};
+
+  UINT count = 0u;
+  // With a null buffer Windows may report ERROR_INSUFFICIENT_BUFFER while still
+  // returning the required count through puiNumDevices. The count is what matters
+  // for this sizing query.
+  GetRegisteredRawInputDevices(nullptr, &count, sizeof(RAWINPUTDEVICE));
+  if (count == 0u) return;
+
+  std::vector<RAWINPUTDEVICE> devices(count);
+  UINT actual = count;
+  if (GetRegisteredRawInputDevices(
+          devices.data(),
+          &actual,
+          sizeof(RAWINPUTDEVICE)) == static_cast<UINT>(-1)) {
+    return;
+  }
+
+  for (UINT index = 0u; index < actual; ++index) {
+    const auto& device = devices[index];
+    if (device.usUsagePage == 0x01u && device.usUsage == 0x02u) {
+      g_saved_raw_registration = device;
+      g_saved_raw_registration_valid = true;
+      return;
+    }
+  }
+}
+
+bool RegisterRawMouse(HWND hwnd) {
+  if (hwnd == nullptr) return false;
+
+  if (!g_raw_registered.load(std::memory_order_acquire)) {
+    SnapshotExistingRawMouseRegistration();
+  }
+
+  RAWINPUTDEVICE mouse = {};
+  mouse.usUsagePage = 0x01u;
+  mouse.usUsage = 0x02u;
+  // Plutonium registers raw mouse input with INPUTSINK. We intentionally leave
+  // RIDEV_NOLEGACY clear in the RenoDX port so WaW's stock button/wheel/menu
+  // handling remains intact; gameplay movement itself is sourced from WM_INPUT.
+  mouse.dwFlags = RIDEV_INPUTSINK;
+  mouse.hwndTarget = hwnd;
+
+  if (!RegisterRawInputDevices(&mouse, 1u, sizeof(mouse))) {
+    return false;
+  }
+
+  g_registered_hwnd = hwnd;
+  g_raw_registered.store(true, std::memory_order_release);
+  return true;
+}
+
+void RestoreRawMouseRegistration() {
+  if (!g_raw_registered.exchange(false, std::memory_order_acq_rel)) return;
+
+  if (g_saved_raw_registration_valid) {
+    RegisterRawInputDevices(
+        &g_saved_raw_registration,
+        1u,
+        sizeof(g_saved_raw_registration));
+  } else {
+    RAWINPUTDEVICE remove = {};
+    remove.usUsagePage = 0x01u;
+    remove.usUsage = 0x02u;
+    remove.dwFlags = RIDEV_REMOVE;
+    remove.hwndTarget = nullptr;
+    RegisterRawInputDevices(&remove, 1u, sizeof(remove));
+  }
+
+  g_registered_hwnd = nullptr;
+  g_saved_raw_registration_valid = false;
+  g_saved_raw_registration = {};
+}
+
+void ProcessRawInput(HRAWINPUT handle) {
+  if (handle == nullptr) return;
+
+  alignas(RAWINPUT) std::array<uint8_t, 512u> storage = {};
+  UINT size = static_cast<UINT>(storage.size());
+  const UINT result = GetRawInputData(
+      handle,
+      RID_INPUT,
+      storage.data(),
+      &size,
+      sizeof(RAWINPUTHEADER));
+  if (result == static_cast<UINT>(-1) || result < sizeof(RAWINPUTHEADER)) return;
+
+  const auto* raw = reinterpret_cast<const RAWINPUT*>(storage.data());
+  if (raw->header.dwType != RIM_TYPEMOUSE) return;
+
+  const RAWMOUSE& mouse = raw->data.mouse;
+  if ((mouse.usFlags & MOUSE_MOVE_ABSOLUTE) != 0u) {
+    // Standard gaming mice report relative movement. Ignore absolute devices
+    // rather than guessing a coordinate transform (touch/tablet/light-gun).
+    return;
+  }
+
+  if (mouse.lLastX != 0) {
+    g_raw_total_x.fetch_add(
+        static_cast<int64_t>(mouse.lLastX),
+        std::memory_order_relaxed);
+  }
+  if (mouse.lLastY != 0) {
+    g_raw_total_y.fetch_add(
+        static_cast<int64_t>(mouse.lLastY),
+        std::memory_order_relaxed);
+  }
+}
+
+void ConsumeDroppedInputMessage(const MSG& message) {
+  if (message.message == WM_INPUT) {
+    ProcessRawInput(reinterpret_cast<HRAWINPUT>(message.lParam));
+    // Foreground WM_INPUT cleanup normally happens through DefWindowProc after
+    // DispatchMessage. We intentionally consume this message, so perform that
+    // cleanup here.
+    if (message.hwnd != nullptr) {
+      DefWindowProcA(
+          message.hwnd,
+          message.message,
+          message.wParam,
+          message.lParam);
+    }
+  }
+  // WM_MOUSEMOVE is intentionally discarded in relative gameplay mode. Its
+  // movement is already represented by the accumulated WM_INPUT deltas.
+}
+
+bool IsMovementOnlyMessage(const MSG& message) {
+  return message.message == WM_INPUT || message.message == WM_MOUSEMOVE;
+}
+
+BOOL WINAPI HookGetCursorPos(LPPOINT point) {
+  if (point == nullptr || !RelativeCaptureActive()) {
+    return g_original_get_cursor_pos != nullptr
+        ? g_original_get_cursor_pos(point)
+        : FALSE;
+  }
+
+  const int64_t dx =
+      g_raw_total_x.load(std::memory_order_relaxed)
+      - g_raw_base_x.load(std::memory_order_relaxed);
+  const int64_t dy =
+      g_raw_total_y.load(std::memory_order_relaxed)
+      - g_raw_base_y.load(std::memory_order_relaxed);
+
+  constexpr int64_t kMaximumVirtualDelta = 32767;
+  const int64_t safe_dx = std::clamp(
+      dx,
+      -kMaximumVirtualDelta,
+      kMaximumVirtualDelta);
+  const int64_t safe_dy = std::clamp(
+      dy,
+      -kMaximumVirtualDelta,
+      kMaximumVirtualDelta);
+
+  point->x = static_cast<LONG>(
+      static_cast<int64_t>(g_anchor_x.load(std::memory_order_relaxed)) + safe_dx);
+  point->y = static_cast<LONG>(
+      static_cast<int64_t>(g_anchor_y.load(std::memory_order_relaxed)) + safe_dy);
+  return TRUE;
+}
+
+BOOL WINAPI HookSetCursorPos(int x, int y) {
+  const HWND hwnd = GameWindow();
+  const uint64_t now = GetTickCount64();
+
+  if (g_enabled.load(std::memory_order_acquire)
+      && hwnd != nullptr
+      && GetForegroundWindow() == hwnd
+      && IsNearClientCenter(hwnd, x, y)) {
+    const uint64_t previous_tick =
+        g_last_center_set_tick.load(std::memory_order_relaxed);
+    const long previous_x = g_last_center_x.load(std::memory_order_relaxed);
+    const long previous_y = g_last_center_y.load(std::memory_order_relaxed);
+
+    const bool close_to_previous =
+        previous_tick != 0u
+        && now >= previous_tick
+        && (now - previous_tick) <= kRecenterSequenceGapMs
+        && (static_cast<long long>(x) - previous_x) >= -4
+        && (static_cast<long long>(x) - previous_x) <= 4
+        && (static_cast<long long>(y) - previous_y) >= -4
+        && (static_cast<long long>(y) - previous_y) <= 4;
+
+    uint32_t streak = close_to_previous
+        ? g_center_set_streak.load(std::memory_order_relaxed) + 1u
+        : 1u;
+    streak = std::min<uint32_t>(streak, 1000u);
+
+    g_center_set_streak.store(streak, std::memory_order_release);
+    g_last_center_set_tick.store(now, std::memory_order_release);
+    g_last_center_x.store(x, std::memory_order_relaxed);
+    g_last_center_y.store(y, std::memory_order_relaxed);
+    g_anchor_x.store(x, std::memory_order_relaxed);
+    g_anchor_y.store(y, std::memory_order_relaxed);
+    g_anchor_valid.store(true, std::memory_order_release);
+
+    // A recenter marks the exact point at which the native engine considers all
+    // prior movement consumed. Preserve that behavior with raw cumulative totals.
+    g_raw_base_x.store(
+        g_raw_total_x.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
+    g_raw_base_y.store(
+        g_raw_total_y.load(std::memory_order_relaxed),
+        std::memory_order_relaxed);
+
+    if (streak >= kRecenterStreakRequired
+        && !g_logged_capture.exchange(true, std::memory_order_acq_rel)) {
+      LogInfo(
+          "[CoDWaW Raw Input] Relative gameplay capture detected; movement is now sourced from WM_INPUT while WaW keeps its native sensitivity/ADS math.");
+    }
+  } else if (hwnd != nullptr && GetForegroundWindow() != hwnd) {
+    g_center_set_streak.store(0u, std::memory_order_release);
+    g_anchor_valid.store(false, std::memory_order_release);
+  }
+
+  return g_original_set_cursor_pos != nullptr
+      ? g_original_set_cursor_pos(x, y)
+      : FALSE;
+}
+
+BOOL WINAPI HookPeekMessageA(
+    LPMSG message,
+    HWND hwnd,
+    UINT min_filter,
+    UINT max_filter,
+    UINT remove_message) {
+  if (g_original_peek_message_a == nullptr) return FALSE;
+
+  const BOOL first = g_original_peek_message_a(
+      message,
+      hwnd,
+      min_filter,
+      max_filter,
+      remove_message);
+
+  if (!first
+      || message == nullptr
+      || (remove_message & PM_REMOVE) == 0u
+      || min_filter != 0u
+      || max_filter != 0u
+      || !RelativeCaptureActive()) {
+    return first;
+  }
+
+  if (!IsMovementOnlyMessage(*message)) return first;
+
+  ConsumeDroppedInputMessage(*message);
+
+  for (uint32_t drained = 1u;
+       drained < kMaxInputMessagesDrainedPerCall;
+       ++drained) {
+    MSG next = {};
+    if (!g_original_peek_message_a(
+            &next,
+            hwnd,
+            0u,
+            0u,
+            PM_REMOVE)) {
+      return FALSE;
+    }
+
+    if (!IsMovementOnlyMessage(next)) {
+      *message = next;
+      return TRUE;
+    }
+
+    ConsumeDroppedInputMessage(next);
+  }
+
+  // Leave any remaining queue entries for the next engine pump iteration rather
+  // than spending unbounded time inside one call.
+  return FALSE;
+}
+
+BOOL WINAPI HookGetMessageA(
+    LPMSG message,
+    HWND hwnd,
+    UINT min_filter,
+    UINT max_filter) {
+  if (g_original_get_message_a == nullptr) return -1;
+
+  const BOOL first = g_original_get_message_a(
+      message,
+      hwnd,
+      min_filter,
+      max_filter);
+
+  if (first <= 0
+      || message == nullptr
+      || min_filter != 0u
+      || max_filter != 0u
+      || !RelativeCaptureActive()
+      || !IsMovementOnlyMessage(*message)) {
+    return first;
+  }
+
+  ConsumeDroppedInputMessage(*message);
+
+  // A classic idTech/CoD pump often does PeekMessage(PM_NOREMOVE) followed by
+  // GetMessage. After consuming the mouse burst, never block here waiting for a
+  // non-mouse message: drain with the original PeekMessage and return WM_NULL if
+  // the queue becomes empty so the engine can continue its frame.
+  for (uint32_t drained = 1u;
+       drained < kMaxInputMessagesDrainedPerCall;
+       ++drained) {
+    MSG next = {};
+    if (g_original_peek_message_a == nullptr
+        || !g_original_peek_message_a(
+            &next,
+            hwnd,
+            0u,
+            0u,
+            PM_REMOVE)) {
+      *message = {};
+      message->hwnd = GameWindow();
+      message->message = WM_NULL;
+      return TRUE;
+    }
+
+    if (next.message == WM_QUIT) {
+      *message = next;
+      return FALSE;
+    }
+
+    if (!IsMovementOnlyMessage(next)) {
+      *message = next;
+      return TRUE;
+    }
+
+    ConsumeDroppedInputMessage(next);
+  }
+
+  *message = {};
+  message->hwnd = GameWindow();
+  message->message = WM_NULL;
+  return TRUE;
+}
+
+bool InstallHooks() {
+  if (g_hooks_installed.load(std::memory_order_acquire)) return true;
+
+  const bool got_cursor = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "GetCursorPos",
+      reinterpret_cast<void*>(&HookGetCursorPos),
+      g_get_cursor_hook);
+  if (got_cursor) {
+    g_original_get_cursor_pos = reinterpret_cast<GetCursorPosFn>(
+        g_get_cursor_hook.original);
+  }
+
+  const bool set_cursor = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "SetCursorPos",
+      reinterpret_cast<void*>(&HookSetCursorPos),
+      g_set_cursor_hook);
+  if (set_cursor) {
+    g_original_set_cursor_pos = reinterpret_cast<SetCursorPosFn>(
+        g_set_cursor_hook.original);
+  }
+
+  const bool peek_message = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "PeekMessageA",
+      reinterpret_cast<void*>(&HookPeekMessageA),
+      g_peek_message_hook);
+  if (peek_message) {
+    g_original_peek_message_a = reinterpret_cast<PeekMessageAFn>(
+        g_peek_message_hook.original);
+  }
+
+  const bool get_message = FindAndPatchMainExeIAT(
+      "user32.dll",
+      "GetMessageA",
+      reinterpret_cast<void*>(&HookGetMessageA),
+      g_get_message_hook);
+  if (get_message) {
+    g_original_get_message_a = reinterpret_cast<GetMessageAFn>(
+        g_get_message_hook.original);
+  }
+
+  const bool complete =
+      got_cursor && set_cursor && peek_message && get_message;
+  if (!complete) {
+    RestoreIATHook(g_get_message_hook);
+    RestoreIATHook(g_peek_message_hook);
+    RestoreIATHook(g_set_cursor_hook);
+    RestoreIATHook(g_get_cursor_hook);
+    g_original_get_cursor_pos = nullptr;
+    g_original_set_cursor_pos = nullptr;
+    g_original_peek_message_a = nullptr;
+    g_original_get_message_a = nullptr;
+
+    if (!g_logged_install_failure.exchange(true, std::memory_order_acq_rel)) {
+      LogWarning(
+          "[CoDWaW Raw Input] Could not find all four stock user32 IAT entries (GetCursorPos/SetCursorPos/PeekMessageA/GetMessageA); Raw Input left disabled rather than partially hooking input.");
+    }
+    return false;
+  }
+
+  g_hooks_installed.store(true, std::memory_order_release);
+  LogInfo(
+      "[CoDWaW Raw Input] Hooks installed: WM_INPUT accumulation + native cursor-delta bridge. Legacy buttons/wheel remain handled by WaW.");
+  return true;
+}
+
+void SetEnabled(bool enabled) {
+  g_enabled.store(enabled, std::memory_order_release);
+  if (!enabled) {
+    g_center_set_streak.store(0u, std::memory_order_release);
+    g_anchor_valid.store(false, std::memory_order_release);
+  }
+}
+
+void Update(HWND hwnd, bool enabled, bool overlay_capturing_mouse) {
+  SetEnabled(enabled);
+
+  const bool previous_overlay_state =
+      g_overlay_capturing_mouse.exchange(
+          overlay_capturing_mouse,
+          std::memory_order_acq_rel);
+
+  // Do not carry mouse motion accumulated while the ReShade UI was open back
+  // into gameplay. Re-anchor the raw-delta bridge on both overlay transitions.
+  if (previous_overlay_state != overlay_capturing_mouse) {
+    const int64_t total_x = g_raw_total_x.load(std::memory_order_relaxed);
+    const int64_t total_y = g_raw_total_y.load(std::memory_order_relaxed);
+    g_raw_base_x.store(total_x, std::memory_order_relaxed);
+    g_raw_base_y.store(total_y, std::memory_order_relaxed);
+    g_anchor_valid.store(false, std::memory_order_release);
+    g_center_set_streak.store(0u, std::memory_order_release);
+  }
+
+  const uintptr_t previous_hwnd =
+      g_game_hwnd.exchange(
+          reinterpret_cast<uintptr_t>(hwnd),
+          std::memory_order_acq_rel);
+
+  if (!enabled || hwnd == nullptr) {
+    if (g_raw_registered.load(std::memory_order_acquire)) {
+      RestoreRawMouseRegistration();
+    }
+    return;
+  }
+
+  if (!InstallHooks()) return;
+
+  if (!g_raw_registered.load(std::memory_order_acquire)
+      || previous_hwnd != reinterpret_cast<uintptr_t>(hwnd)
+      || g_registered_hwnd != hwnd) {
+    if (g_raw_registered.load(std::memory_order_acquire)) {
+      RestoreRawMouseRegistration();
+    }
+    if (!RegisterRawMouse(hwnd)) {
+      LogWarning(
+          "[CoDWaW Raw Input] RegisterRawInputDevices failed; native mouse path remains active.");
+      return;
+    }
+
+    g_raw_total_x.store(0, std::memory_order_relaxed);
+    g_raw_total_y.store(0, std::memory_order_relaxed);
+    g_raw_base_x.store(0, std::memory_order_relaxed);
+    g_raw_base_y.store(0, std::memory_order_relaxed);
+    g_anchor_valid.store(false, std::memory_order_release);
+    g_center_set_streak.store(0u, std::memory_order_release);
+  }
+}
+
+void Shutdown() {
+  g_enabled.store(false, std::memory_order_release);
+  g_overlay_capturing_mouse.store(false, std::memory_order_release);
+  g_center_set_streak.store(0u, std::memory_order_release);
+  g_anchor_valid.store(false, std::memory_order_release);
+
+  RestoreRawMouseRegistration();
+
+  RestoreIATHook(g_get_message_hook);
+  RestoreIATHook(g_peek_message_hook);
+  RestoreIATHook(g_set_cursor_hook);
+  RestoreIATHook(g_get_cursor_hook);
+
+  g_original_get_cursor_pos = nullptr;
+  g_original_set_cursor_pos = nullptr;
+  g_original_peek_message_a = nullptr;
+  g_original_get_message_a = nullptr;
+  g_hooks_installed.store(false, std::memory_order_release);
+  g_game_hwnd.store(0u, std::memory_order_release);
+}
+
+}  // namespace cod_high_polling_mouse
+
+float codwaw_mouse_input_fix = 1.f;
+float codwaw_raw_mouse_input = 0.f;
+
+// ============================================================================
+// CoDWaW / Plutonium-style fix_mouse_lag
+// ============================================================================
+//
+// Retail T4's main window procedure begins by calling
+// SetThreadExecutionState(ES_DISPLAY_REQUIRED) for every Windows message.
+// A high-polling-rate mouse can therefore make this relatively expensive Win32
+// call hundreds or thousands of times per second while looking around.
+//
+// Plutonium's fix_mouse_lag skips this execution-state update when its fix is
+// enabled. Keep the RenoDX port equally narrow: only suppress the exact call
+// made by the verified T4 window procedure. Every other
+// SetThreadExecutionState call in the process remains untouched.
+
+namespace codwaw_plutonium_mouse_fix {
+
+using SetThreadExecutionStateFn = EXECUTION_STATE(WINAPI*)(EXECUTION_STATE);
+
+struct IATHook {
+  uintptr_t* slot = nullptr;
+  uintptr_t original = 0u;
+  uintptr_t replacement = 0u;
+};
+
+inline std::atomic<bool> g_enabled{true};
+inline std::atomic<bool> g_installed{false};
+inline std::atomic<bool> g_logged_suppression{false};
+inline SetThreadExecutionStateFn g_original_set_thread_execution_state = nullptr;
+inline IATHook g_hook = {};
+
+bool EqualAsciiInsensitive(const char* a, const char* b) {
+  if (a == nullptr || b == nullptr) return false;
+  while (*a != '\0' && *b != '\0') {
+    char ca = *a++;
+    char cb = *b++;
+    if (ca >= 'A' && ca <= 'Z') ca = static_cast<char>(ca - 'A' + 'a');
+    if (cb >= 'A' && cb <= 'Z') cb = static_cast<char>(cb - 'A' + 'a');
+    if (ca != cb) return false;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
+bool PatchMainExeIAT(
+    const char* imported_dll,
+    const char* imported_name,
+    void* replacement,
+    IATHook& hook) {
+  if (imported_dll == nullptr || imported_name == nullptr || replacement == nullptr) {
+    return false;
+  }
+
+  auto* module = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+  if (module == nullptr) return false;
+
+  auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+
+  auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+
+  const auto& directory =
+      nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (directory.VirtualAddress == 0u
+      || directory.Size < sizeof(IMAGE_IMPORT_DESCRIPTOR)) {
+    return false;
+  }
+
+  auto* descriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(
+      module + directory.VirtualAddress);
+
+  for (; descriptor->Name != 0u; ++descriptor) {
+    const char* dll_name = reinterpret_cast<const char*>(module + descriptor->Name);
+    if (!EqualAsciiInsensitive(dll_name, imported_dll)) continue;
+    if (descriptor->OriginalFirstThunk == 0u || descriptor->FirstThunk == 0u) {
+      return false;
+    }
+
+    auto* name_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->OriginalFirstThunk);
+    auto* iat_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        module + descriptor->FirstThunk);
+
+    for (; name_thunk->u1.AddressOfData != 0u; ++name_thunk, ++iat_thunk) {
+      if (IMAGE_SNAP_BY_ORDINAL(name_thunk->u1.Ordinal)) continue;
+
+      auto* import = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(
+          module + static_cast<uintptr_t>(name_thunk->u1.AddressOfData));
+      if (std::strcmp(reinterpret_cast<const char*>(import->Name), imported_name) != 0) {
+        continue;
+      }
+
+      auto* slot = reinterpret_cast<uintptr_t*>(&iat_thunk->u1.Function);
+      const uintptr_t original = *slot;
+      const uintptr_t replacement_value = reinterpret_cast<uintptr_t>(replacement);
+
+      DWORD old_protect = 0u;
+      if (!VirtualProtect(slot, sizeof(uintptr_t), PAGE_READWRITE, &old_protect)) {
+        return false;
+      }
+
+      *slot = replacement_value;
+      FlushInstructionCache(GetCurrentProcess(), slot, sizeof(uintptr_t));
+      DWORD ignored = 0u;
+      VirtualProtect(slot, sizeof(uintptr_t), old_protect, &ignored);
+
+      hook.slot = slot;
+      hook.original = original;
+      hook.replacement = replacement_value;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void RestoreHook() {
+  if (g_hook.slot != nullptr && g_hook.original != 0u) {
+    DWORD old_protect = 0u;
+    if (VirtualProtect(
+            g_hook.slot,
+            sizeof(uintptr_t),
+            PAGE_READWRITE,
+            &old_protect)) {
+      if (*g_hook.slot == g_hook.replacement) {
+        *g_hook.slot = g_hook.original;
+        FlushInstructionCache(
+            GetCurrentProcess(),
+            g_hook.slot,
+            sizeof(uintptr_t));
+      }
+      DWORD ignored = 0u;
+      VirtualProtect(g_hook.slot, sizeof(uintptr_t), old_protect, &ignored);
+    }
+  }
+
+  g_hook = {};
+  g_original_set_thread_execution_state = nullptr;
+  g_installed.store(false, std::memory_order_release);
+}
+
+bool IsT4PerMessageExecutionStateCaller(uintptr_t caller) {
+  if (caller < 8u || g_hook.slot == nullptr) return false;
+
+  // Retail T4 emits:
+  //   6A 02                push ES_DISPLAY_REQUIRED
+  //   FF 15 xx xx xx xx    call dword ptr [SetThreadExecutionState IAT]
+  // Match the instruction bytes and require the indirect-call operand to point
+  // at the exact IAT slot we hooked. This survives T4 executables whose image
+  // layout differs while avoiding unrelated SetThreadExecutionState calls.
+  const auto* code = reinterpret_cast<const uint8_t*>(caller);
+  if (code[-8] != 0x6Au || code[-7] != 0x02u
+      || code[-6] != 0xFFu || code[-5] != 0x15u) {
+    return false;
+  }
+
+  uintptr_t called_slot = 0u;
+  std::memcpy(&called_slot, code - 4, sizeof(uint32_t));
+  return called_slot == reinterpret_cast<uintptr_t>(g_hook.slot);
+}
+
+EXECUTION_STATE WINAPI HookSetThreadExecutionState(EXECUTION_STATE flags) {
+  if (g_enabled.load(std::memory_order_acquire)) {
+    const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+
+    const bool t4_display_required =
+        flags == ES_DISPLAY_REQUIRED
+        || flags == (ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
+
+    if (t4_display_required && IsT4PerMessageExecutionStateCaller(caller)) {
+      if (!g_logged_suppression.exchange(true, std::memory_order_acq_rel)) {
+        reshade::log::message(
+            reshade::log::level::info,
+            "[CoDWaW Mouse Input Fix] Plutonium-style fix active: skipping the per-window-message SetThreadExecutionState call.");
+      }
+
+      // The stock caller ignores the return value. Return a non-zero execution
+      // state to preserve successful-call semantics without entering kernel32.
+      return flags != 0u ? flags : ES_DISPLAY_REQUIRED;
+    }
+  }
+
+  return g_original_set_thread_execution_state != nullptr
+      ? g_original_set_thread_execution_state(flags)
+      : static_cast<EXECUTION_STATE>(0u);
+}
+
+bool Install() {
+  if (g_installed.load(std::memory_order_acquire)) return true;
+
+  if (!PatchMainExeIAT(
+          "kernel32.dll",
+          "SetThreadExecutionState",
+          reinterpret_cast<void*>(&HookSetThreadExecutionState),
+          g_hook)) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        "[CoDWaW Mouse Input Fix] Could not hook the main EXE SetThreadExecutionState import; Plutonium-style mouse fix unavailable.");
+    return false;
+  }
+
+  g_original_set_thread_execution_state =
+      reinterpret_cast<SetThreadExecutionStateFn>(g_hook.original);
+  g_installed.store(true, std::memory_order_release);
+
+  reshade::log::message(
+      reshade::log::level::info,
+      "[CoDWaW Mouse Input Fix] T4 fix_mouse_lag-style hook installed; per-message execution-state call will be signature-matched at runtime.");
+  return true;
+}
+
+void SetEnabled(bool enabled) {
+  g_enabled.store(enabled, std::memory_order_release);
+}
+
+void Update(bool enabled) {
+  g_enabled.store(enabled, std::memory_order_release);
+  if (enabled) Install();
+}
+
+void Shutdown() {
+  g_enabled.store(false, std::memory_order_release);
+  RestoreHook();
+}
+
+}  // namespace codwaw_plutonium_mouse_fix
+
+// Track the ReShade overlay through the add-on API instead of calling
+// ImGui::GetCurrentContext() from Present. The RenoDX target does not export
+// that ImGui symbol, which caused an lld-link failure in the full-smoothness
+// builds. Returning false preserves ReShade's normal open/close behavior.
+std::atomic<bool> g_reshade_overlay_open{false};
+
+bool OnReShadeOpenOverlay(
+    reshade::api::effect_runtime* runtime,
+    bool open,
+    reshade::api::input_source source) {
+  (void)runtime;
+  (void)source;
+  g_reshade_overlay_open.store(open, std::memory_order_release);
+  return false;
+}
+
+
+// ============================================================================
+// Call of Duty: World at War — V4 smooth MW3-V8-style renderer scheduler
+// ============================================================================
+//
+// V3.5 is based on the user's V3.3 diagnostic capture. The exact stable renderer
+// handoff is Present-thread WaitForSingleObject(event, INFINITE) at caller RVA
+// 0x2FC6CF. The event is signaled by a non-Present producer on each cycle.
+//
+// The INFINITE wait is semantically different from MW3's 1 ms wait, so V3.5 does
+// NOT substitute MW3's 8/12/20 ms timeout values. Instead it ports the V8 pieces
+// that are safe for this event topology:
+//  * real renderer event and real SetEvent are preserved;
+//  * producer joins MMCSS "Games" when possible;
+//  * fallback producer baseline is ABOVE_NORMAL;
+//  * an adaptive renderer-wait baseline detects a statistically slow handoff and
+//    temporarily bursts fallback producers to HIGHEST for following frames;
+//  * recovery uses V8-style success/Present-count hysteresis;
+//  * Sleep/SleepEx/SwitchToThread are not hooked;
+//  * the old broad profiler and ALL periodic sync/stats logging are removed.
+//
+// This last point is intentional: the supplied WaW log showed the old ~1200-
+// Present diagnostic report at the same time as the user's repeatable major
+// stutter. V3.5 performs no periodic formatting/log I/O on the Present thread.
+
+constexpr DWORD CODWAW_SYNC_TARGET_TIMESTAMP = 0x4AEA1F46u;
+constexpr DWORD CODWAW_SYNC_TARGET_SIZE_OF_IMAGE = 0x04B11000u;
+constexpr uintptr_t CODWAW_RENDERER_EVENT_WAIT_CALLER_RVA = 0x002FC6CFu;
+constexpr DWORD CODWAW_RENDERER_EVENT_WAIT_MS = INFINITE;
+constexpr uint64_t CODWAW_SYNC_ARM_AFTER_PRESENTS = 120u;
+constexpr size_t CODWAW_SYNC_MAX_PRODUCERS = 8u;
+constexpr uint32_t CODWAW_V8_WARMUP_SAMPLES = 64u;
+constexpr uint64_t CODWAW_V8_BURST_MIN_HOLD_PRESENTS = 4u;
+constexpr uint64_t CODWAW_V8_BURST_FORCE_RELEASE_PRESENTS = 10u;
+constexpr uint32_t CODWAW_V8_BURST_RELEASE_SUCCESSES = 12u;
+constexpr uint32_t CODWAW_V8_SOFT_STREAK_TO_BURST = 2u;
+constexpr uint64_t CODWAW_V8_SOFT_BURST_HOLD_PRESENTS = 3u;
+
+// Verified from the user's running Steam CoDWaW.exe .text on 2026-09-09.
+// The V8 source subtracted 0x1000 from these addresses; that landed in unrelated
+// code and caused BOTH runtime signatures to fail. Do not infer retail RVAs
+// from file offsets or from differences in a different executable.
+constexpr uintptr_t CODWAW_T4_FRAME_SLEEP_RETURN_RVA_1 = 0x0019DDDEu;
+constexpr uintptr_t CODWAW_T4_FRAME_SLEEP_RETURN_RVA_2 = 0x0019DE57u;
+constexpr uintptr_t CODWAW_T4_WAIT1_HOOK_RVA = 0x0019DDD0u;
+constexpr std::array<uint8_t, 8> CODWAW_T4_WAIT1_HOOK_ORIGINAL = {
+    0x8Bu, 0xF0u, 0x2Bu, 0xF1u, 0x3Bu, 0x74u, 0x24u, 0x14u};
+constexpr uintptr_t CODWAW_T4_WAIT1_BRANCH_RVA = 0x0019DDD8u;
+constexpr uintptr_t CODWAW_T4_WAIT1_LOOP_RVA = 0x0019DD90u;
+constexpr uintptr_t CODWAW_T4_WAIT1_DONE_RVA = 0x0019DDEBu;
+
+constexpr uintptr_t CODWAW_T4_WAIT2_HOOK_RVA = 0x0019DE4Cu;
+constexpr std::array<uint8_t, 6> CODWAW_T4_WAIT2_HOOK_ORIGINAL = {
+    0x8Bu, 0xD0u, 0x2Bu, 0xD1u, 0x85u, 0xD2u};
+constexpr uintptr_t CODWAW_T4_WAIT2_BRANCH_RVA = 0x0019DE52u;
+constexpr uintptr_t CODWAW_T4_WAIT2_LOOP_RVA = 0x0019DE10u;
+// Enter before max(minMsec, elapsed), ESI and com_frameTime updates.
+// 0x19DE83 skips that bookkeeping and is NOT a valid completion target.
+constexpr uintptr_t CODWAW_T4_WAIT2_DONE_RVA = 0x0019DE69u;
+
+// Validate the branches AND bookkeeping we enter, not only overwritten bytes.
+constexpr std::array<uint8_t, 34> CODWAW_T4_WAIT1_TAIL = {
+    0x7D,0x11,0x6A,0x01,0xFF,0xD3,0x83,0xC7,0x01,0x83,0xFF,0x32,
+    0x7C,0xAA,0xA1,0x8C,0x64,0xF9,0x01,0xA3,0xB8,0x64,0xF9,0x01,
+    0xBB,0x01,0x00,0x00,0x00,0xE9,0x89,0x00,0x00,0x00};
+constexpr std::array<uint8_t, 49> CODWAW_T4_WAIT2_TAIL = {
+    0x7F,0x15,0x53,0xFF,0xD5,0x03,0xF3,0x83,0xFE,0x32,0x7C,0xB2,
+    0xA1,0x8C,0x64,0xF9,0x01,0x8B,0x0D,0xB8,0x64,0xF9,0x01,0x8B,
+    0x74,0x24,0x14,0x2B,0xC1,0x3B,0xC6,0x7C,0x02,0x8B,0xF0,0x03,
+    0xCE,0x85,0xF6,0x89,0x0D,0xB8,0x64,0xF9,0x01,0x75,0x02,0x8B,0xF3};
+
+// T4M maps WaW Dvar_FindMalleableVar at VA 0x005EDE30. The direct dvar write is
+// retained for engine/console consistency, but the exact limiter reads the
+// RenoDX slider target directly and bypasses stock 1000/com_maxfps integer math.
+constexpr uintptr_t CODWAW_DVAR_FIND_MALLEABLE_RVA = 0x001EDE30u;
+constexpr uint64_t CODWAW_FPS_DVAR_AFTER_PRESENTS = 120u;
+
+float codwaw_renderer_sync_fix = 1.f;
+float codwaw_t4_busy_wait = 1.f;
+float codwaw_native_fps_limit = 85.f;
+std::atomic<bool> g_codwaw_renderer_sync_enabled{true};
+std::atomic<int> g_codwaw_native_fps_limit_requested{85};
+std::atomic<int> g_codwaw_native_fps_limit_applied{-1};
+std::atomic<uintptr_t> g_codwaw_com_maxfps_dvar{0u};
+std::atomic<bool> g_codwaw_fps_dvar_failure_logged{false};
+using CoDWaWWaitForSingleObjectFn = DWORD(WINAPI*)(HANDLE, DWORD);
+using CoDWaWSetEventFn = BOOL(WINAPI*)(HANDLE);
+using CoDWaWSleepFn = VOID(WINAPI*)(DWORD);
+using CoDWaWAvSetMmThreadCharacteristicsWFn = HANDLE(WINAPI*)(LPCWSTR, LPDWORD);
+using CoDWaWAvSetMmThreadPriorityFn = BOOL(WINAPI*)(HANDLE, int);
+CoDWaWWaitForSingleObjectFn g_codwaw_original_wait = nullptr;
+CoDWaWSetEventFn g_codwaw_original_set_event = nullptr;
+CoDWaWSleepFn g_codwaw_original_sleep = nullptr;
+void** g_codwaw_wait_iat_slot = nullptr;
+void** g_codwaw_set_event_iat_slot = nullptr;
+void** g_codwaw_sleep_iat_slot = nullptr;
+std::atomic<bool> g_codwaw_sync_hooks_installed{false};
+std::atomic<bool> g_codwaw_sync_install_attempted{false};
+std::atomic<DWORD> g_codwaw_present_thread_id{0u};
+std::atomic<uint64_t> g_codwaw_present_count{0u};
+std::atomic<uintptr_t> g_codwaw_renderer_event{0u};
+std::atomic<bool> g_codwaw_producer_burst{false};
+std::atomic<uint32_t> g_codwaw_clean_successes{0u};
+std::atomic<uint64_t> g_codwaw_burst_hold_until{0u};
+std::atomic<uint64_t> g_codwaw_last_stall_present{0u};
+std::atomic<uint32_t> g_codwaw_soft_stall_streak{0u};
+uint64_t g_codwaw_qpc_frequency = 0u;
+double g_codwaw_wait_baseline_us = 0.0;
+double g_codwaw_wait_deviation_us = 0.0;
+uint64_t g_codwaw_wait_samples = 0u;
+HMODULE g_codwaw_avrt_module = nullptr;
+CoDWaWAvSetMmThreadCharacteristicsWFn g_codwaw_av_set_mm = nullptr;
+CoDWaWAvSetMmThreadPriorityFn g_codwaw_av_set_mm_priority = nullptr;
+std::atomic<bool> g_codwaw_t4_busy_wait_enabled{true};
+std::atomic<uint64_t> g_codwaw_t4_busy_wait_yields{0u};
+
+std::atomic<bool> g_codwaw_smooth_wait_hook_installed{false};
+std::atomic<bool> g_codwaw_smooth_wait_hook_attempted{false};
+void* g_codwaw_smooth_wait_stub1 = nullptr;
+void* g_codwaw_smooth_wait_stub2 = nullptr;
+std::array<uint8_t, CODWAW_T4_WAIT1_HOOK_ORIGINAL.size()>
+    g_codwaw_smooth_wait_saved1 = {};
+std::array<uint8_t, CODWAW_T4_WAIT2_HOOK_ORIGINAL.size()>
+    g_codwaw_smooth_wait_saved2 = {};
+
+struct CoDWaWSmoothLimiterState {
+  uint64_t qpc_frequency = 0u;
+  double next_deadline = 0.0;
+  int target_fps = 0;
+  HANDLE timer = nullptr;
+  double wake_error_us = 250.0;
+  bool initialized = false;
+  // 0 = normal; 1/2 = QPC wait completed. Re-enter the same clock-sampling
+  // loop once, then replay elapsed-time arithmetic and finish the native frame
+  // bookkeeping without running another stock wait or another QPC interval.
+  int stock_recheck_path = 0;
+};
+thread_local CoDWaWSmoothLimiterState g_codwaw_smooth_limiter;
+
+struct CoDWaWProducerThread {
+  DWORD thread_id = 0u;
+  HANDLE handle = nullptr;
+  int original_priority = THREAD_PRIORITY_NORMAL;
+  int base_priority = THREAD_PRIORITY_ABOVE_NORMAL;
+  BOOL original_boost_disabled = FALSE;
+  bool have_original_boost = false;
+};
+SRWLOCK g_codwaw_producer_lock = SRWLOCK_INIT;
+std::array<CoDWaWProducerThread, CODWAW_SYNC_MAX_PRODUCERS> g_codwaw_producers = {};
+
+void LogCoDWaWSync(reshade::log::level level, const std::string& message) {
+  reshade::log::message(level, message.c_str());
+}
+
+uintptr_t CoDWaWExeBase() { return reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)); }
+uintptr_t CoDWaWReturnAddressToExeRva(const void* return_address) {
+  const uintptr_t base = CoDWaWExeBase();
+  if (!base || !return_address) return 0u;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0u;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return 0u;
+  const uintptr_t a = reinterpret_cast<uintptr_t>(return_address);
+  if (a < base || a >= base + nt->OptionalHeader.SizeOfImage) return 0u;
+  return a - base;
+}
+
+bool VerifyCoDWaWSyncTargetBuild() {
+  const uintptr_t base = CoDWaWExeBase();
+  if (!base) return false;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return false;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+  const bool ok = nt->FileHeader.Machine == IMAGE_FILE_MACHINE_I386
+      && nt->FileHeader.TimeDateStamp == CODWAW_SYNC_TARGET_TIMESTAMP
+      && nt->OptionalHeader.SizeOfImage == CODWAW_SYNC_TARGET_SIZE_OF_IMAGE;
+  std::stringstream s;
+  s << "[CoDWaW Smoothness] V5 EXE verification: timestamp=0x" << std::hex << std::uppercase
+    << nt->FileHeader.TimeDateStamp << " sizeOfImage=0x" << nt->OptionalHeader.SizeOfImage
+    << std::dec << " result=" << (ok ? "OK" : "REFUSED");
+  LogCoDWaWSync(ok ? reshade::log::level::info : reshade::log::level::warning, s.str());
+  return ok;
+}
+
+// ============================================================================
+// WaW native com_maxfps slider
+// ============================================================================
+//
+// The direct dvar write is retained for engine/console consistency. Smooth Frame
+// Pacing does NOT use WaW's stock integer 1000/com_maxfps scheduler: the exact
+// T4 client wait-decision hook owns the wait and reads the slider target directly.
+
+enum : uint8_t {
+  CODWAW_DVAR_TYPE_INT = 5u,
+};
+
+union CoDWaWDvarValue {
+  char* string;
+  int integer;
+  float value;
+  bool boolean;
+  bool enabled;
+  float vec2[2];
+  float vec3[3];
+  float vec4[4];
+  BYTE color[4];
+  __int64 integer64;
+};
+
+struct CoDWaWDvar {
+  const char* name;             // +0x00
+  const char* description;      // +0x04
+  uint16_t flags;               // +0x08
+  int8_t type;                  // +0x0A
+  char modified;                // +0x0B
+  char padding[4];              // +0x0C
+  CoDWaWDvarValue current;      // +0x10
+  CoDWaWDvarValue latched;      // +0x20
+  CoDWaWDvarValue default_value;// +0x30
+};
+
+static_assert(offsetof(CoDWaWDvar, current) == 0x10u,
+              "WaW dvar current offset must be 0x10");
+static_assert(offsetof(CoDWaWDvar, latched) == 0x20u,
+              "WaW dvar latched offset must be 0x20");
+
+using CoDWaWDvarFindMalleableVarFn = CoDWaWDvar*(__cdecl*)(const char* name);
+
+bool IsCoDWaWReadableProtection(DWORD protect) {
+  if ((protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) return false;
+  switch (protect & 0xFFu) {
+    case PAGE_READONLY:
+    case PAGE_READWRITE:
+    case PAGE_WRITECOPY:
+    case PAGE_EXECUTE_READ:
+    case PAGE_EXECUTE_READWRITE:
+    case PAGE_EXECUTE_WRITECOPY:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool IsCoDWaWExecutableProtection(DWORD protect) {
+  if ((protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) return false;
+  switch (protect & 0xFFu) {
+    case PAGE_EXECUTE:
+    case PAGE_EXECUTE_READ:
+    case PAGE_EXECUTE_READWRITE:
+    case PAGE_EXECUTE_WRITECOPY:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool IsCoDWaWReadableRange(const void* address, size_t size) {
+  if (address == nullptr || size == 0u) return false;
+  const uintptr_t begin = reinterpret_cast<uintptr_t>(address);
+  const uintptr_t end = begin + size;
+  if (end < begin) return false;
+
+  uintptr_t cursor = begin;
+  while (cursor < end) {
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if (VirtualQuery(reinterpret_cast<const void*>(cursor), &mbi, sizeof(mbi)) == 0u)
+      return false;
+    if (mbi.State != MEM_COMMIT || !IsCoDWaWReadableProtection(mbi.Protect))
+      return false;
+    const uintptr_t region_end =
+        reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+    if (region_end <= cursor) return false;
+    cursor = std::min(end, region_end);
+  }
+  return true;
+}
+
+bool CoDWaWTargetBuildMatchesNoLog() {
+  const uintptr_t base = CoDWaWExeBase();
+  if (base == 0u) return false;
+  if (!IsCoDWaWReadableRange(reinterpret_cast<const void*>(base), sizeof(IMAGE_DOS_HEADER)))
+    return false;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return false;
+  const uintptr_t nt_address = base + static_cast<uintptr_t>(dos->e_lfanew);
+  if (!IsCoDWaWReadableRange(reinterpret_cast<const void*>(nt_address), sizeof(IMAGE_NT_HEADERS)))
+    return false;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(nt_address);
+  return nt->Signature == IMAGE_NT_SIGNATURE
+      && nt->FileHeader.Machine == IMAGE_FILE_MACHINE_I386
+      && nt->FileHeader.TimeDateStamp == CODWAW_SYNC_TARGET_TIMESTAMP
+      && nt->OptionalHeader.SizeOfImage == CODWAW_SYNC_TARGET_SIZE_OF_IMAGE;
+}
+
+bool ValidateCoDWaWComMaxFpsDvar(CoDWaWDvar* dvar) {
+  if (dvar == nullptr || !IsCoDWaWReadableRange(dvar, sizeof(CoDWaWDvar)))
+    return false;
+  if (dvar->name == nullptr
+      || !IsCoDWaWReadableRange(dvar->name, sizeof("com_maxfps")))
+    return false;
+  if (std::strcmp(dvar->name, "com_maxfps") != 0)
+    return false;
+  return dvar->type == CODWAW_DVAR_TYPE_INT;
+}
+
+CoDWaWDvar* ResolveCoDWaWComMaxFpsDvar() {
+  const uintptr_t cached =
+      g_codwaw_com_maxfps_dvar.load(std::memory_order_acquire);
+  if (cached != 0u) {
+    auto* dvar = reinterpret_cast<CoDWaWDvar*>(cached);
+    if (ValidateCoDWaWComMaxFpsDvar(dvar)) return dvar;
+    g_codwaw_com_maxfps_dvar.store(0u, std::memory_order_release);
+  }
+
+  if (!CoDWaWTargetBuildMatchesNoLog()) return nullptr;
+
+  const uintptr_t function_address =
+      CoDWaWExeBase() + CODWAW_DVAR_FIND_MALLEABLE_RVA;
+  MEMORY_BASIC_INFORMATION mbi = {};
+  if (VirtualQuery(reinterpret_cast<const void*>(function_address), &mbi, sizeof(mbi)) == 0u
+      || mbi.State != MEM_COMMIT
+      || !IsCoDWaWExecutableProtection(mbi.Protect)) {
+    return nullptr;
+  }
+
+  const auto find_dvar =
+      reinterpret_cast<CoDWaWDvarFindMalleableVarFn>(function_address);
+  CoDWaWDvar* dvar = find_dvar("com_maxfps");
+  if (!ValidateCoDWaWComMaxFpsDvar(dvar)) return nullptr;
+
+  g_codwaw_com_maxfps_dvar.store(
+      reinterpret_cast<uintptr_t>(dvar), std::memory_order_release);
+  g_codwaw_fps_dvar_failure_logged.store(false, std::memory_order_release);
+
+  std::stringstream s;
+  s << "[CoDWaW FPS] resolved live com_maxfps dvar at 0x"
+    << std::hex << std::uppercase << reinterpret_cast<uintptr_t>(dvar)
+    << std::dec << ".";
+  LogCoDWaWSync(reshade::log::level::info, s.str());
+  return dvar;
+}
+
+bool ApplyCoDWaWNativeFpsLimit(int target_fps) {
+  target_fps = std::clamp(target_fps, 0, 500);
+  CoDWaWDvar* dvar = ResolveCoDWaWComMaxFpsDvar();
+  if (dvar == nullptr) {
+    if (!g_codwaw_fps_dvar_failure_logged.exchange(true, std::memory_order_acq_rel)) {
+      LogCoDWaWSync(reshade::log::level::warning,
+          "[CoDWaW FPS] could not resolve live com_maxfps dvar; slider will retry on Present.");
+    }
+    return false;
+  }
+
+  InterlockedExchange(
+      reinterpret_cast<volatile LONG*>(&dvar->current.integer),
+      static_cast<LONG>(target_fps));
+  InterlockedExchange(
+      reinterpret_cast<volatile LONG*>(&dvar->latched.integer),
+      static_cast<LONG>(target_fps));
+  dvar->modified = 1;
+
+  const bool applied = dvar->current.integer == target_fps;
+  if (applied) {
+    std::stringstream s;
+    s << "[CoDWaW FPS] com_maxfps = " << target_fps
+      << " (direct live dvar)"
+      << (target_fps == 0 ? " (uncapped)." : ".");
+    LogCoDWaWSync(reshade::log::level::info, s.str());
+  }
+  return applied;
+}
+
+
+uint64_t CoDWaWSmoothQpcNow() {
+  LARGE_INTEGER value = {};
+  QueryPerformanceCounter(&value);
+  return static_cast<uint64_t>(value.QuadPart);
+}
+
+uint64_t CoDWaWSmoothQpcFrequency() {
+  auto& state = g_codwaw_smooth_limiter;
+  if (state.qpc_frequency != 0u) return state.qpc_frequency;
+  LARGE_INTEGER value = {};
+  if (!QueryPerformanceFrequency(&value) || value.QuadPart <= 0) return 0u;
+  state.qpc_frequency = static_cast<uint64_t>(value.QuadPart);
+  return state.qpc_frequency;
+}
+
+void ResetCoDWaWSmoothLimiter() {
+  auto& state = g_codwaw_smooth_limiter;
+  state.next_deadline = 0.0;
+  state.target_fps = 0;
+  state.wake_error_us = 250.0;
+  state.initialized = false;
+  state.stock_recheck_path = 0;
+}
+
+HANDLE GetCoDWaWSmoothLimiterTimer() {
+  auto& state = g_codwaw_smooth_limiter;
+  if (state.timer != nullptr) return state.timer;
+
+  HANDLE timer = CreateWaitableTimerExW(
+      nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+      TIMER_MODIFY_STATE | SYNCHRONIZE);
+  if (timer == nullptr) timer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+  state.timer = timer;
+  return timer;
+}
+
+// BO1 V7 scheduling model, placed at T4's own frame-end decision:
+// exact floating-point QPC period, absolute phase, high-resolution coarse wait,
+// scheduler yields near deadline, <=100 us finish, and MW3-style late re-anchor.
+void CoDWaWSmoothLimitFrame(int target_fps) {
+  codwaw_frame_timing::Scope timing(codwaw_frame_timing::LimiterWait);
+  if (target_fps <= 0 || target_fps > 1000) {
+    ResetCoDWaWSmoothLimiter();
+    return;
+  }
+
+  const uint64_t frequency = CoDWaWSmoothQpcFrequency();
+  if (frequency == 0u) return;
+
+  auto& state = g_codwaw_smooth_limiter;
+  const double period_ticks =
+      static_cast<double>(frequency) / static_cast<double>(target_fps);
+  uint64_t now = CoDWaWSmoothQpcNow();
+
+  if (!state.initialized || state.target_fps != target_fps) {
+    state.initialized = true;
+    state.target_fps = target_fps;
+    state.next_deadline = static_cast<double>(now) + period_ticks;
+  } else {
+    const double candidate_deadline = state.next_deadline + period_ticks;
+    if (candidate_deadline <= static_cast<double>(now)) {
+      state.next_deadline = static_cast<double>(now);
+      return;
+    }
+    state.next_deadline = candidate_deadline;
+  }
+
+  const double ticks_per_us = static_cast<double>(frequency) / 1000000.0;
+  constexpr double kCoarseFloorUs = 650.0;
+  constexpr double kSpinFinishUs = 100.0;
+
+  for (;;) {
+    now = CoDWaWSmoothQpcNow();
+    const double remaining_ticks =
+        state.next_deadline - static_cast<double>(now);
+    if (remaining_ticks <= 0.0) break;
+
+    const double remaining_us = remaining_ticks / ticks_per_us;
+    const double adaptive_headroom_us = std::clamp(
+        state.wake_error_us + 200.0, kCoarseFloorUs, 1800.0);
+
+    if (remaining_us > adaptive_headroom_us + 250.0) {
+      HANDLE timer = GetCoDWaWSmoothLimiterTimer();
+      if (timer != nullptr) {
+        const double sleep_us = remaining_us - adaptive_headroom_us;
+        LARGE_INTEGER due = {};
+        due.QuadPart = -static_cast<LONGLONG>(sleep_us * 10.0);
+        const uint64_t before = CoDWaWSmoothQpcNow();
+        if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+          WaitForSingleObject(timer, INFINITE);
+          const uint64_t after = CoDWaWSmoothQpcNow();
+          const double actual_us =
+              static_cast<double>(after - before) / ticks_per_us;
+          const double error = std::max(0.0, actual_us - sleep_us);
+          state.wake_error_us = state.wake_error_us * 0.90 + error * 0.10;
+          continue;
+        }
+      }
+      Sleep(0);
+      continue;
+    }
+
+    if (remaining_us > 300.0) {
+      if (!SwitchToThread()) Sleep(0);
+      continue;
+    }
+
+    if (remaining_us > kSpinFinishUs) {
+      Sleep(0);
+      continue;
+    }
+
+    YieldProcessor();
+  }
+
+  // A late timer/yield wake must not produce a shortened catch-up frame.
+  // Keep at least one full period between actual limiter releases.
+  state.next_deadline = std::max(state.next_deadline, static_cast<double>(now));
+}
+
+bool WriteCoDWaWExecutableBytes(void* destination, const void* source, size_t size) {
+  if (destination == nullptr || source == nullptr || size == 0u) return false;
+  DWORD old_protect = 0u;
+  if (!VirtualProtect(destination, size, PAGE_EXECUTE_READWRITE, &old_protect))
+    return false;
+  std::memcpy(destination, source, size);
+  FlushInstructionCache(GetCurrentProcess(), destination, size);
+  DWORD ignored = 0u;
+  VirtualProtect(destination, size, old_protect, &ignored);
+  return true;
+}
+
+// Decisions mirror the recovered BO1 wrapper shape:
+//   0 = execute the original T4 comparison/branch for this path.
+//   1 = replay the overwritten arithmetic, then finish native bookkeeping.
+//   2 = QPC wait is complete; loop once so T4 refreshes its millisecond clock,
+//       then use decision 1 so the stock comparison cannot impose a second cap.
+int CoDWaWSmoothWaitDecisionCommon(int path) {
+  auto& state = g_codwaw_smooth_limiter;
+
+  if (!g_codwaw_t4_busy_wait_enabled.load(std::memory_order_acquire)) {
+    ResetCoDWaWSmoothLimiter();
+    return 0;
+  }
+
+  // Refresh the engine's millisecond clock once after sleeping. The original
+  // wait comparison must not take control again: it could sleep and re-enter
+  // this helper a third time, scheduling a second full period for one frame.
+  if (state.stock_recheck_path != 0) {
+    state.stock_recheck_path = 0;
+    return 1;
+  }
+
+  const int target_fps =
+      g_codwaw_native_fps_limit_requested.load(std::memory_order_acquire);
+  if (target_fps <= 0) {
+    ResetCoDWaWSmoothLimiter();
+    return 1;  // No addon wait; still execute WaW's frame-time bookkeeping.
+  }
+
+  if (CoDWaWSmoothQpcFrequency() == 0u) return 0;
+
+  CoDWaWSmoothLimitFrame(std::clamp(target_fps, 1, 1000));
+  state.stock_recheck_path = path;
+  return 2;
+}
+
+int __cdecl CoDWaWSmoothWaitDecision1(int, int, int) {
+  return CoDWaWSmoothWaitDecisionCommon(1);
+}
+
+int __cdecl CoDWaWSmoothWaitDecision2(int, int, int) {
+  return CoDWaWSmoothWaitDecisionCommon(2);
+}
+
+template <size_t N>
+bool BuildAndInstallCoDWaWWaitHook(
+    uintptr_t hook_rva,
+    const std::array<uint8_t, N>& original,
+    uintptr_t branch_rva,
+    uintptr_t loop_rva,
+    uintptr_t done_rva,
+    void* decision_function,
+    void*& stub_out,
+    std::array<uint8_t, N>& saved_out) {
+  static_assert(N >= 5u);
+  const uintptr_t base = CoDWaWExeBase();
+  if (base == 0u) return false;
+  auto* target = reinterpret_cast<uint8_t*>(base + hook_rva);
+
+  if (std::memcmp(target, original.data(), original.size()) != 0) return false;
+  std::memcpy(saved_out.data(), target, N);
+
+  auto* stub = reinterpret_cast<uint8_t*>(VirtualAlloc(
+      nullptr, 128u, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+  if (stub == nullptr) return false;
+
+  size_t o = 0u;
+  auto b = [&](uint8_t value) { stub[o++] = value; };
+  auto d = [&](uint32_t value) {
+    std::memcpy(stub + o, &value, sizeof(value));
+    o += sizeof(value);
+  };
+  auto abs_jump = [&](uintptr_t address) {
+    b(0x68u); d(static_cast<uint32_t>(address)); b(0xC3u);
+  };
+
+  // Preserve every game register, including EDX.  This matters for wait path 1:
+  // unlike the BO1/path-2 comparison, its overwritten bytes do not recreate
+  // EDX.  Branch on the helper result while PUSHAD is still active, then POPAD
+  // on every exit so neither path leaks the helper return value into T4.
+  b(0x60u);                         // pushad
+  b(0x53u); b(0x51u); b(0x50u);    // push ebx, ecx, eax
+  b(0xB8u);
+  d(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(decision_function)));
+  b(0xFFu); b(0xD0u);              // call eax
+  b(0x83u); b(0xC4u); b(0x0Cu);    // add esp, 12
+
+  b(0x83u); b(0xF8u); b(0x02u);    // cmp eax, 2
+  b(0x74u);
+  const size_t je_wait = o++;
+  b(0x83u); b(0xF8u); b(0x01u);    // cmp eax, 1
+  b(0x74u);
+  const size_t je_done = o++;
+
+  // Decision 0: fully restore T4 registers, reproduce every overwritten retail
+  // byte, then continue at the original branch following the hook span.
+  b(0x61u);                         // popad
+  for (const uint8_t value : original) b(value);
+  abs_jump(base + branch_rva);
+
+  const size_t done_label = o;
+  b(0x61u);                         // popad
+  // Path 1 must reconstruct ESI = elapsed. Path 2 then enters 0x19DE69,
+  // which computes ESI and updates the game's frame clock itself.
+  for (const uint8_t value : original) b(value);
+  abs_jump(base + done_rva);
+
+  const size_t wait_label = o;
+  b(0x61u);                         // popad
+  abs_jump(base + loop_rva);
+
+  const auto rel8 = [](size_t from_next, size_t to) -> uint8_t {
+    return static_cast<uint8_t>(static_cast<int8_t>(
+        static_cast<intptr_t>(to) - static_cast<intptr_t>(from_next)));
+  };
+  const intptr_t wait_delta =
+      static_cast<intptr_t>(wait_label) - static_cast<intptr_t>(je_wait + 1u);
+  const intptr_t done_delta =
+      static_cast<intptr_t>(done_label) - static_cast<intptr_t>(je_done + 1u);
+  if (wait_delta < -128 || wait_delta > 127
+      || done_delta < -128 || done_delta > 127) {
+    VirtualFree(stub, 0u, MEM_RELEASE);
+    return false;
+  }
+  stub[je_wait] = rel8(je_wait + 1u, wait_label);
+  stub[je_done] = rel8(je_done + 1u, done_label);
+  FlushInstructionCache(GetCurrentProcess(), stub, o);
+
+  std::array<uint8_t, N> hook = {};
+  hook.fill(0x90u);
+  hook[0] = 0xE9u;
+  const intptr_t delta =
+      reinterpret_cast<intptr_t>(stub) - reinterpret_cast<intptr_t>(target + 5u);
+  if (delta < std::numeric_limits<int32_t>::min()
+      || delta > std::numeric_limits<int32_t>::max()) {
+    VirtualFree(stub, 0u, MEM_RELEASE);
+    return false;
+  }
+  const int32_t rel32 = static_cast<int32_t>(delta);
+  std::memcpy(hook.data() + 1u, &rel32, sizeof(rel32));
+
+  if (!WriteCoDWaWExecutableBytes(target, hook.data(), hook.size())) {
+    VirtualFree(stub, 0u, MEM_RELEASE);
+    return false;
+  }
+
+  stub_out = stub;
+  return true;
+}
+
+bool InstallCoDWaWSmoothWaitHook() {
+  if (g_codwaw_smooth_wait_hook_installed.load(std::memory_order_acquire))
+    return true;
+  if (g_codwaw_smooth_wait_hook_attempted.exchange(
+          true, std::memory_order_acq_rel))
+    return false;
+  if (!CoDWaWTargetBuildMatchesNoLog()) return false;
+
+  const uintptr_t base = CoDWaWExeBase();
+  if (base == 0u) return false;
+
+  auto* wait1 = reinterpret_cast<uint8_t*>(base + CODWAW_T4_WAIT1_HOOK_RVA);
+  auto* wait2 = reinterpret_cast<uint8_t*>(base + CODWAW_T4_WAIT2_HOOK_RVA);
+  const bool sig1 = std::memcmp(
+      wait1, CODWAW_T4_WAIT1_HOOK_ORIGINAL.data(),
+      CODWAW_T4_WAIT1_HOOK_ORIGINAL.size()) == 0
+      && std::memcmp(reinterpret_cast<void*>(base + CODWAW_T4_WAIT1_BRANCH_RVA),
+                     CODWAW_T4_WAIT1_TAIL.data(), CODWAW_T4_WAIT1_TAIL.size()) == 0;
+  const bool sig2 = std::memcmp(
+      wait2, CODWAW_T4_WAIT2_HOOK_ORIGINAL.data(),
+      CODWAW_T4_WAIT2_HOOK_ORIGINAL.size()) == 0
+      && std::memcmp(reinterpret_cast<void*>(base + CODWAW_T4_WAIT2_BRANCH_RVA),
+                     CODWAW_T4_WAIT2_TAIL.data(), CODWAW_T4_WAIT2_TAIL.size()) == 0;
+  if (!sig1 || !sig2) {
+    std::stringstream stream;
+    stream << "[CoDWaW Frame Pacing] V9 dual-path signature check failed: path1="
+           << (sig1 ? "OK" : "BAD") << " path2=" << (sig2 ? "OK" : "BAD")
+           << ". Exact limiter not installed.";
+    LogCoDWaWSync(reshade::log::level::warning, stream.str());
+    return false;
+  }
+
+  if (!BuildAndInstallCoDWaWWaitHook(
+          CODWAW_T4_WAIT1_HOOK_RVA,
+          CODWAW_T4_WAIT1_HOOK_ORIGINAL,
+          CODWAW_T4_WAIT1_BRANCH_RVA,
+          CODWAW_T4_WAIT1_LOOP_RVA,
+          CODWAW_T4_WAIT1_DONE_RVA,
+          reinterpret_cast<void*>(&CoDWaWSmoothWaitDecision1),
+          g_codwaw_smooth_wait_stub1,
+          g_codwaw_smooth_wait_saved1)) {
+    LogCoDWaWSync(reshade::log::level::warning,
+        "[CoDWaW Frame Pacing] V9 failed to install T4 wait path 1 hook at RVA 0x19DDD0.");
+    return false;
+  }
+
+  if (!BuildAndInstallCoDWaWWaitHook(
+          CODWAW_T4_WAIT2_HOOK_RVA,
+          CODWAW_T4_WAIT2_HOOK_ORIGINAL,
+          CODWAW_T4_WAIT2_BRANCH_RVA,
+          CODWAW_T4_WAIT2_LOOP_RVA,
+          CODWAW_T4_WAIT2_DONE_RVA,
+          reinterpret_cast<void*>(&CoDWaWSmoothWaitDecision2),
+          g_codwaw_smooth_wait_stub2,
+          g_codwaw_smooth_wait_saved2)) {
+    WriteCoDWaWExecutableBytes(
+        wait1, g_codwaw_smooth_wait_saved1.data(),
+        g_codwaw_smooth_wait_saved1.size());
+    if (g_codwaw_smooth_wait_stub1 != nullptr) {
+      VirtualFree(g_codwaw_smooth_wait_stub1, 0u, MEM_RELEASE);
+      g_codwaw_smooth_wait_stub1 = nullptr;
+    }
+    LogCoDWaWSync(reshade::log::level::warning,
+        "[CoDWaW Frame Pacing] V9 failed to install T4 wait path 2 hook at RVA 0x19DE4C; path 1 was rolled back.");
+    return false;
+  }
+
+  g_codwaw_smooth_wait_hook_installed.store(true, std::memory_order_release);
+  LogCoDWaWSync(
+      reshade::log::level::info,
+      "[CoDWaW Frame Pacing] V9 internal limiter installed: verified T4 wait RVAs 0x19DDD0 + 0x19DE4C; one QPC wait per frame, refreshed native clock, preserved ESI/frame-time bookkeeping.");
+  return true;
+}
+
+void ShutdownCoDWaWSmoothWaitHook() {
+  if (!g_codwaw_smooth_wait_hook_installed.exchange(
+          false, std::memory_order_acq_rel))
+    return;
+
+  const uintptr_t base = CoDWaWExeBase();
+  if (base != 0u) {
+    WriteCoDWaWExecutableBytes(
+        reinterpret_cast<uint8_t*>(base + CODWAW_T4_WAIT1_HOOK_RVA),
+        g_codwaw_smooth_wait_saved1.data(),
+        g_codwaw_smooth_wait_saved1.size());
+    WriteCoDWaWExecutableBytes(
+        reinterpret_cast<uint8_t*>(base + CODWAW_T4_WAIT2_HOOK_RVA),
+        g_codwaw_smooth_wait_saved2.data(),
+        g_codwaw_smooth_wait_saved2.size());
+  }
+
+  if (g_codwaw_smooth_wait_stub1 != nullptr) {
+    VirtualFree(g_codwaw_smooth_wait_stub1, 0u, MEM_RELEASE);
+    g_codwaw_smooth_wait_stub1 = nullptr;
+  }
+  if (g_codwaw_smooth_wait_stub2 != nullptr) {
+    VirtualFree(g_codwaw_smooth_wait_stub2, 0u, MEM_RELEASE);
+    g_codwaw_smooth_wait_stub2 = nullptr;
+  }
+  ResetCoDWaWSmoothLimiter();
+}
+
+bool PatchCoDWaWMainExeIAT(const char* function_name, void* replacement,
+                           void** original_out, void*** slot_out) {
+  if (!function_name || !replacement || !original_out || !slot_out) return false;
+  const uintptr_t base = CoDWaWExeBase(); if (!base) return false;
+  const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+  if (dos->e_magic != IMAGE_DOS_SIGNATURE) return false;
+  const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+  if (nt->Signature != IMAGE_NT_SIGNATURE) return false;
+  const auto& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (!dir.VirtualAddress) return false;
+  auto* desc = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress);
+  for (; desc->Name; ++desc) {
+    auto* iat = reinterpret_cast<IMAGE_THUNK_DATA*>(base + desc->FirstThunk);
+    auto* names = desc->OriginalFirstThunk
+        ? reinterpret_cast<IMAGE_THUNK_DATA*>(base + desc->OriginalFirstThunk) : iat;
+    for (; names->u1.AddressOfData; ++names, ++iat) {
+      if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
+      const auto* n = reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
+      if (std::strcmp(reinterpret_cast<const char*>(n->Name), function_name) != 0) continue;
+      auto** slot = reinterpret_cast<void**>(&iat->u1.Function);
+      DWORD oldp = 0u;
+      if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &oldp)) return false;
+      *original_out = *slot; *slot_out = slot;
+      InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(slot), replacement);
+      DWORD ignored = 0u; VirtualProtect(slot, sizeof(void*), oldp, &ignored);
+      FlushInstructionCache(GetCurrentProcess(), slot, sizeof(void*));
+      return true;
+    }
+  }
+  return false;
+}
+
+void RestoreCoDWaWIATSlot(void** slot, void* hook, void* original) {
+  if (!slot || !hook || !original || *slot != hook) return;
+  DWORD oldp = 0u; if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &oldp)) return;
+  InterlockedExchangePointer(reinterpret_cast<PVOID volatile*>(slot), original);
+  DWORD ignored = 0u; VirtualProtect(slot, sizeof(void*), oldp, &ignored);
+  FlushInstructionCache(GetCurrentProcess(), slot, sizeof(void*));
+}
+
+void InitializeCoDWaWMmcss() {
+  if (g_codwaw_av_set_mm) return;
+  HMODULE module = LoadLibraryW(L"avrt.dll"); if (!module) return;
+  auto fn = reinterpret_cast<CoDWaWAvSetMmThreadCharacteristicsWFn>(
+      GetProcAddress(module, "AvSetMmThreadCharacteristicsW"));
+  if (!fn) return;
+  auto priority_fn = reinterpret_cast<CoDWaWAvSetMmThreadPriorityFn>(
+      GetProcAddress(module, "AvSetMmThreadPriority"));
+  g_codwaw_avrt_module = module;
+  g_codwaw_av_set_mm = fn;
+  g_codwaw_av_set_mm_priority = priority_fn;
+}
+
+int CoDWaWMaxPriority(int a, int b) { return a > b ? a : b; }
+void SetCoDWaWProducerBurst(bool enable) {
+  const bool old = g_codwaw_producer_burst.exchange(enable, std::memory_order_acq_rel);
+  if (old == enable) return;
+  AcquireSRWLockExclusive(&g_codwaw_producer_lock);
+  for (auto& p : g_codwaw_producers) {
+    if (!p.handle) continue;
+    SetThreadPriority(p.handle, enable
+        ? CoDWaWMaxPriority(p.base_priority, THREAD_PRIORITY_HIGHEST)
+        : p.base_priority);
+  }
+  ReleaseSRWLockExclusive(&g_codwaw_producer_lock);
+}
+
+void RestoreCoDWaWProducerPriorities() {
+  SetCoDWaWProducerBurst(false);
+  AcquireSRWLockExclusive(&g_codwaw_producer_lock);
+  for (auto& p : g_codwaw_producers) {
+    if (p.handle) {
+      SetThreadPriority(p.handle, p.original_priority);
+      if (p.have_original_boost) SetThreadPriorityBoost(p.handle, p.original_boost_disabled);
+      CloseHandle(p.handle);
+    }
+    p = {};
+  }
+  ReleaseSRWLockExclusive(&g_codwaw_producer_lock);
+}
+
+void MaybeEnrollCoDWaWProducer(HANDLE event_handle) {
+  const uintptr_t learned = g_codwaw_renderer_event.load(std::memory_order_acquire);
+  if (!learned || reinterpret_cast<uintptr_t>(event_handle) != learned) return;
+  const DWORD tid = GetCurrentThreadId();
+  if (!tid || tid == g_codwaw_present_thread_id.load(std::memory_order_relaxed)) return;
+  thread_local uintptr_t tls_event = 0u;
+  if (tls_event == learned) return;
+  if (g_codwaw_av_set_mm) {
+    DWORD task = 0u;
+    HANDLE mmcss = g_codwaw_av_set_mm(L"Games", &task);
+    if (mmcss) {
+      // HIGH is the documented relative MMCSS level below CRITICAL.
+      if (g_codwaw_av_set_mm_priority) g_codwaw_av_set_mm_priority(mmcss, 1);
+      tls_event = learned;
+      return;
+    }
+  }
+  AcquireSRWLockExclusive(&g_codwaw_producer_lock);
+  for (const auto& p : g_codwaw_producers) {
+    if (p.thread_id == tid) { tls_event = learned; ReleaseSRWLockExclusive(&g_codwaw_producer_lock); return; }
+  }
+  CoDWaWProducerThread* free_slot = nullptr;
+  for (auto& p : g_codwaw_producers) if (!p.thread_id) { free_slot = &p; break; }
+  if (!free_slot) { ReleaseSRWLockExclusive(&g_codwaw_producer_lock); return; }
+  HANDLE th = OpenThread(THREAD_QUERY_INFORMATION | THREAD_SET_INFORMATION, FALSE, tid);
+  if (!th) { ReleaseSRWLockExclusive(&g_codwaw_producer_lock); return; }
+  const int original = GetThreadPriority(th);
+  if (original == THREAD_PRIORITY_ERROR_RETURN) { CloseHandle(th); ReleaseSRWLockExclusive(&g_codwaw_producer_lock); return; }
+  BOOL boost_disabled = FALSE;
+  const bool have_boost = GetThreadPriorityBoost(th, &boost_disabled) != FALSE;
+  const int base_priority = CoDWaWMaxPriority(original, THREAD_PRIORITY_ABOVE_NORMAL);
+  SetThreadPriority(th, g_codwaw_producer_burst.load(std::memory_order_relaxed)
+      ? CoDWaWMaxPriority(base_priority, THREAD_PRIORITY_HIGHEST) : base_priority);
+  SetThreadPriorityBoost(th, FALSE);
+  free_slot->thread_id = tid; free_slot->handle = th;
+  free_slot->original_priority = original; free_slot->base_priority = base_priority;
+  free_slot->original_boost_disabled = boost_disabled; free_slot->have_original_boost = have_boost;
+  tls_event = learned;
+  ReleaseSRWLockExclusive(&g_codwaw_producer_lock);
+}
+
+uint64_t CoDWaWElapsedUs(const LARGE_INTEGER& a, const LARGE_INTEGER& b) {
+  if (!g_codwaw_qpc_frequency || b.QuadPart <= a.QuadPart) return 0u;
+  return (static_cast<uint64_t>(b.QuadPart - a.QuadPart) * 1000000ull) / g_codwaw_qpc_frequency;
+}
+
+struct CoDWaWAdaptiveThresholds { uint64_t soft_us = 400u; uint64_t strong_us = 1000u; };
+CoDWaWAdaptiveThresholds GetCoDWaWAdaptiveThresholds() {
+  if (g_codwaw_wait_samples < 16u || g_codwaw_wait_baseline_us <= 0.0) return {};
+  const double dev = g_codwaw_wait_deviation_us < 10.0 ? 10.0 : g_codwaw_wait_deviation_us;
+  const double soft = g_codwaw_wait_baseline_us + std::max(dev * 3.0, 100.0);
+  const double strong = g_codwaw_wait_baseline_us + std::max(dev * 6.0, 300.0);
+  CoDWaWAdaptiveThresholds t;
+  t.soft_us = static_cast<uint64_t>(std::clamp(soft, 150.0, 3000.0));
+  t.strong_us = static_cast<uint64_t>(std::clamp(strong, 400.0, 8000.0));
+  if (t.strong_us <= t.soft_us + 100u) t.strong_us = t.soft_us + 100u;
+  return t;
+}
+
+void ObserveCoDWaWCleanWait(uint64_t us) {
+  if (!us) return;
+  const auto thresholds = GetCoDWaWAdaptiveThresholds();
+  if (g_codwaw_wait_samples >= CODWAW_V8_WARMUP_SAMPLES && us > thresholds.soft_us) return;
+  double sample = static_cast<double>(us);
+  if (g_codwaw_wait_samples < CODWAW_V8_WARMUP_SAMPLES && sample > 2000.0) sample = 2000.0;
+  if (!g_codwaw_wait_samples) {
+    g_codwaw_wait_baseline_us = sample;
+    g_codwaw_wait_deviation_us = sample * 0.25 + 10.0;
+    g_codwaw_wait_samples = 1u;
+    return;
+  }
+  const double alpha = g_codwaw_wait_samples < CODWAW_V8_WARMUP_SAMPLES ? 0.08 : 0.02;
+  const double error = sample - g_codwaw_wait_baseline_us;
+  g_codwaw_wait_baseline_us += alpha * error;
+  g_codwaw_wait_deviation_us += alpha * (std::fabs(error) - g_codwaw_wait_deviation_us);
+  ++g_codwaw_wait_samples;
+}
+
+void WINAPI HookCoDWaWSleep(DWORD milliseconds) {
+  // Failed exact hooks leave native waits intact, without a Sleep(0) CPU loop.
+  const auto original = g_codwaw_original_sleep;
+  if (original) original(milliseconds);
+}
+DWORD WINAPI HookCoDWaWWaitForSingleObject(HANDLE handle, DWORD milliseconds) {
+  const auto original = g_codwaw_original_wait;
+  if (!original) return WAIT_FAILED;
+  if (!g_codwaw_renderer_sync_enabled.load(std::memory_order_acquire)
+      || GetCurrentThreadId() != g_codwaw_present_thread_id.load(std::memory_order_relaxed)
+      || milliseconds != CODWAW_RENDERER_EVENT_WAIT_MS || !handle
+      || CoDWaWReturnAddressToExeRva(_ReturnAddress()) != CODWAW_RENDERER_EVENT_WAIT_CALLER_RVA)
+    return original(handle, milliseconds);
+
+  const uintptr_t hv = reinterpret_cast<uintptr_t>(handle);
+  uintptr_t old = g_codwaw_renderer_event.exchange(hv, std::memory_order_acq_rel);
+  if (!old) {
+    LogCoDWaWSync(reshade::log::level::info,
+        "[CoDWaW Smoothness] V5 learned exact renderer event at callerRVA 0x2FC6CF; INFINITE wait remains native; MW3-V8 producer scheduling + soft-stall recovery active; periodic stats logging disabled.");
+  }
+
+  LARGE_INTEGER begin = {}, end = {};
+  codwaw_frame_timing::Scope timing(codwaw_frame_timing::RendererWait);
+  if (g_codwaw_qpc_frequency) QueryPerformanceCounter(&begin);
+  const DWORD result = original(handle, milliseconds); // INFINITE remains INFINITE
+  if (g_codwaw_qpc_frequency) QueryPerformanceCounter(&end);
+  if (result != WAIT_OBJECT_0) return result;
+
+  const uint64_t us = CoDWaWElapsedUs(begin, end);
+  const auto thresholds = GetCoDWaWAdaptiveThresholds();
+  const uint64_t present = g_codwaw_present_count.load(std::memory_order_relaxed);
+  if (g_codwaw_wait_samples >= 16u && us >= thresholds.strong_us) {
+    // One clearly abnormal renderer handoff starts a short V8-style recovery.
+    g_codwaw_soft_stall_streak.store(0u, std::memory_order_relaxed);
+    g_codwaw_clean_successes.store(0u, std::memory_order_relaxed);
+    g_codwaw_last_stall_present.store(present, std::memory_order_relaxed);
+    const uint64_t hold = present + CODWAW_V8_BURST_MIN_HOLD_PRESENTS;
+    uint64_t cur = g_codwaw_burst_hold_until.load(std::memory_order_relaxed);
+    while (hold > cur && !g_codwaw_burst_hold_until.compare_exchange_weak(cur, hold,
+        std::memory_order_relaxed, std::memory_order_relaxed)) {}
+    SetCoDWaWProducerBurst(true);
+  } else if (g_codwaw_wait_samples >= 16u && us >= thresholds.soft_us) {
+    // MW3 V8 also reacts before a full timeout when the exact renderer wait is
+    // repeatedly abnormal. WaW has an INFINITE wait, so two consecutive soft
+    // stalls are the closest safe equivalent: the wait semantics never change,
+    // only the already-identified producer receives a short scheduling burst.
+    g_codwaw_clean_successes.store(0u, std::memory_order_relaxed);
+    const uint32_t streak = g_codwaw_soft_stall_streak.fetch_add(
+        1u, std::memory_order_relaxed) + 1u;
+    if (streak >= CODWAW_V8_SOFT_STREAK_TO_BURST) {
+      g_codwaw_soft_stall_streak.store(0u, std::memory_order_relaxed);
+      g_codwaw_last_stall_present.store(present, std::memory_order_relaxed);
+      const uint64_t hold = present + CODWAW_V8_SOFT_BURST_HOLD_PRESENTS;
+      uint64_t cur = g_codwaw_burst_hold_until.load(std::memory_order_relaxed);
+      while (hold > cur && !g_codwaw_burst_hold_until.compare_exchange_weak(
+          cur, hold, std::memory_order_relaxed, std::memory_order_relaxed)) {}
+      SetCoDWaWProducerBurst(true);
+    }
+  } else {
+    g_codwaw_soft_stall_streak.store(0u, std::memory_order_relaxed);
+    if (g_codwaw_producer_burst.load(std::memory_order_relaxed)
+        && us < thresholds.soft_us) {
+      const uint32_t clean = g_codwaw_clean_successes.fetch_add(1u, std::memory_order_relaxed) + 1u;
+      if (clean >= CODWAW_V8_BURST_RELEASE_SUCCESSES
+          && present >= g_codwaw_burst_hold_until.load(std::memory_order_relaxed))
+        SetCoDWaWProducerBurst(false);
+    }
+    ObserveCoDWaWCleanWait(us);
+  }
+  return result;
+}
+
+BOOL WINAPI HookCoDWaWSetEvent(HANDLE handle) {
+  const auto original = g_codwaw_original_set_event;
+  if (!original) return FALSE;
+  const BOOL result = original(handle); // never delay the current renderer wake
+  if (result != FALSE && g_codwaw_renderer_sync_enabled.load(std::memory_order_acquire)
+      && reinterpret_cast<uintptr_t>(handle) == g_codwaw_renderer_event.load(std::memory_order_acquire))
+    MaybeEnrollCoDWaWProducer(handle);
+  return result;
+}
+
+bool InstallCoDWaWSyncHooks() {
+  if (g_codwaw_sync_hooks_installed.load(std::memory_order_acquire)) return true;
+  if (g_codwaw_sync_install_attempted.exchange(true, std::memory_order_acq_rel)) return false;
+  if (!VerifyCoDWaWSyncTargetBuild()) return false;
+  LARGE_INTEGER f = {}; if (QueryPerformanceFrequency(&f) && f.QuadPart > 0)
+    g_codwaw_qpc_frequency = static_cast<uint64_t>(f.QuadPart);
+  InitializeCoDWaWMmcss();
+  void *ow = nullptr, *os = nullptr, *osl = nullptr;
+  void **sw = nullptr, **ss = nullptr, **ssl = nullptr;
+  const bool a = PatchCoDWaWMainExeIAT("WaitForSingleObject",
+      reinterpret_cast<void*>(&HookCoDWaWWaitForSingleObject), &ow, &sw);
+  const bool b = PatchCoDWaWMainExeIAT("SetEvent",
+      reinterpret_cast<void*>(&HookCoDWaWSetEvent), &os, &ss);
+  const bool c = PatchCoDWaWMainExeIAT("Sleep",
+      reinterpret_cast<void*>(&HookCoDWaWSleep), &osl, &ssl);
+  if (!a || !b || !c) {
+    if (a) RestoreCoDWaWIATSlot(sw, reinterpret_cast<void*>(&HookCoDWaWWaitForSingleObject), ow);
+    if (b) RestoreCoDWaWIATSlot(ss, reinterpret_cast<void*>(&HookCoDWaWSetEvent), os);
+    if (c) RestoreCoDWaWIATSlot(ssl, reinterpret_cast<void*>(&HookCoDWaWSleep), osl);
+    return false;
+  }
+  g_codwaw_original_wait = reinterpret_cast<CoDWaWWaitForSingleObjectFn>(ow);
+  g_codwaw_original_set_event = reinterpret_cast<CoDWaWSetEventFn>(os);
+  g_codwaw_original_sleep = reinterpret_cast<CoDWaWSleepFn>(osl);
+  g_codwaw_wait_iat_slot = sw;
+  g_codwaw_set_event_iat_slot = ss;
+  g_codwaw_sleep_iat_slot = ssl;
+  g_codwaw_sync_hooks_installed.store(true, std::memory_order_release);
+  LogCoDWaWSync(reshade::log::level::info,
+      "[CoDWaW Smoothness] ARMED V7: exact T4 0x2FC6CF renderer event remains INFINITE; producer uses MMCSS Games/HIGH plus adaptive recovery. BO1-style exact FPS pacing hooks both T4 frame-wait branches (0x19DDD0 + 0x19DE4C); Hook installation status is reported separately.");
+  return true;
+}
+
+void ShutdownCoDWaWSyncFix() {
+  ShutdownCoDWaWSmoothWaitHook();
+  g_codwaw_sync_hooks_installed.store(false, std::memory_order_release);
+  RestoreCoDWaWIATSlot(g_codwaw_wait_iat_slot,
+      reinterpret_cast<void*>(&HookCoDWaWWaitForSingleObject), reinterpret_cast<void*>(g_codwaw_original_wait));
+  RestoreCoDWaWIATSlot(g_codwaw_set_event_iat_slot,
+      reinterpret_cast<void*>(&HookCoDWaWSetEvent), reinterpret_cast<void*>(g_codwaw_original_set_event));
+  RestoreCoDWaWIATSlot(g_codwaw_sleep_iat_slot,
+      reinterpret_cast<void*>(&HookCoDWaWSleep), reinterpret_cast<void*>(g_codwaw_original_sleep));
+  g_codwaw_wait_iat_slot = nullptr;
+  g_codwaw_set_event_iat_slot = nullptr;
+  g_codwaw_sleep_iat_slot = nullptr;
+  g_codwaw_original_wait = nullptr;
+  g_codwaw_original_set_event = nullptr;
+  g_codwaw_original_sleep = nullptr;
+  RestoreCoDWaWProducerPriorities();
+}
+
+void NotifyCoDWaWD3D9Present() {
+  codwaw_frame_timing::Present();
+  g_codwaw_present_thread_id.store(GetCurrentThreadId(), std::memory_order_relaxed);
+  const uint64_t present = g_codwaw_present_count.fetch_add(1u, std::memory_order_relaxed) + 1u;
+
+  // Apply only when the requested value changes. There is deliberately no
+  // periodic dvar polling/logging on Present so the old smooth hot path stays
+  // as close as possible to the original addon.
+  if (present >= CODWAW_FPS_DVAR_AFTER_PRESENTS) {
+    const int wanted_fps =
+        g_codwaw_native_fps_limit_requested.load(std::memory_order_acquire);
+    if (g_codwaw_native_fps_limit_applied.load(std::memory_order_acquire) != wanted_fps
+        && ApplyCoDWaWNativeFpsLimit(wanted_fps)) {
+      g_codwaw_native_fps_limit_applied.store(wanted_fps, std::memory_order_release);
+    }
+  }
+
+  if (g_codwaw_t4_busy_wait_enabled.load(std::memory_order_acquire)
+      && present >= CODWAW_SYNC_ARM_AFTER_PRESENTS
+      && !g_codwaw_smooth_wait_hook_installed.load(std::memory_order_acquire)
+      && !g_codwaw_smooth_wait_hook_attempted.load(std::memory_order_acquire)) {
+    InstallCoDWaWSmoothWaitHook();
+  }
+
+  if ((g_codwaw_renderer_sync_enabled.load(std::memory_order_acquire)
+       || g_codwaw_t4_busy_wait_enabled.load(std::memory_order_acquire))
+      && present >= CODWAW_SYNC_ARM_AFTER_PRESENTS
+      && !g_codwaw_sync_hooks_installed.load(std::memory_order_acquire)
+      && !g_codwaw_sync_install_attempted.load(std::memory_order_acquire))
+    InstallCoDWaWSyncHooks();
+
+  if (g_codwaw_producer_burst.load(std::memory_order_relaxed)) {
+    const uint64_t last = g_codwaw_last_stall_present.load(std::memory_order_relaxed);
+    const uint64_t hold = g_codwaw_burst_hold_until.load(std::memory_order_relaxed);
+    if (last && present >= hold && present >= last + CODWAW_V8_BURST_FORCE_RELEASE_PRESENTS) {
+      g_codwaw_clean_successes.store(0u, std::memory_order_relaxed);
+      SetCoDWaWProducerBurst(false);
+    }
+  }
+  // Deliberately NO present%1200 logging here.
+}
+
 // UpgradeRTV clone-hot-swap helper macros removed.
 // They were defined but never used by this addon's shader table.
 
@@ -2343,6 +4424,163 @@ bool TryAcquireDX9TextureContainer(
   return true;
 }
 
+
+// Self-contained D3D9 readback blit shaders.
+// These are compiled once on demand through d3dcompiler_47.dll (or an older
+// compatible Windows compiler DLL) so this addon does not depend on RenoDX's
+// generated __dx9_readback_blit_* embed symbols.
+static constexpr char DX9_READBACK_BLIT_VERTEX_HLSL[] = R"hlsl(
+float4 gInvTargetSize : register(c0);
+
+struct VSInput {
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+};
+
+struct VSOutput {
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+};
+
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = input.position;
+    output.position.xy += float2(-gInvTargetSize.x, gInvTargetSize.y)
+                        * output.position.w;
+    output.texcoord = input.texcoord;
+    return output;
+}
+)hlsl";
+
+static constexpr char DX9_READBACK_BLIT_PIXEL_HLSL[] = R"hlsl(
+sampler2D gSource : register(s0);
+
+float3 LinearToSRGB(float3 linearColor) {
+    linearColor = saturate(linearColor);
+    const float3 low = linearColor * 12.92f;
+    const float3 high = 1.055f * pow(linearColor, 1.0f / 2.4f) - 0.055f;
+    const float3 useHigh = step(0.0031308f, linearColor);
+    return lerp(low, high, useHigh);
+}
+
+float4 main(float2 texcoord : TEXCOORD0) : COLOR0 {
+    const float4 source = tex2D(gSource, texcoord);
+    return float4(LinearToSRGB(source.rgb), saturate(source.a));
+}
+)hlsl";
+
+using DX9D3DCompileFn = HRESULT(WINAPI*)(
+    LPCVOID,
+    SIZE_T,
+    LPCSTR,
+    const D3D_SHADER_MACRO*,
+    ID3DInclude*,
+    LPCSTR,
+    LPCSTR,
+    UINT,
+    UINT,
+    ID3DBlob**,
+    ID3DBlob**);
+
+DX9D3DCompileFn LoadDX9D3DCompiler(HMODULE& module_out) {
+  module_out = nullptr;
+
+  static constexpr const wchar_t* COMPILER_DLLS[] = {
+      L"d3dcompiler_47.dll",
+      L"d3dcompiler_46.dll",
+      L"d3dcompiler_43.dll",
+  };
+
+  for (const wchar_t* dll_name : COMPILER_DLLS) {
+    HMODULE module = LoadLibraryW(dll_name);
+    if (module == nullptr) continue;
+
+    auto compile = reinterpret_cast<DX9D3DCompileFn>(
+        GetProcAddress(module, "D3DCompile"));
+    if (compile != nullptr) {
+      module_out = module;
+      return compile;
+    }
+
+    FreeLibrary(module);
+  }
+
+  return nullptr;
+}
+
+bool CompileDX9ReadbackShader(
+    const char* source,
+    const char* profile,
+    std::vector<DWORD>& bytecode_out) {
+  bytecode_out.clear();
+  if (source == nullptr || profile == nullptr) return false;
+
+  HMODULE compiler_module = nullptr;
+  DX9D3DCompileFn compile = LoadDX9D3DCompiler(compiler_module);
+  if (compile == nullptr || compiler_module == nullptr) {
+    LogDX9GPUBlitFailure(
+        "Could not load d3dcompiler_47/46/43.dll for the cached blit shader");
+    return false;
+  }
+
+  ID3DBlob* code_blob = nullptr;
+  ID3DBlob* error_blob = nullptr;
+  const HRESULT hr = compile(
+      source,
+      std::strlen(source),
+      "RenoDX DX9 readback blit",
+      nullptr,
+      nullptr,
+      "main",
+      profile,
+      D3DCOMPILE_OPTIMIZATION_LEVEL3,
+      0u,
+      &code_blob,
+      &error_blob);
+
+  if (FAILED(hr) || code_blob == nullptr) {
+    if (error_blob != nullptr && error_blob->GetBufferPointer() != nullptr) {
+      std::string message = "D3DCompile failed for ";
+      message += profile;
+      message += ": ";
+      message.append(
+          static_cast<const char*>(error_blob->GetBufferPointer()),
+          error_blob->GetBufferSize());
+      LogDX9GPUBlitFailure(message.c_str());
+    } else {
+      std::string message = "D3DCompile failed for ";
+      message += profile;
+      LogDX9GPUBlitFailure(message.c_str());
+    }
+
+    if (error_blob != nullptr) error_blob->Release();
+    if (code_blob != nullptr) code_blob->Release();
+    FreeLibrary(compiler_module);
+    return false;
+  }
+
+  const size_t byte_size = code_blob->GetBufferSize();
+  if (byte_size == 0u || (byte_size % sizeof(DWORD)) != 0u) {
+    LogDX9GPUBlitFailure("D3DCompile returned invalid DX9 shader bytecode");
+    if (error_blob != nullptr) error_blob->Release();
+    code_blob->Release();
+    FreeLibrary(compiler_module);
+    return false;
+  }
+
+  bytecode_out.resize(byte_size / sizeof(DWORD));
+  std::memcpy(
+      bytecode_out.data(),
+      code_blob->GetBufferPointer(),
+      byte_size);
+
+  if (error_blob != nullptr) error_blob->Release();
+  code_blob->Release();
+  FreeLibrary(compiler_module);
+  return true;
+}
+
+
 bool EnsureDX9GPUReadbackPipelineLocked(IDirect3DDevice9* device) {
   if (device == nullptr) return false;
 
@@ -2355,8 +4593,16 @@ bool EnsureDX9GPUReadbackPipelineLocked(IDirect3DDevice9* device) {
   cache.device = device;
 
   if (cache.vertex_shader == nullptr) {
+    std::vector<DWORD> bytecode;
+    if (!CompileDX9ReadbackShader(
+            DX9_READBACK_BLIT_VERTEX_HLSL,
+            "vs_3_0",
+            bytecode)) {
+      return false;
+    }
+
     const HRESULT hr = device->CreateVertexShader(
-        reinterpret_cast<const DWORD*>(std::data(__dx9_readback_blit_vertex)),
+        bytecode.data(),
         &cache.vertex_shader);
     if (FAILED(hr) || cache.vertex_shader == nullptr) {
       LogDX9GPUBlitFailure("Could not create the cached vs_3_0 blit shader");
@@ -2365,8 +4611,16 @@ bool EnsureDX9GPUReadbackPipelineLocked(IDirect3DDevice9* device) {
   }
 
   if (cache.pixel_shader == nullptr) {
+    std::vector<DWORD> bytecode;
+    if (!CompileDX9ReadbackShader(
+            DX9_READBACK_BLIT_PIXEL_HLSL,
+            "ps_3_0",
+            bytecode)) {
+      return false;
+    }
+
     const HRESULT hr = device->CreatePixelShader(
-        reinterpret_cast<const DWORD*>(std::data(__dx9_readback_blit_pixel)),
+        bytecode.data(),
         &cache.pixel_shader);
     if (FAILED(hr) || cache.pixel_shader == nullptr) {
       LogDX9GPUBlitFailure("Could not create the cached ps_3_0 SDR conversion shader");
@@ -2891,8 +5145,39 @@ float LinearToSRGB(float linear) {
   return 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
 }
 
+// Small cached transfer-function LUT used only by the CPU readback fallback.
+// The GPU blit is preferred; if it cannot be used, this removes millions of
+// per-pixel std::pow() calls from a 4K FP16 -> SDR readback. 4096 entries are
+// enough for the 8-bit destination and cost only 4 KiB.
+const std::array<uint8_t, 4096u>& GetDX9SRGBEncodeLUT() {
+  static const std::array<uint8_t, 4096u> table = []() {
+    std::array<uint8_t, 4096u> result = {};
+    for (size_t i = 0u; i < result.size(); ++i) {
+      const float linear =
+          static_cast<float>(i) / static_cast<float>(result.size() - 1u);
+      const float srgb = LinearToSRGB(linear);
+      result[i] = static_cast<uint8_t>(
+          std::clamp(
+              static_cast<int>(std::lround(srgb * 255.0f)),
+              0,
+              255));
+    }
+    return result;
+  }();
+  return table;
+}
+
 uint8_t FloatToUNorm8(float value, bool encode_srgb) {
-  value = encode_srgb ? LinearToSRGB(value) : SanitizeUnit(value);
+  value = SanitizeUnit(value);
+  if (encode_srgb) {
+    const auto& table = GetDX9SRGBEncodeLUT();
+    const size_t index = static_cast<size_t>(std::clamp(
+        static_cast<int>(std::lround(
+            value * static_cast<float>(table.size() - 1u))),
+        0,
+        static_cast<int>(table.size() - 1u)));
+    return table[index];
+  }
   return static_cast<uint8_t>(
       std::clamp(
           static_cast<int>(std::lround(value * 255.0f)),
@@ -3219,6 +5504,12 @@ bool OnDX9CopyResource(
   // ResolveDX9CopyEndpoint already queried this descriptor. Reuse it instead of
   // asking the resource tracker/device for the same description a second time.
   const reshade::api::resource_desc& dest_desc = dest_endpoint.input_desc;
+
+  // Captures the complete replacement readback (including state setup and
+  // fallback attempts), and does not create any additional GPU work.
+  codwaw_frame_timing::Scope timing(
+      IsCPUVisibleReadbackHeap(dest_desc.heap)
+          ? codwaw_frame_timing::Readback : codwaw_frame_timing::Count);
 
   // Preferred path: refresh the game's original 8-bit resource from the FP16
   // clone with a GPU fullscreen blit, then issue a normal same-format readback.
@@ -3829,7 +6120,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return false;},
     },
-        new renodx::utils::settings::Setting{
+        /*  new renodx::utils::settings::Setting{
         .key = "FPSLimit",
         .binding = &renodx::utils::swapchain::fps_limit,
         .default_value = 60.f,
@@ -3838,7 +6129,7 @@ renodx::utils::settings::Settings settings = {
         .min = 30.f,
         .max = 500.f,
         .parse = [](float value) { return value * 2.f; },
-    },   
+    },     */
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
@@ -4052,6 +6343,10 @@ void OnPresent(reshade::api::command_queue* queue,
   auto* device = queue->get_device();
   if (device == nullptr) return;
 
+  if (device->get_api() == reshade::api::device_api::d3d9) {
+    NotifyCoDWaWD3D9Present();
+  }
+
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
@@ -4060,6 +6355,15 @@ void OnPresent(reshade::api::command_queue* queue,
 
   HWND hwnd = reinterpret_cast<HWND>(swapchain->get_hwnd());
   if (hwnd == nullptr) return;
+
+  const bool overlay_capturing_mouse =
+      g_reshade_overlay_open.load(std::memory_order_acquire);
+  codwaw_plutonium_mouse_fix::Update(
+      codwaw_mouse_input_fix >= 0.5f);
+  cod_high_polling_mouse::Update(
+      hwnd,
+      codwaw_raw_mouse_input >= 0.5f,
+      overlay_capturing_mouse);
 
   uint32_t backbuffer_width = 0u;
   uint32_t backbuffer_height = 0u;
@@ -4099,6 +6403,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::constant_buffer_offset = 50 * 4; 
         renodx::mods::swapchain::set_color_space = false; 
+        // The game-native com_maxfps slider below owns the cap. Do not stack
+        // RenoDX's generic swapchain limiter on top of WaW's own frame deadline.
+        renodx::utils::swapchain::fps_limit = 0.f;
         renodx::mods::swapchain::use_device_proxy = true;
           renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_proxy_shaders = {
@@ -4121,6 +6428,68 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // Always register Present so Windowed Borderless works even when the
         // display proxy is disabled.
         reshade::register_event<reshade::addon_event::present>(OnPresent);
+        reshade::register_event<reshade::addon_event::reshade_open_overlay>(
+            OnReShadeOpenOverlay);
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "CoDWaWMouseInputFix",
+              .binding = &codwaw_mouse_input_fix,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Mouse Input Fix",
+              .section = "Performance",
+              .tooltip = "Plutonium-style T4 fix_mouse_lag port. WaW calls SetThreadExecutionState(ES_DISPLAY_REQUIRED) once for every Windows message; high-polling mice can make that call happen hundreds or thousands of times per second while aiming. This option skips only WaW's signature-matched per-window-message call and leaves every other execution-state call untouched.",
+              .labels = {
+                  "Off",
+                  "Plutonium-style mouse lag fix",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                codwaw_mouse_input_fix = current;
+                codwaw_plutonium_mouse_fix::SetEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          codwaw_mouse_input_fix = setting->GetValue();
+          codwaw_plutonium_mouse_fix::SetEnabled(
+              codwaw_mouse_input_fix >= 0.5f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "CoDWaWRawMouseInput",
+              .binding = &codwaw_raw_mouse_input,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Raw Mouse Input",
+              .section = "Performance",
+              .tooltip = "Feeds gameplay look movement from Windows WM_INPUT relative mouse deltas while preserving WaW's native sensitivity, ADS, m_yaw/m_pitch and mouse-button/wheel handling. Raw input is registered with RIDEV_INPUTSINK like Plutonium, but RIDEV_NOLEGACY is intentionally not used in this RenoDX port so menus and mouse buttons remain compatible. Disable for the completely vanilla cursor path.",
+              .labels = {
+                  "Vanilla",
+                  "Raw Input",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                codwaw_raw_mouse_input = current;
+                cod_high_polling_mouse::SetEnabled(current >= 0.5f);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          codwaw_raw_mouse_input = setting->GetValue();
+          cod_high_polling_mouse::SetEnabled(
+              codwaw_raw_mouse_input >= 0.5f);
+          settings.push_back(setting);
+        }
+
 
         {
           auto* setting = new renodx::utils::settings::Setting{
@@ -4164,6 +6533,139 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "CoDWaWRendererSyncFix",
+              .binding = &codwaw_renderer_sync_fix,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Renderer Sync Fix",
+              .section = "Performance",
+              .tooltip = "V5 WaW renderer scheduler for the exact Present-thread INFINITE event at RVA 0x2FC6CF. The real renderer wait remains unchanged. Matching producer threads join MMCSS Games at HIGH relative priority when available; fallback producers run ABOVE_NORMAL and temporarily burst to HIGHEST after one strong or two consecutive soft stalls. The separate Smooth Frame Pacing option owns T4's client frame-end wait decision and uses the FPS slider as its exact QPC target. No fake wait success, broad profiler, or periodic hot-path logging.",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                codwaw_renderer_sync_fix = current;
+                g_codwaw_renderer_sync_enabled.store(
+                    current >= 0.5f,
+                    std::memory_order_release);
+                if (current < 0.5f) {
+                  RestoreCoDWaWProducerPriorities();
+                }
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name,
+              setting);
+          codwaw_renderer_sync_fix = setting->GetValue();
+          g_codwaw_renderer_sync_enabled.store(
+              codwaw_renderer_sync_fix >= 0.5f,
+              std::memory_order_release);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              // New key intentionally ignores saved values from the earlier broken
+              // limiter experiments and starts from T4's real default: 85 FPS.
+              .key = "CoDWaWNativeFpsLimitV8",
+              .binding = &codwaw_native_fps_limit,
+              .default_value = 85.f,
+              .label = "In-Game FPS Limit (com_maxfps)",
+              .section = "Performance",
+              .tooltip = "Exact BO1-style internal FPS target. WaW stock uses integer minMsec = 1000 / com_maxfps, so 85 becomes 11 ms (~90.9 FPS). With Smooth Frame Pacing enabled, the addon intercepts both T4 frame-wait branches and paces this slider with absolute QPC deadlines. 0 = uncapped. Native com_maxfps is still updated for console/config consistency.",
+              .min = 0.f,
+              .max = 500.f,
+              .format = "%.0f FPS",
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                codwaw_native_fps_limit =
+                    std::clamp(std::round(current), 0.f, 500.f);
+                renodx::utils::swapchain::fps_limit = 0.f;
+
+                const int wanted_fps = static_cast<int>(codwaw_native_fps_limit);
+                g_codwaw_native_fps_limit_requested.store(
+                    wanted_fps, std::memory_order_release);
+                if (ApplyCoDWaWNativeFpsLimit(wanted_fps)) {
+                  g_codwaw_native_fps_limit_applied.store(
+                      wanted_fps, std::memory_order_release);
+                } else {
+                  // Present will retry once the game has initialized the dvar.
+                  g_codwaw_native_fps_limit_applied.store(
+                      -1, std::memory_order_release);
+                }
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          codwaw_native_fps_limit = std::clamp(
+              std::round(setting->GetValue()), 0.f, 500.f);
+          g_codwaw_native_fps_limit_requested.store(
+              static_cast<int>(codwaw_native_fps_limit),
+              std::memory_order_release);
+          g_codwaw_native_fps_limit_applied.store(
+              -1, std::memory_order_release);
+          renodx::utils::swapchain::fps_limit = 0.f;
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "CoDWaWT4BusyWait",
+              .binding = &codwaw_t4_busy_wait,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Smooth Frame Pacing",
+              .section = "Performance",
+              .tooltip = "BO1-style exact T4 frame pacing. Hooks both WaW client frame-wait decisions at RVAs 0x19DDD0 and 0x19DE4C and replaces both stock integer-millisecond paths with absolute QPC deadlines, a high-resolution coarse wait, scheduler yields near the deadline, a <=100 us fine finish, and MW3-style immediate late-frame re-anchoring. After each QPC wait, T4 refreshes its native clock once and finishes frame bookkeeping without a second wait. Disabled restores WaW's original scheduler. If the verified hook cannot install, the original scheduler remains active and the status below reports it.",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .on_change_value = [](float previous, float current) {
+                (void)previous;
+                codwaw_t4_busy_wait = current;
+                g_codwaw_t4_busy_wait_enabled.store(
+                    current >= 0.5f,
+                    std::memory_order_release);
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(
+              renodx::utils::settings::global_name, setting);
+          codwaw_t4_busy_wait = setting->GetValue();
+          g_codwaw_t4_busy_wait_enabled.store(
+              codwaw_t4_busy_wait >= 0.5f,
+              std::memory_order_release);
+          settings.push_back(setting);
+        }
+
+        settings.push_back(new renodx::utils::settings::Setting{
+            .key = "CoDWaWFrameTimingStatus",
+            .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+            .label = "Frame pacing status",
+            .section = "Performance",
+            .on_draw = []() {
+              const bool enabled = g_codwaw_t4_busy_wait_enabled.load(std::memory_order_acquire);
+              const bool installed = g_codwaw_smooth_wait_hook_installed.load(std::memory_order_acquire);
+              const bool attempted = g_codwaw_smooth_wait_hook_attempted.load(std::memory_order_acquire);
+              ImGui::Text("Internal FPS limiter: %s", !enabled ? "Disabled (stock timing)"
+                  : installed ? "Active (V9 verified hooks)"
+                  : attempted ? "Unavailable (signature check failed; stock timing)"
+                              : "Waiting for game initialization");
+              codwaw_frame_timing::Draw();
+              return false;
+            },
+            .is_global = true,
+        });
         {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainPreventFullscreen",
@@ -4231,7 +6733,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainDeviceProxyBaseWaitIdle",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
+              .default_value = 1.f,
               .label = "Base Wait Idle",
               .section = "Display Proxy",
               .labels = {"Off", "On"},
@@ -4354,6 +6856,10 @@ for (const auto old_format : scene_intermediate_formats) {
       }
       break;
     case DLL_PROCESS_DETACH:
+      g_reshade_overlay_open.store(false, std::memory_order_release);
+      codwaw_plutonium_mouse_fix::Shutdown();
+      cod_high_polling_mouse::Shutdown();
+      ShutdownCoDWaWSyncFix();
       ClearDX9ReadbackOptimizationCaches();
 #if 0  // Automatic DX9 output unclamper disabled
       reshade::unregister_event<reshade::addon_event::create_pipeline>(
@@ -4370,8 +6876,9 @@ for (const auto old_format : scene_intermediate_formats) {
           OnDX9ReadbackDestroySwapchain);
       reshade::unregister_event<reshade::addon_event::destroy_device>(
           OnDX9ReadbackDestroyDevice);
+      reshade::unregister_event<reshade::addon_event::reshade_open_overlay>(
+          OnReShadeOpenOverlay);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-      reshade::unregister_addon(h_module);
       break;
   }
 
@@ -4387,6 +6894,13 @@ for (const auto old_format : scene_intermediate_formats) {
         OnCreatePipelineDX9AutoOutputUnclamp);
   }
 #endif
+
+  // Keep the ReShade add-on registered until all RenoDX modules have processed
+  // DLL_PROCESS_DETACH. Unregistering it earlier makes their event cleanup fail
+  // (the BO1 log showed dozens of "Could not find associated add-on" errors).
+  if (fdw_reason == DLL_PROCESS_DETACH) {
+    reshade::unregister_addon(h_module);
+  }
 
   return TRUE;
 }
