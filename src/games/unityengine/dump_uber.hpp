@@ -91,11 +91,17 @@ inline bool IsInternalLutDimensions(std::uint32_t width, std::uint32_t height) {
   return (width == 1024u && height == 32u) || (width == 256u && height == 16u);
 }
 
+inline bool IsInternalLutDimensions(std::uint32_t width, std::uint32_t height, std::uint32_t depth) {
+  return (width == 33u && height == 33u && depth == 33u);
+}
+
 inline bool IsInternalLutDesc(const reshade::api::resource_desc& desc) {
   switch (desc.type) {
     case reshade::api::resource_type::texture_2d:
     case reshade::api::resource_type::surface:
       return IsInternalLutDimensions(desc.texture.width, desc.texture.height);
+    case reshade::api::resource_type::texture_3d:
+      return IsInternalLutDimensions(desc.texture.width, desc.texture.height, desc.texture.depth_or_layers);
     default:
       return false;
   }
