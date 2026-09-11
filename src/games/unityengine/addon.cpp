@@ -1707,6 +1707,7 @@ const ShaderItem INITIAL_SHADERS[] = {
       // Beautify
     CustomShaderEntryCallback(0x98451591, &CountLinear),
     CustomShaderEntryCallback(0x8B3EF05B, &CountLinearTonemap1),
+    CustomShaderEntryCallback(0x90BF03E1, &CountLinearTonemap1),
     CustomShaderEntryCallback(0xCF0602FB, &CountGammaTonemap1),
     CustomShaderEntryCallback(0x1C3A2078, &CountGammaTonemap1),
     CustomShaderEntryCallback(0xA0712B3B, &CountGammaTonemap1),
