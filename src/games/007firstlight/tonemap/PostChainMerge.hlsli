@@ -42,28 +42,29 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
 
     if (RENODX_TONE_MAP_SCALING == 0.f) {  // luminance tonemapping with purity and some hues from per channel
       float y_in = renodx::color::yf::from::BT709(untonemapped);
+      float3 untonemapped_expanded_bt709 = mul(BT709_TO_XFYFZF_EXPANDED_BT709_MAT, untonemapped);
       float4 channel_and_luminance_tonemapped = ApplyFilmToneMapExtended(
-          float4(untonemapped, y_in),
+        float4(untonemapped_expanded_bt709, y_in),
           film_tonemap_config,
           shoulder_start_linear,
           non_extended_blend_strength);
 
-      float hue_amount = 0.65f
-                         + (0.15f * saturate(renodx::math::DivideSafe(y_in, shoulder_start_linear, 0.f)))
-                         + (0.15f * saturate(renodx::math::DivideSafe(y_in - shoulder_start_linear, peak - shoulder_start_linear, 0.f)));
+      float3 lum_tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, channel_and_luminance_tonemapped.a);
 
       // Add extra hue shifts and blowout based on the user's peak setting, then restore luminance.
-      float3 hue_and_purity_reference = ApplyAnchoredCInfinityShoulder(
+        float3 hue_and_purity_reference = ApplyAnchoredCInfinityShoulder(
           channel_and_luminance_tonemapped.rgb,
           peak,
           shoulder_start_linear);
-      float3 lum_tonemapped = renodx::color::correct::Luminance(
-          untonemapped, y_in, channel_and_luminance_tonemapped.a);
-
+        hue_and_purity_reference = mul(XFYFZF_EXPANDED_BT709_TO_BT709_MAT, hue_and_purity_reference);
+        
+      float hue_amount = 0.7f
+                          + (0.15f * saturate(renodx::math::DivideSafe(y_in, shoulder_start_linear, 0.f)))
+                          + (0.15f * saturate(renodx::math::DivideSafe(y_in - shoulder_start_linear, peak - shoulder_start_linear, 0.f)));
       tonemapped = ApplyPerChannelPurityAndHue(
-          max(0.f, hue_and_purity_reference),
-          max(0.f, lum_tonemapped),
-          DISPLAYP3_TO_LMS_WEIGHTED_MAT,
+          hue_and_purity_reference,
+          lum_tonemapped,
+          renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
           1.f,
           hue_amount);
     } else {
@@ -176,14 +177,16 @@ float3 FinalizeOutput(float3 color) {
       float y_out = renodx::color::correct::Gamma(max(0, y_in));
       float3 color_corrected_lum = renodx::color::correct::Luminance(color, y_in, y_out);
 
-      float3 color_corrected_ch = renodx::color::correct::GammaSafe(color);
+      float3 color_expanded_bt709 = mul(BT709_TO_XFYFZF_EXPANDED_BT709_MAT, color);
+      float3 color_corrected_ch = renodx::color::correct::GammaSafe(color_expanded_bt709);
+      color_corrected_ch = mul(XFYFZF_EXPANDED_BT709_TO_BT709_MAT, color_corrected_ch);
 
       color = ApplyPerChannelPurityAndHue(
           color_corrected_ch,
           color_corrected_lum,
           DISPLAYP3_TO_LMS_WEIGHTED_MAT,
           1.f,
-          0.75f);
+          0.7f);
     }
 
     color = renodx::color::bt2020::from::BT709(color);

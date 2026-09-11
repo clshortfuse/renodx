@@ -96,6 +96,26 @@ float ApplyAnchoredCInfinityShoulderMaxChannelScale(float3 color, float peak = 1
   return renodx::math::DivideSafe(compressed_max, max_channel, 1.f);
 }
 
+static const float3x3 BT709_TO_BT2020_EXPANDED_BT709_MAT = float3x3(
+    0.9773816772f, 0.0112560072f, 0.0113623156f,
+    0.0060849375f, 0.9825527470f, 0.0113623156f,
+    0.0060849375f, 0.0112560072f, 0.9826590553f);
+
+static const float3x3 BT2020_EXPANDED_BT709_TO_BT709_MAT = float3x3(
+    1.0232867278f, -0.0115886389f, -0.0116980889f,
+    -0.0062647564f, 1.0179628453f, -0.0116980889f,
+    -0.0062647564f, -0.0115886389f, 1.0178533953f);
+
+static const float3x3 BT709_TO_XFYFZF_EXPANDED_BT709_MAT = float3x3(
+    0.9416502419f, 0.0286279843f, 0.0297217737f,
+    0.0166682791f, 0.9536099471f, 0.0297217737f,
+    0.0166682791f, 0.0286279843f, 0.9547037366f);
+
+static const float3x3 XFYFZF_EXPANDED_BT709_TO_BT709_MAT = float3x3(
+    1.0630820496f, -0.0309497757f, -0.0321322739f,
+    -0.0180201126f, 1.0501523865f, -0.0321322739f,
+    -0.0180201126f, -0.0309497757f, 1.0489698883f);
+
 float3 RenderIntermediatePass(float3 color) {
   if (TONE_MAP_TYPE != 0.f) {
     color = renodx::color::gamma::DecodeSafe(color);

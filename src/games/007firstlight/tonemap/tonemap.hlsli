@@ -98,19 +98,6 @@ RWTexture2D<float4> uavOutput1 : register(u0);
 
 SamplerState samplerLinearClampNode : register(s4);
 
-float3 ReinhardPiecewise(float3 x, float3 x_max, float3 shoulder) {
-  const float x_min = 0.f;
-  x_max = max(x_max, shoulder + 1e-6f);
-  float3 exposure = (x_max * (shoulder - x_min)) / (shoulder * (x_max - shoulder));
-  float3 tonemapped = mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
-
-  return lerp(x, tonemapped, step(shoulder, x));
-}
-
-float3 ReinhardPiecewise(float3 x, float x_max, float3 shoulder) {
-  return ReinhardPiecewise(x, x_max.xxx, shoulder);
-}
-
 static const float3x3 DISPLAYP3_TO_LMS_WEIGHTED_MAT = mul(
     renodx::color::macleod_boynton::XYZ_TO_LMS_WEIGHTED_MAT,
     renodx::color::DISPLAYP3_TO_XYZ_MAT);
