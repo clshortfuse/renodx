@@ -42,12 +42,17 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
     float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     const float SHOULDERLESS_BLEND = 0.7f;
 
+    untonemapped = renodx::tonemap::psychov::psychograde_custom_test30(
+        untonemapped, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
+        RENODX_TONE_MAP_CONTRAST, 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
+        RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA, 0.18f, 0.18f);
+
     [branch]
     if (TONE_MAP_TYPE == 2.f) {  // Enhanced: luminance tonemapping with purity and some hues from per channel
-      float y_in = renodx::color::yf::from::BT709(untonemapped);
+      float y_in = max(0, renodx::color::yf::from::BT709(untonemapped));
       float3 untonemapped_expanded_bt709 = mul(BT709_TO_XFYFZF_EXPANDED_BT709_MAT, untonemapped);
       float4 channel_and_luminance_tonemapped = ApplyFilmToneMapExtendedEnhanced(
-          float4(untonemapped_expanded_bt709, y_in),
+          float4(abs(untonemapped_expanded_bt709), y_in),
           film_tonemap_config,
           SHOULDERLESS_BLEND);
 
@@ -58,6 +63,7 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
           channel_and_luminance_tonemapped.rgb,
           peak,
           shoulder_start_linear);
+      hue_and_purity_reference = renodx::math::CopySign(hue_and_purity_reference, untonemapped_expanded_bt709);
       hue_and_purity_reference = mul(XFYFZF_EXPANDED_BT709_TO_BT709_MAT, hue_and_purity_reference);
 
       float hue_amount = 0.75f
@@ -71,18 +77,19 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
           hue_amount);
     } else {
       // Extend from the start of the vanilla shoulder, then blend toward the non-extended shoulderless curve.
-      float3 per_channel_tonemapped = ApplyFilmToneMapExtended(
-          untonemapped, film_tonemap_config, shoulder_start_linear, SHOULDERLESS_BLEND);
+      float3 per_channel_tonemapped = ApplyFilmToneMapExtended(abs(untonemapped), film_tonemap_config, shoulder_start_linear, SHOULDERLESS_BLEND);
 
-      // Add hue shifts and blowout based on the user's peak setting.
+      // Apply the shoulder to magnitudes, then restore signs for luminance matching.
       float3 hue_and_purity_reference = ApplyAnchoredCInfinityShoulder(
           per_channel_tonemapped,
           peak,
           shoulder_start_linear);
+      hue_and_purity_reference = renodx::math::CopySign(hue_and_purity_reference, untonemapped);
+      per_channel_tonemapped = renodx::math::CopySign(per_channel_tonemapped, untonemapped);
       tonemapped = renodx::color::correct::Luminance(
           hue_and_purity_reference,
-          renodx::color::yf::from::BT709(hue_and_purity_reference),
-          renodx::color::yf::from::BT709(per_channel_tonemapped));
+          max(0, renodx::color::yf::from::BT709(hue_and_purity_reference)),
+          max(0, renodx::color::yf::from::BT709(per_channel_tonemapped)));
     }
   } else {
     tonemapped = ApplyFilmToneMap(untonemapped, film_white_clip);
@@ -108,7 +115,6 @@ float3 ApplyVignetteWhitePointAndVerticalFade(float3 color, float4 grid) {
 float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_headroom) {
   [branch]
   if (TONE_MAP_TYPE != 0.f) {
-    color = max(0, color);
 #if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM || POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
     float maxch_scale = ApplyAnchoredCInfinityShoulderMaxChannelScale(color, 1.f, 0.25f);
 #else  // don't use max channel scaling with SDR tonemappers
@@ -183,8 +189,6 @@ float3 FinalizeOutput(float3 color) {
     }
 
     color = renodx::color::bt2020::from::BT709(color);
-
-    color = ApplyCustomGrading(color);
 
     // bt.2020 max channel display mapping
     color = ApplyAnchoredCInfinityShoulder(max(0, color), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.25f);
