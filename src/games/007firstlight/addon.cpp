@@ -31,11 +31,11 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDX"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Enhanced)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -69,17 +69,6 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapScaling",
-        .binding = &shader_injection.tone_map_scaling,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Scaling",
-        .section = "Tone Mapping",
-        .tooltip = "Luminance scales colors consistently while per channel matches the original behavior of the tonemapper",
-        .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -274,8 +263,8 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
+              {"ToneMapType", 1.f},
               {"FxFilmGrainType", 1.f},
-              {"ToneMapScaling", 1.f},
           });
         },
     },
@@ -347,7 +336,6 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"ToneMapScaling", 1.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeHighlightContrast", 50.f},
@@ -419,7 +407,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-    firstlight::dlss::Use(fdw_reason);
+  firstlight::dlss::Use(fdw_reason);
 
   return TRUE;
 }

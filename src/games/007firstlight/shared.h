@@ -10,7 +10,6 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float graphics_white_nits;
-  float tone_map_scaling;
 
   float tone_map_exposure;
   float tone_map_highlights;
@@ -44,8 +43,6 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
-
-#define RENODX_TONE_MAP_SCALING shader_injection.tone_map_scaling
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights

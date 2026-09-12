@@ -1,5 +1,38 @@
 #include "./shared.h"
 
+// Default GammaSafe (sRGB to gamma 2.2), with a C-infinity toe join.
+// Matches the original outside |color| = [0.002, 0.006]. Zero retains its original C2 behavior.
+#define CINFINITY_GAMMA_SAFE_GENERATOR(T, B)                                                                               \
+  T CInfinityGammaSafe(T color) {                                                                                          \
+    T magnitude = abs(color);                                                                                              \
+    B in_transition = (magnitude > 0.002f) & (magnitude < 0.006f);                                                         \
+    [branch]                                                                                                               \
+    if (!any(in_transition)) {                                                                                             \
+      return renodx::color::correct::GammaSafe(color);                                                                     \
+    }                                                                                                                      \
+    /* Compute the original result once, including channels outside the transition. */                                     \
+    B in_srgb_toe = magnitude <= 0.0031308f;                                                                               \
+    T shadow_encoded = 12.92f * magnitude;                                                                                 \
+    T highlight_encoded = mad(1.055f, pow(magnitude, 1.f / 2.4f), -0.055f);                                                \
+    T original_output = pow(renodx::math::Select(in_srgb_toe, shadow_encoded, highlight_encoded), 2.2f);                   \
+    /* Keep inactive channels' blend arithmetic valid. */                                                                  \
+    T blend_magnitude = renodx::math::Select(in_transition, magnitude, (T)0.004f);                                         \
+    T t = (blend_magnitude - 0.002f) / (0.006f - 0.002f);                                                                  \
+    T weight = exp(-abs(2.f * t - 1.f) / (t * (1.f - t)));                                                                 \
+    T blend = renodx::math::Select(t < 0.5f, weight, (T)1.f) / (1.f + weight);                                             \
+    /* Reuse the decoded original branch; only the other branch needs another power. */                                    \
+    T other_output = pow(renodx::math::Select(                                                                             \
+                             in_transition, renodx::math::Select(in_srgb_toe, highlight_encoded, shadow_encoded), (T)1.f), \
+                         2.2f);                                                                                            \
+    T smoothed_output = lerp(                                                                                              \
+        original_output, other_output, renodx::math::Select(in_srgb_toe, blend, 1.f - blend));                             \
+    return renodx::math::CopySign(renodx::math::Select(in_transition, smoothed_output, original_output), color);           \
+  }
+
+CINFINITY_GAMMA_SAFE_GENERATOR(float, bool)
+CINFINITY_GAMMA_SAFE_GENERATOR(float3, bool3)
+#undef CINFINITY_GAMMA_SAFE_GENERATOR
+
 renodx::canvas::Context CreateDebugOverlayContext(
     float3 color,
     float2 screen_position,
