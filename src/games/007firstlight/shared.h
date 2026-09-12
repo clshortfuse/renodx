@@ -19,7 +19,6 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_dechroma;
   float tone_map_flare;
-  float tone_map_gamma;
   float color_grade_lut_strength;
 
   float custom_bloom;
@@ -52,7 +51,6 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-#define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
 
 #define CUSTOM_BLOOM              shader_injection.custom_bloom

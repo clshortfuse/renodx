@@ -1,3 +1,6 @@
+#ifndef SRC_007FIRSTLIGHT_COMMON_HLSLI_
+#define SRC_007FIRSTLIGHT_COMMON_HLSLI_
+
 #include "./shared.h"
 
 // Default GammaSafe (sRGB to gamma 2.2), with a C-infinity toe join.
@@ -166,3 +169,5 @@ float3 InvertIntermediatePass(float3 color) {
   }
   return color;
 }
+
+#endif  // SRC_007FIRSTLIGHT_COMMON_HLSLI_
