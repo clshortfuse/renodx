@@ -1,0 +1,9 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "genshin",
+  "title": "Genshin Impact",
+  "status": "experimental",
+  "notes": [
+    "Works with the in-game HDR setting on or off and with any anti-aliasing option. Requires Windows HDR on."
+  ]
+}
