@@ -106,7 +106,8 @@ float3 ApplyPerChannelPurityAndHue(
     float purity_amount,
     float hue_amount,
     float purity_compression_knee = 0.9f) {
-  const float epsilon = 1e-7f;
+  const float EPSILON = 1e-7f;
+  const float RADIUS_EPSILON_SQUARED = EPSILON * EPSILON;
   float3 background_state_lms = renodx::color::lms::from::BT709(0.18f.xxx);
   float3 source_lms = renodx::color::lms::from::BT709(source_bt709);
   float3 target_lms = renodx::color::lms::from::BT709(target_bt709);
@@ -122,22 +123,33 @@ float3 ApplyPerChannelPurityAndHue(
   float2 mb_white = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
   float2 source_offset = source_mb.xy - mb_white;
   float2 target_offset = target_mb.xy - mb_white;
-  float source_radius = sqrt(max(dot(source_offset, source_offset), 0.f));
-  float target_radius = sqrt(max(dot(target_offset, target_offset), 0.f));
+  float source_radius_squared = max(dot(source_offset, source_offset), 0.f);
+  float target_radius_squared = max(dot(target_offset, target_offset), 0.f);
+  bool has_source_direction = source_radius_squared > RADIUS_EPSILON_SQUARED;
+  bool has_target_direction = target_radius_squared > RADIUS_EPSILON_SQUARED;
+  // Guard the rsqrt operand itself: inactive zero/subnormal radii must not produce infinity.
+  float source_inverse_radius = rsqrt(has_source_direction ? source_radius_squared : 1.f);
+  float target_inverse_radius = rsqrt(has_target_direction ? target_radius_squared : 1.f);
+  // Keep sub-epsilon radii for purity interpolation rather than clamping them to zero or EPSILON.
+  float source_radius = has_source_direction
+                            ? source_radius_squared * source_inverse_radius
+                            : sqrt(source_radius_squared);
+  // Independent of target normalization so this sqrt can DCE for purity_amount == 1.
+  float target_radius = sqrt(target_radius_squared);
 
-  float2 source_direction = source_radius > epsilon
-                                ? source_offset / source_radius
+  float2 source_direction = has_source_direction
+                                ? source_offset * source_inverse_radius
                                 : float2(1.f, 0.f);
-  float2 target_direction = target_radius > epsilon
-                                ? target_offset / target_radius
+  float2 target_direction = has_target_direction
+                                ? target_offset * target_inverse_radius
                                 : source_direction;
-  if (source_radius <= epsilon) {
+  if (!has_source_direction) {
     source_direction = target_direction;
   }
 
   float2 output_direction = lerp(target_direction, source_direction, hue_amount);
   float output_direction_length_squared = dot(output_direction, output_direction);
-  output_direction = output_direction_length_squared > epsilon
+  output_direction = output_direction_length_squared > EPSILON
                          ? output_direction * rsqrt(output_direction_length_squared)
                          : target_direction;
 
@@ -163,7 +175,7 @@ float3 ApplyPerChannelPurityAndHue(
                             : 0.f;
 
   float purity_knee = saturate(purity_compression_knee);
-  float purity_range = max(1.f - purity_knee, epsilon);
+  float purity_range = max(1.f - purity_knee, EPSILON);
   float purity_excess = max(output_purity - purity_knee, 0.f);
   float compressed_purity = purity_knee
                             + (purity_excess * purity_range
@@ -231,6 +243,7 @@ FilmTonemapConfig CreateFilmTonemapConfig(float film_white_clip) {
       shoulder_value = select((log_value > config.shoulder_start), (config.shoulder_white - (config.shoulder_range / (exp2(config.shoulder_exponent_scale * (log_value - config.shoulder_start)) + 1.0f))), straight_color); \
     }                                                                                                                                                                                                                        \
     T tonemapped = select((untonemapped < 1.0e-15f), config.black_level, (((film_blend * film_blend) * (shoulder_value - toe_value)) * (3.0f - (film_blend * 2.0f))) + toe_value);                                           \
+    [branch]                                                                                                                                                                                                                 \
     if (config.use_toe_linear_interp) {                                                                                                                                                                                      \
       return (saturate(pow(untonemapped / cbPostChainMerge.fFilmToeLinearInterp, 0.6f)) * (tonemapped - untonemapped)) + untonemapped;                                                                                       \
     }                                                                                                                                                                                                                        \
@@ -328,6 +341,7 @@ FILM_ENHANCED_STEP_GENERATOR(float4, bool4)
     if (span == 0.f) span = -LOG2_E / config.toe_exponent_scale;                                                        \
     T blend = FilmEnhancedSmoothStep((log_input - min(config.toe_start, config.shoulder_start)) / span);                \
     T value = lerp(toe, straight_color, blend);                                                                         \
+    [branch]                                                                                                            \
     if (config.use_toe_linear_interp) {                                                                                 \
       /* Retain vanilla interpolation below 0.9 * I; smoothly complete its cap at I. */                                 \
       const float INTERP_LOG_SPAN = -log10(1.f - FILM_ENHANCED_INTERP_RELATIVE_WIDTH);                                  \
@@ -420,9 +434,7 @@ renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
   lut_config.scaling = 0.f;
   lut_config.lut_sampler = lut_sampler;
   lut_config.size = 16u;
-#if !USE_EXPENSIVE_LUT_GAMUT_RESTORATION
   lut_config.gamut_compress = 0.f;
-#endif
   lut_config.strength = COLOR_GRADE_LUT_STRENGTH;
   return lut_config;
 }
@@ -482,6 +494,7 @@ float ApplyCustomContrastAndFlare(float x, float contrast, float contrast_highli
 }
 
 float3 ApplyCustomLuminanceGrading(float3 color, float y_in, CustomGradingConfig config, float mid_gray) {
+  [branch]
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f
       && config.contrast_highlights == 1.f && config.contrast_shadows == 1.f && config.flare == 0.f && config.gamma == 1.f) {
     return color;
@@ -500,10 +513,12 @@ float3 ApplyCustomLuminanceGrading(float3 color, float y_in, CustomGradingConfig
 float3 ApplyCustomChromaGrading(float3 color, float y, CustomGradingConfig config) {
   float chroma_scale = config.saturation;
 
+  [branch]
   if (config.dechroma != 0.f) {
     chroma_scale *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
   }
 
+  [branch]
   if (config.highlight_saturation != 0.f) {
     float percent_max = saturate(y * 100.f / 10000.f);
     float blowout_strength = 100.f;
@@ -514,6 +529,7 @@ float3 ApplyCustomChromaGrading(float3 color, float y, CustomGradingConfig confi
     chroma_scale *= blowout_change;
   }
 
+  [branch]
   if (chroma_scale == 1.f) return color;
 
   float purity_scale = max(chroma_scale, 0.f);

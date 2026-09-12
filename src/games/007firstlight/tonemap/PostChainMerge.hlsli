@@ -21,6 +21,7 @@ void CalculateFilmTonemapHDRHeadroom(inout float hdr_scale, inout float hdr_head
 float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
   float3 tonemapped;
 #if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
+  [branch]
   if (TONE_MAP_TYPE != 0.f) {
     float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
@@ -34,12 +35,14 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
   tonemapped = renodx::tonemap::ApplyCurve(untonemapped, 0.6f, 1.f, 0.1f, 1.f, 0.004f, 0.06f);
 #elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM
 
+  [branch]
   if (TONE_MAP_TYPE != 0.f) {
     FilmTonemapConfig film_tonemap_config = CreateFilmTonemapConfig(film_white_clip);
     float shoulder_start_linear = pow(10.f, film_tonemap_config.shoulder_start);
     float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     const float SHOULDERLESS_BLEND = 0.7f;
 
+    [branch]
     if (TONE_MAP_TYPE == 2.f) {  // Enhanced: luminance tonemapping with purity and some hues from per channel
       float y_in = renodx::color::yf::from::BT709(untonemapped);
       float3 untonemapped_expanded_bt709 = mul(BT709_TO_XFYFZF_EXPANDED_BT709_MAT, untonemapped);
@@ -103,16 +106,8 @@ float3 ApplyVignetteWhitePointAndVerticalFade(float3 color, float4 grid) {
 }
 
 float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_headroom) {
+  [branch]
   if (TONE_MAP_TYPE != 0.f) {
-    float3 adaptive_state_lms;
-    float gamut_compression_scale;
-
-#if USE_EXPENSIVE_LUT_GAMUT_RESTORATION
-    adaptive_state_lms = LMS_WHITE_BT709 * 0.18f;
-    gamut_compression_scale = renodx::color::gamut::ComputeGamutCompressionScaleBT709AdaptiveD65(color, adaptive_state_lms, 1.f);
-    color = renodx::color::gamut::GamutCompressBT709AdaptiveD65(color, adaptive_state_lms, gamut_compression_scale);
-#endif
-
     color = max(0, color);
 #if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM || POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
     float maxch_scale = ApplyAnchoredCInfinityShoulderMaxChannelScale(color, 1.f, 0.25f);
@@ -121,10 +116,6 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
 #endif
 
     float3 lut_color = renodx::lut::Sample(srvColorCorrectionVolume, CreateLUTConfig(samplerLinearClampNode), color * maxch_scale) / maxch_scale;
-
-#if USE_EXPENSIVE_LUT_GAMUT_RESTORATION
-    lut_color = renodx::color::gamut::GamutDecompressBT709AdaptiveD65(lut_color, adaptive_state_lms, gamut_compression_scale);
-#endif
 
     lut_color = renodx::color::srgb::EncodeSafe(lut_color);
     return lut_color;
@@ -165,9 +156,11 @@ float3 ApplyOptionalGammaAdjust(float3 color) {
 }
 
 float3 FinalizeOutput(float3 color) {
+  [branch]
   if (TONE_MAP_TYPE != 0.f) {
     color = renodx::color::srgb::DecodeSafe(color);
 
+    [branch]
     if (TONE_MAP_TYPE == 1.f) {  // Vanilla+: per-channel gamma correction
       color = renodx::color::correct::GammaSafe(color);
     } else {  // luminance gamma correction with purity and some hues from per channel
