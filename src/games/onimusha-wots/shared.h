@@ -11,7 +11,6 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float graphics_white_nits;
-  float tone_map_apply_pre_tone_map_curve;
   float tone_map_scaling;
   float tone_map_hue_retention;
   float custom_ui_visibility;
@@ -43,16 +42,13 @@ cbuffer shader_injection : register(b0, space50) {
 }
 
 #define TONE_MAP_TYPE                     shader_injection.tone_map_type
-#define TONE_MAP_ACES_MID_GRAY            shader_injection.tone_map_aces_mid_gray
-#define TONE_MAP_APPLY_PRE_TONE_MAP_CURVE shader_injection.tone_map_apply_pre_tone_map_curve
+#define TONE_MAP_APPLY_PRE_TONE_MAP_CURVE shader_injection.tone_map_type == 3.f  // RenoDX (Vanilla+, Matches SDR)
 #define RENODX_PEAK_WHITE_NITS            shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS         shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS        shader_injection.graphics_white_nits
 #define CUSTOM_SHOW_UI                    shader_injection.custom_ui_visibility
 
-#define RENODX_TONE_MAP_HUE_RETENTION shader_injection.tone_map_hue_retention
-#define RENODX_GAMMA_CORRECTION       shader_injection.gamma_correction
-#define RENODX_GAMMA_CORRECTION_UI    shader_injection.gamma_correction_ui
+#define RENODX_GAMMA_CORRECTION_UI shader_injection.gamma_correction_ui
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights

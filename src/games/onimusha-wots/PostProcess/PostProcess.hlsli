@@ -41,7 +41,7 @@ static float linearStart = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_linearStart : renod
 static float toe = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_toe : 1.f;
 
 float3 ApplyCapcomExponentialToneMap(float3 color) {
-  if (tonemapParam_isHDRMode == 0.f || (TONE_MAP_APPLY_PRE_TONE_MAP_CURVE && TONE_MAP_TYPE == 1.f)) {
+  if (tonemapParam_isHDRMode == 0.f || TONE_MAP_APPLY_PRE_TONE_MAP_CURVE) {
     float3 t = color * invLinearBegin;  // color / linearBegin
 
     float3 toeSmooth = select(color < linearBegin, t * t * (3.f - 2.f * t), 1.f);  // smoothstep(0, linearBegin, color)
@@ -113,10 +113,8 @@ float3 PrintPostProcessCbuffers(float3 color, float2 uv) {
 float3 Unclamp(float3 original, float3 black, float3 mid_gray, float3 neutral) {
   const float3 added_gamma = black;
 
-  const float mid_gray_average = renodx::math::Average(mid_gray);
-
   // Remove from 0 to mid-gray
-  const float shadow_length = mid_gray_average;
+  const float shadow_length = renodx::math::Min(mid_gray);
   const float shadow_stop = renodx::math::Max(neutral);
   const float3 floor_remove = added_gamma * renodx::math::DivideSafe(max(0, shadow_length - shadow_stop), shadow_length, 0.f);
 

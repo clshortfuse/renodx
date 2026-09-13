@@ -33,7 +33,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Custom)"},
+        .labels = {"Vanilla", "RenoDX (Enhanced)", "RenoDX (Vanilla+, Matches HDR)", "RenoDX (Vanilla+, Matches SDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -47,29 +47,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapApplyPreToneMapCurve",
-        .binding = &shader_injection.tone_map_apply_pre_tone_map_curve,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .label = "Apply Pre Tone Map Curve",
-        .section = "Tone Mapping",
-        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapACESMidGray",
-        .binding = &shader_injection.tone_map_aces_mid_gray,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "ACES Mid Gray",
-        .section = "Tone Mapping",
-        .tooltip = "Selects the ACES mid-gray target:\n"
-                   "4.8 is ACES reference behavior.\n"
-                   "10.0 roughly matches the SDR tonemapper.\n"
-                   "15.0 matches the HDR tonemapper [RRTODT.Academy.Rec2020_1000nits_15nits_ST2084].",
-        .labels = {"4.8 (Reference ACES)", "10.0 (Matches SDR)", "15.0 (Matches HDR)"},
-        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
         .binding = &shader_injection.diffuse_white_nits,
         .default_value = 203.f,
@@ -80,29 +57,6 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "EOTFEmulation",
-        .binding = &shader_injection.gamma_correction,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "SDR EOTF Emulation",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF",
-        .labels = {"Off", "2.2", "Lower ACES Min Nits"},
-        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
-    },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ToneMapHueRetention",
-    //     .binding = &shader_injection.tone_map_hue_retention,
-    //     .default_value = 0.f,
-    //     .label = "Hue Retention",
-    //     .section = "Tone Mapping",
-    //     .tooltip = "Hue retention strength.",
-    //     .min = 0.f,
-    //     .max = 100.f,
-    //     .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
         .binding = &shader_injection.graphics_white_nits,
@@ -259,7 +213,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxNoise",
         .binding = &shader_injection.custom_noise,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Vanilla Noise",
         .section = "Effects",
         .tooltip = "Noise pattern added to game in some areas.",
@@ -269,7 +223,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
-        .default_value = 0.f,
+        .default_value = 25.f,
         .label = "Custom Film Grain",
         .section = "Effects",
         .max = 100.f,
@@ -279,7 +233,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FogBrightness",
         .binding = &shader_injection.custom_fog_brightness,
-        .default_value = 100.f,
+        .default_value = 75.f,
         .label = "Fog Brightness",
         .section = "Fog",
         .min = 0.f,
@@ -293,6 +247,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Skip Denoiser",
         .section = "Ray Tracing",
+        .tooltip = "Experimental setting to be used alongside JoHien's Graphics Enhancement mod.",
         .labels = {"Off", "Skip Deflicker", "Skip Deflicker and Bilateral Filter", "Skip Deflicker, Bilateral Filter, and Temporal Accumulation"},
     },
     new renodx::utils::settings::Setting{
@@ -317,8 +272,11 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"EOTFEmulation", 1.f},
+              {"ToneMapType", 3.f},
               {"ColorGradeLUTScaling", 0.f},
+              {"FxNoise", 100.f},
+              {"FxGrainStrength", 0.f},
+              {"FogBrightness", 100.f},
           });
         },
     },
@@ -327,30 +285,16 @@ renodx::utils::settings::Settings settings = {
         .label = "Match HDR",
         .section = "Options",
         .group = "button-line-0",
-        .tooltip = "Matches HDR with the `Brightness (HDR)` slider set to 10 (neutral setting).",
-        .on_change = []() {
-          renodx::utils::settings::ResetSettings();
-          renodx::utils::settings::UpdateSettings({
-              {"ToneMapACESMidGray", 2.f},
-              {"ToneMapGameNits", 150.f},
-              {"EOTFEmulation", 0.f},
-              {"ToneMapApplyPreToneMapCurve", 0.f},
-              {"ColorGradeLUTScaling", 0.f},
-          });
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended Settings",
-        .section = "Options",
-        .group = "button-line-0",
+        .tooltip = "Matches HDR with the `Overall Brightness` slider set to default.",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapType", 2.f},
-              {"FxNoise", 0.f},
-              {"FxGrainStrength", 25.f},
-              {"FogBrightness", 75.f},
+              {"ToneMapGameNits", 150.f},
+              {"ColorGradeLUTScaling", 0.f},
+              {"FxNoise", 100.f},
+              {"FxGrainStrength", 0.f},
+              {"FogBrightness", 100.f},
           });
         },
     },
@@ -422,9 +366,6 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"ToneMapApplyPreToneMapCurve", 0.f},
-      {"ToneMapACESMidGray", 2.f},
-      {"EOTFEmulation", 0.f},
       {"UIEOTFEmulation", 0.f},
       {"UIVisibility", 1.f},
       {"ColorGradeExposure", 1.f},
@@ -433,7 +374,6 @@ void OnPresetOff() {
       {"ColorGradeShadows", 50.f},
       {"ColorGradeShadowContrast", 50.f},
       {"ColorGradeContrast", 50.f},
-      {"ColorGradeGamma", 1.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeDechroma", 0.f},

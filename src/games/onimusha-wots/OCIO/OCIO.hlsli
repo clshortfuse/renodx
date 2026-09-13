@@ -43,7 +43,21 @@ renodx::tonemap::aces::ODTConfig CreateODTConfig(
 // User grading -> ACES -> 2.2 EOTF emulation -> apply per channel purity onto luminance curve -> grain -> diffuse white scale + PQ encode
 float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, float cbuffer_diffuse_white_nits, float2 uv) {
   float3 tonemapped_bt2020;
-  if (TONE_MAP_TYPE == 1.f) {
+  if (TONE_MAP_TYPE == 1.f) {  // RenoDX (Enhanced)
+    const float highlight_contrast = 43.f / 50.f;
+    const float cone_response_exponent = 1.385f;
+
+    float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
+    float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_custom_test30(
+        untonemapped_bt709,
+        RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
+        cone_response_exponent * RENODX_TONE_MAP_CONTRAST, 0.10f * pow(0.72f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+        highlight_contrast * RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
+        RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA,
+        0.525f, 0.1f, 0.f, 1.f, renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_DISPLAY_P3, 1.5f, 0.35f);
+    tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
+
+  } else {  // RenoDX (Vanilla+)
     untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
 
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
@@ -60,54 +74,44 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
     // We fix this by basing the exp-shifted curve on reference ACES_MAX and ACES_MIN values
     // We then scale brightness like SDR as a linear scalar
     // ACES_MAX and ACES_MIN are pre-adjusted in order to account for the post-tonemap diffuse white scalar which we define as `10.f * ACES_MID`
-    float ACES_MID;
-    float EXP_SHIFT_REFERENCE_MAX;
-    float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
-    if (TONE_MAP_ACES_MID_GRAY == 0.f) {
-      ACES_MID = 4.8f;
-      EXP_SHIFT_REFERENCE_MAX = 48.f;
-    } else if (TONE_MAP_ACES_MID_GRAY == 1.f) {
-      ACES_MID = 10.f;
-      EXP_SHIFT_REFERENCE_MAX = 100.f;
-    } else {
-      ACES_MID = 15.f;
-      EXP_SHIFT_REFERENCE_MAX = 1000.f;
-    }
-    const float ACES_DIFFUSE = ACES_MID * 10.f;
     const float ACES_MIN = 0.0001f;
     float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
     float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    if (TONE_MAP_TYPE == 3.f) {  // RenoDX (Vanilla+, Matches SDR)
+      const float ACES_MID = 10.f;
+      const float EXP_SHIFT_REFERENCE_MAX = 100.f;
+      const float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
+      const float ACES_DIFFUSE = ACES_MID * 10.f;
 
-    if (RENODX_GAMMA_CORRECTION == 1.f) {
-      aces_max = renodx::color::correct::Gamma(aces_max, true);
-      aces_min = renodx::color::correct::Gamma(aces_min, true);
-    } else if (RENODX_GAMMA_CORRECTION == 2.f) {
-      aces_min /= 10000.f;
+      {
+        aces_max = renodx::color::correct::Gamma(aces_max, true);
+        aces_min = renodx::color::correct::Gamma(aces_min, true);
+      }
+
+      renodx::tonemap::aces::ODTConfig ODT_config = renodx_custom::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
+
+      float3 tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / ACES_DIFFUSE;
+      float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+
+      {
+        tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
+      }
+
+      tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
+
+    } else {  // RenoDX (Vanilla+, Matches HDR)
+      const float ACES_MID = 15.f;
+      const float EXP_SHIFT_REFERENCE_MAX = 1000.f;
+      const float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
+      const float ACES_DIFFUSE = ACES_MID * 10.f;
+
+      renodx::tonemap::aces::ODTConfig ODT_config = renodx_custom::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
+
+      float hdr_exposure_bias = 0.5f;
+      untonemapped_ap1 *= hdr_exposure_bias;
+      float3 tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / ACES_DIFFUSE;
+      tonemapped_bt2020 = renodx::color::bt2020::from::AP1(tonemapped_ap1);
     }
-
-    renodx::tonemap::aces::ODTConfig ODT_config = renodx_custom::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
-
-    float3 tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / ACES_DIFFUSE;
-    float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
-
-    if (RENODX_GAMMA_CORRECTION == 1.f) {
-      tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
-    }
-
-    tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
-  } else {
-    const float highlight_contrast = 43.f / 50.f;
-    const float cone_response_exponent = 1.26f;
-
-    float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
-    float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_custom_test30(
-        untonemapped_bt709,
-        RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
-        cone_response_exponent * RENODX_TONE_MAP_CONTRAST, 0.10f * pow(0.78f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
-        highlight_contrast * RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
-        RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA,
-        0.51f, 0.1f, 0.f, 1.f, renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_DISPLAY_P3, 1.5f, 0.35f);
-    tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
   }
 
   if (CUSTOM_GRAIN_STRENGTH > 0.f) {
