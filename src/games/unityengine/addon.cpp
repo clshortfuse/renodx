@@ -766,6 +766,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CountLinearOnDraw(0x5A977943),
     CountLinearOnDraw(0x08F6AF40),
     CountLinearOnDraw(0x31B9B1AB),
+    CountLinearOnDraw(0x36C5A4AA),
     CountLinearOnDraw(0x38B55FCE),
     CountLinearOnDraw(0x44D2D279),
     CountLinearOnDraw(0x48DCE4C7),
@@ -790,6 +791,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CountLinearOnDraw(0x28075F34),
     CountLinearOnDraw(0x40072B90),
     CountLinearOnDraw(0x44080C9A),
+    CountLinearOnDraw(0x49550CBC),
     CountLinearOnDraw(0x774090A7),
     CountLinearOnDraw(0x2548186A),
     CountLinearOnDraw(0x78363901),
@@ -819,6 +821,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CountLinearOnDraw(0xFFB14DDC),
     CountLinearOnDraw(0xA7E4A5B2),
     CountLinearOnDraw(0x3068FF2D),
+    CountLinearOnDraw(0x1993762F),
       /// Builder 3D ///
         // No Tonemap
     SneakyBuilder1OnDraw(0xE6786595),
