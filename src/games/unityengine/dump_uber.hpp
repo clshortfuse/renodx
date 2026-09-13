@@ -92,7 +92,7 @@ inline bool IsInternalLutDimensions(std::uint32_t width, std::uint32_t height) {
 }
 
 inline bool IsInternalLutDimensions(std::uint32_t width, std::uint32_t height, std::uint32_t depth) {
-  return (width == 33u && height == 33u && depth == 33u);
+  return (width == 33u && height == 33u && depth == 33u) || (width == 32u && height == 32u && depth == 32u);
 }
 
 inline bool IsInternalLutDesc(const reshade::api::resource_desc& desc) {
