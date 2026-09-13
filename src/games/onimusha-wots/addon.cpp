@@ -287,6 +287,15 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "RTSkipDenoiser",
+        .binding = &shader_injection.rt_skip_denoiser,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Skip Denoiser",
+        .section = "Ray Tracing",
+        .labels = {"Off", "Skip Deflicker", "Skip Deflicker and Bilateral Filter", "Skip Deflicker, Bilateral Filter, and Temporal Accumulation"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -341,6 +350,7 @@ renodx::utils::settings::Settings settings = {
               {"ToneMapType", 2.f},
               {"FxNoise", 0.f},
               {"FxGrainStrength", 25.f},
+              {"FogBrightness", 75.f},
           });
         },
     },
@@ -433,6 +443,7 @@ void OnPresetOff() {
       {"FxNoise", 100.f},
       {"FxGrainStrength", 0.f},
       {"FogBrightness", 100.f},
+      {"RTSkipDenoiser", 0.f},
   });
 }
 

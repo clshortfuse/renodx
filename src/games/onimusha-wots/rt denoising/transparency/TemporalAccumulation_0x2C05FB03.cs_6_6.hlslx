@@ -1,0 +1,44 @@
+#include "../denoising.hlsli"
+
+Texture2D<float> DepthSRV : register(t0);
+
+Texture2D<float4> ColorSRV : register(t1);
+
+Texture2D<float4> HistoryColorSRV : register(t2);
+
+RWTexture2D<float4> ColorUAV : register(u0);
+
+cbuffer RayTracingTransparentCB : register(b0) {
+  uint2 rtScreenSize : packoffset(c000.x);
+  float2 rtScreenInverseSize : packoffset(c000.z);
+  float2 resScaler : packoffset(c001.x);
+  float2 uvAdjuster : packoffset(c001.z);
+  float2 prevRTScreenSize : packoffset(c002.x);
+  float boost : packoffset(c002.z);
+  float reserved : packoffset(c002.w);
+};
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float4 _22;
+  float4 _27;
+  if (((uint)(int)(SV_DispatchThreadID.x) < (uint)rtScreenSize.x) && ((uint)(int)(SV_DispatchThreadID.y) < (uint)rtScreenSize.y)) {
+    if (!(((DepthSRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0))).x) <= 0.0f)) {
+      _22 = ColorSRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0));
+      _27 = HistoryColorSRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0));
+      ColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(lerp(_27.xyz, _22.xyz, 0.019999999552965164f), 1.0f);
+    }
+  }
+}

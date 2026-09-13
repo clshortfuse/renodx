@@ -33,6 +33,8 @@ struct ShaderInjectData {
   float custom_random;
   float custom_grain_strength;
   float custom_fog_brightness;
+
+  float rt_skip_denoiser;
 };
 
 #ifndef __cplusplus
@@ -70,6 +72,11 @@ cbuffer shader_injection : register(b0, space50) {
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
 
 #define CUSTOM_FOG_BRIGHTNESS shader_injection.custom_fog_brightness
+
+#define RT_SKIP_DENOISER              shader_injection.rt_skip_denoiser
+#define RT_SKIP_DEFLICKER             (RT_SKIP_DENOISER >= 1.f)
+#define RT_SKIP_BILATERAL_FILTER      (RT_SKIP_DENOISER >= 2.f)
+#define RT_SKIP_TEMPORAL_ACCUMULATION (RT_SKIP_DENOISER >= 3.f)
 
 #include "../../shaders/renodx.hlsl"
 

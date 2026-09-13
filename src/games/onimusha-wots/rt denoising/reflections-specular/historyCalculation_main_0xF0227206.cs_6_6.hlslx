@@ -1,0 +1,90 @@
+#include "../denoising.hlsli"
+
+Texture2D<float2> historyMotionSRV : register(t0);
+
+RWTexture2D<float> specularHistoryCountUAV : register(u0);
+
+RWTexture2D<float2> historyMotionUAV : register(u1);
+
+RWTexture2D<float4> specularWeightUAV : register(u2);
+
+cbuffer RayTracingDenoiserConstantBufferInfo : register(b0) {
+  uint WaveletStep : packoffset(c000.x);
+  float AODistance : packoffset(c000.y);
+  uint UserStencilMask : packoffset(c000.z);
+  float compressEV : packoffset(c000.w);
+  uint diff_RT_WIDTH : packoffset(c001.x);
+  uint diff_RT_HEIGHT : packoffset(c001.y);
+  float diff_INV_RT_WIDTH : packoffset(c001.z);
+  float diff_INV_RT_HEIGHT : packoffset(c001.w);
+  uint spec_RT_WIDTH : packoffset(c002.x);
+  uint spec_RT_HEIGHT : packoffset(c002.y);
+  float spec_INV_RT_WIDTH : packoffset(c002.z);
+  float spec_INV_RT_HEIGHT : packoffset(c002.w);
+  float diffuseMultipler : packoffset(c003.x);
+  float specularMultipler : packoffset(c003.y);
+  float modelScaler : packoffset(c003.z);
+  float depthRejectionThresold : packoffset(c003.w);
+  float specularRoughnessThreshold : packoffset(c004.x);
+  uint disocclusionStep : packoffset(c004.y);
+  float maxDiffuseHistory : packoffset(c004.z);
+  float maxSpecularHistory : packoffset(c004.w);
+  float4 Rotator0 : packoffset(c005.x);
+  float4 Rotator1 : packoffset(c006.x);
+  float4 Rotator2 : packoffset(c007.x);
+  float4 Rotator3 : packoffset(c008.x);
+  row_major float4x4 prevViewProjInvMat : packoffset(c009.x);
+  uint diffuseMaxIterationCount : packoffset(c013.x);
+  uint specularMaxIterationCount : packoffset(c013.y);
+  uint ps5HeatmapMode : packoffset(c013.z);
+  float heatmapMaxIntersectionCount : packoffset(c013.w);
+  float2 diffResolutionRatio : packoffset(c014.x);
+  float GIHistoryThreshold : packoffset(c014.z);
+  float GIFilterCenterWeight : packoffset(c014.w);
+  float VFXDiffuseBoost : packoffset(c015.x);
+  float VFXSpecularBoost : packoffset(c015.y);
+  uint VFXSpecularMipBias : packoffset(c015.z);
+  float VFXDiffuseResolutionRatio : packoffset(c015.w);
+  float VFXSpecularResolutionRatio : packoffset(c016.x);
+  float VFXInvalidateTemporalRatio : packoffset(c016.y);
+  float VFXPrevSpecularResolutionRatio : packoffset(c016.z);
+  float VFXTemporalCompositeRate : packoffset(c016.w);
+  uint medianFilterStepSize : packoffset(c017.x);
+  float specularSecondaryBounceRoughnessThreshold : packoffset(c017.y);
+  float2 diffInvResolutionRatio : packoffset(c017.z);
+  float2 specResolutionRatio : packoffset(c018.x);
+  float2 specInvResolutionRatio : packoffset(c018.z);
+  float specularTraceRoughnessThreshold : packoffset(c019.x);
+  uint diffuseDisocclusionFrameRange : packoffset(c019.y);
+  float diffuseDisocclusionFilteringStrength : packoffset(c019.z);
+  float reserved0 : packoffset(c019.w);
+  float iblLeakingAmountDiff : packoffset(c020.x);
+  float iblLeakingAmountSpec : packoffset(c020.y);
+  float iblLeakingDistanceDiff : packoffset(c020.z);
+  float iblLeakingDistanceSpec : packoffset(c020.w);
+  float2 diffUVAdjuster : packoffset(c021.x);
+  float2 specUVAdjuster : packoffset(c021.z);
+};
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+[numthreads(16, 16, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float2 _22;
+  if (((int)(int)(SV_DispatchThreadID.y) < (int)spec_RT_HEIGHT) && (((int)((int)(SV_DispatchThreadID.y) | (int)(SV_DispatchThreadID.x)) > (int)-1) && ((int)(int)(SV_DispatchThreadID.x) < (int)spec_RT_WIDTH))) {
+    specularHistoryCountUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = 1.0f;
+    specularWeightUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    _22 = historyMotionSRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0));
+    historyMotionUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float2(_22.x, _22.y);
+  }
+}

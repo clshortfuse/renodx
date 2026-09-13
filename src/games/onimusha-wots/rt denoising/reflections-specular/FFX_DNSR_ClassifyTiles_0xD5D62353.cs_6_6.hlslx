@@ -1,0 +1,282 @@
+#include "../denoising.hlsli"
+
+Texture2D<float4> VisibleSRV : register(t0);
+
+Texture2D<float4> g_normal_roughness_source_0 : register(t1);
+
+Texture2D<float4> g_normal_roughness_source_1 : register(t2);
+
+Texture2D<float> g_depth_buffer : register(t3);
+
+Texture2D<float> g_variance_history : register(t4);
+
+RWTexture2D<float4> g_normal_roughness : register(u0);
+
+RWTexture2D<float4> g_intersection_output : register(u1);
+
+RWStructuredBuffer<uint> g_ray_list : register(u2);
+
+RWByteAddressBuffer g_ray_counter : register(u3);
+
+RWStructuredBuffer<uint> g_denoiser_tile_list : register(u4);
+
+RWStructuredBuffer<uint> g_ray_list_forward : register(u5);
+
+RWStructuredBuffer<uint> g_denoiser_tile_list_forward : register(u6);
+
+RWTexture2D<float3> g_out_average_radiance : register(u7);
+
+RWTexture2D<float> RWReflectionAlpha : register(u8);
+
+cbuffer SceneInfo : register(b0) {
+  row_major float4x4 viewProjMat : packoffset(c000.x);
+  row_major float3x4 transposeViewMat : packoffset(c004.x);
+  row_major float3x4 transposeViewInvMat : packoffset(c007.x);
+  float4 projElement[2] : packoffset(c010.x);
+  float4 projInvElements[2] : packoffset(c012.x);
+  row_major float4x4 viewProjInvMat : packoffset(c014.x);
+  row_major float4x4 prevViewProjMat : packoffset(c018.x);
+  float3 ZToLinear : packoffset(c022.x);
+  float subdivisionLevel : packoffset(c022.w);
+  float2 screenSize : packoffset(c023.x);
+  float2 screenInverseSize : packoffset(c023.z);
+  float2 cullingHelper : packoffset(c024.x);
+  float cameraNearPlane : packoffset(c024.z);
+  float cameraFarPlane : packoffset(c024.w);
+  float4 viewFrustum[8] : packoffset(c025.x);
+  float4 clipplane : packoffset(c033.x);
+  float2 vrsVelocityThreshold : packoffset(c034.x);
+  uint GPUVisibleMask : packoffset(c034.z);
+  uint resolutionRatioPacked : packoffset(c034.w);
+  float3 worldOffset : packoffset(c035.x);
+  uint sceneInfoMisc : packoffset(c035.w);
+  uint4 rayTracingParams : packoffset(c036.x);
+  float4 sceneExtendedData : packoffset(c037.x);
+  float2 projectionSpaceJitterOffset : packoffset(c038.x);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  float SceneInfo_Reserve2 : packoffset(c039.x);
+};
+
+cbuffer FFX_SSSR_Constants : register(b1) {
+  uint2 g_buffer_dimensions : packoffset(c000.x);
+  float2 g_inv_buffer_dimensions : packoffset(c000.z);
+  float g_temporal_stability_factor : packoffset(c001.x);
+  float g_depth_buffer_thickness : packoffset(c001.y);
+  float g_roughness_threshold : packoffset(c001.z);
+  float g_temporal_variance_threshold : packoffset(c001.w);
+  uint g_frame_index : packoffset(c002.x);
+  uint g_max_traversal_intersections : packoffset(c002.y);
+  uint g_min_traversal_occupancy : packoffset(c002.z);
+  uint g_most_detailed_mip : packoffset(c002.w);
+  uint g_samples_per_quad : packoffset(c003.x);
+  uint g_temporal_variance_guided_tracing_enabled : packoffset(c003.y);
+  uint g_vignetting_enabled : packoffset(c003.z);
+  float g_max_ray_length : packoffset(c003.w);
+  float g_secondary_ray_offset : packoffset(c004.x);
+  float g_fade_border_roughness : packoffset(c004.y);
+  uint g_reserve_0 : packoffset(c004.z);
+  uint g_reserve_1 : packoffset(c004.w);
+};
+
+SamplerState PointClamp : register(s1, space32);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+groupshared uint _global_0;
+groupshared uint _global_1;
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  uint _27;
+  uint _28;
+  bool _42;
+  int _43;
+  uint _44;
+  uint _45;
+  float4 _54;
+  bool _65;
+  int _66;
+  int _89;
+  int _90;
+  float _91;
+  float _92;
+  float _93;
+  float _94;
+  bool _125;
+  int _151;
+  int _182;
+  int _210;
+  float4 _73;
+  int _80;
+  float4 _83;
+  bool _97;
+  bool _98;
+  int _99;
+  int _100;
+  bool _101;
+  bool _111;
+  bool _113;
+  bool _126;
+  uint _154;
+  float _158;
+  bool _169;
+  bool _171;
+  bool _172;
+  bool _173;
+  bool _174;
+  bool _175;
+  int _176;
+  int _177;
+  int _180;
+  int _183;
+  uint _200;
+  bool _203;
+  int _204;
+  int _205;
+  int _208;
+  int _211;
+  bool _230;
+  int _236;
+  int _252;
+  _27 = SV_GroupThreadID.x + ((int)(SV_GroupID.x) << 3);
+  _28 = SV_GroupThreadID.y + ((int)(SV_GroupID.y) << 3);
+  _42 = (((g_depth_buffer.SampleLevel(PointClamp, float2(((float((int)(_27)) + 0.5f) * g_inv_buffer_dimensions.x), ((float((int)(_28)) + 0.5f) * g_inv_buffer_dimensions.y)), 0.0f)).x) > 0.0f);
+  _43 = (int)(uint)(_42);
+  _44 = _27 << 1;
+  _45 = _28 << 1;
+  _54 = VisibleSRV.GatherGreen(
+      PointClamp,
+      float2(screenInverseSize.x * float((int)_44), screenInverseSize.y * float((int)_45)),
+      int2(1, 1));
+  _65 = (_54.w > 0.0f) || ((_54.z > 0.0f) || ((_54.x > 0.0f) || (_54.y > 0.0f)));
+  _66 = (int)(uint)(_65);
+  if (_65) {
+    RWReflectionAlpha[int2(_27, _28)] = 0.0f;
+  }
+  if (_42) {
+    if (_65) {
+      _73 = g_normal_roughness_source_1.Load(int3(_44, _45, 0));
+      _80 = (int)(uint(_73.w * 3.0f)) & 1;
+      _89 = _80;
+      _90 = _80;
+      _91 = _73.x;
+      _92 = _73.y;
+      _93 = _73.z;
+      _94 = _73.w;
+    } else {
+      _83 = g_normal_roughness_source_0.Load(int3(_44, _45, 0));
+      _89 = _43;
+      _90 = _66;
+      _91 = _83.x;
+      _92 = _83.y;
+      _93 = _83.z;
+      _94 = _83.w;
+    }
+  } else {
+    _89 = _43;
+    _90 = _66;
+    _91 = 1.0f;
+    _92 = 1.0f;
+    _93 = 1.0f;
+    _94 = 1.0f;
+  }
+  g_normal_roughness[int2(_27, _28)] = float4(_91, _92, _93, _94);
+  _97 = (_90 != 0);
+  _98 = (_89 != 0);
+  _global_0 = 0;
+  _global_1 = 0;
+  _99 = WaveGetLaneIndex();
+  _100 = WaveReadLaneFirst(_99);
+  _101 = (_100 == _99);
+  _111 = ((_93 * _93) < (g_roughness_threshold * g_roughness_threshold));
+  _113 = _98 && ((((uint)_27 < (uint)g_buffer_dimensions.x) && ((uint)_28 < (uint)g_buffer_dimensions.y)) && _111);
+  switch ((int)(g_samples_per_quad)) {
+    case 1: {
+      _125 = (((_28 | _27) & 1) == 0);
+      break;
+    }
+    case 2: {
+      _125 = (((_28 ^ _27) & 1) == 0);
+      break;
+    }
+    default: {
+      _125 = true;
+      break;
+    }
+  }
+  _126 = _125 && _113;
+  if (!(_126 || (!((g_temporal_variance_guided_tracing_enabled != 0) && _113)))) {
+    _151 = ((int)(uint)((int)(((g_variance_history.SampleLevel(PointClamp, float2((g_inv_buffer_dimensions.x * (((float)((uint)_27)) + 0.5f)), (g_inv_buffer_dimensions.y * (((float)((uint)_28)) + 0.5f))), 0.0f)).x) > g_temporal_variance_threshold)));
+  } else {
+    _151 = ((int)(uint)(_126));
+  }
+  GroupMemoryBarrierWithGroupSync();
+  if (_98 && _111) {
+    uint _154;
+    InterlockedAdd(_global_0, 1, _154);
+  }
+  uint _samples_per_quad = g_samples_per_quad;
+  _158 = (float)((bool)((uint)(_113 && (_151 == 0))));
+  _169 = (QuadReadAcrossX(_158) != 0.0f) && (_125 && (_samples_per_quad != 4));
+  _171 = _125 && (_samples_per_quad == 1);
+  _172 = (QuadReadAcrossY(_158) != 0.0f) && _171;
+  _173 = (QuadReadAcrossDiagonal(_158) != 0.0f) && _171;
+  _174 = (_151 != 0);
+  _175 = _97 && _174;
+  _176 = WavePrefixCountBits(_175);
+  _177 = WaveActiveCountBits(_175);
+  if (_101) {
+    int _180;
+    g_ray_counter.InterlockedAdd(4, _177, _180);
+    _182 = _180;
+  } else {
+    _182 = 0;
+  }
+  _183 = WaveReadLaneFirst(_182);
+  if (_175) {
+    g_ray_list_forward[((int)(_183 + _176))] = (((((((int)(_28 << 15)) & 536838144) | (_27 & 32767)) | (((int)(uint)(_169)) << 29)) | (((int)(uint)(_172)) << 30)) | ((int)(((int)(uint)(_173)) << 31)));
+    uint _200;
+    InterlockedAdd(_global_1, 1, _200);
+  }
+  _203 = _174 && (!_97);
+  _204 = WavePrefixCountBits(_203);
+  _205 = WaveActiveCountBits(_203);
+  if (_101) {
+    int _208;
+    g_ray_counter.InterlockedAdd(0, _205, _208);
+    _210 = _208;
+  } else {
+    _210 = 0;
+  }
+  _211 = WaveReadLaneFirst(_210);
+  if (_203) {
+    g_ray_list[((int)(_211 + _204))] = (((((((int)(_28 << 15)) & 536838144) | (_27 & 32767)) | (((int)(uint)(_169)) << 29)) | (((int)(uint)(_172)) << 30)) | ((int)(((int)(uint)(_173)) << 31)));
+  }
+  GroupMemoryBarrierWithGroupSync();
+  _230 = (((int)(SV_GroupThreadID.y) | (int)(SV_GroupThreadID.x)) == 0);
+  if (_230 && (_global_0 != 0)) {
+    int _236;
+    g_ray_counter.InterlockedAdd(8, 1, _236);
+    g_denoiser_tile_list[_236] = (((((int)(_28 << 15)) & 1073709056) | (_27 & 32767)) | select((_global_1 != 0), 1073741824, 0));
+  }
+  if (_230 && (_global_1 != 0)) {
+    int _252;
+    g_ray_counter.InterlockedAdd(12, 1, _252);
+    g_denoiser_tile_list_forward[_252] = ((((int)(_28 << 15)) & 1073709056) | (_27 & 32767));
+  }
+  g_intersection_output[int2(_27, _28)] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+  if ((int)(SV_GroupIndex) == 0) {
+    g_out_average_radiance[int2((int)(SV_GroupID.x), (int)(SV_GroupID.y))] = float3(0.0f, 0.0f, 0.0f);
+  }
+}

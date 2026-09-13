@@ -1,0 +1,593 @@
+#include "../denoising.hlsli"
+
+Texture2D<float> depthSRV : register(t0);
+
+Texture2D<float4> normalRoughnessSRV : register(t1);
+
+Texture2D<float2> rayDirectionSRV : register(t2);
+
+Texture2D<float4> specularGlossySRV : register(t3);
+
+Texture2D<float4> specularRoughSRV : register(t4);
+
+RWTexture2D<float4> specularColorUAV : register(u0);
+
+cbuffer SceneInfo : register(b0) {
+  row_major float4x4 viewProjMat : packoffset(c000.x);
+  row_major float3x4 transposeViewMat : packoffset(c004.x);
+  row_major float3x4 transposeViewInvMat : packoffset(c007.x);
+  float4 projElement[2] : packoffset(c010.x);
+  float4 projInvElements[2] : packoffset(c012.x);
+  row_major float4x4 viewProjInvMat : packoffset(c014.x);
+  row_major float4x4 prevViewProjMat : packoffset(c018.x);
+  float3 ZToLinear : packoffset(c022.x);
+  float subdivisionLevel : packoffset(c022.w);
+  float2 screenSize : packoffset(c023.x);
+  float2 screenInverseSize : packoffset(c023.z);
+  float2 cullingHelper : packoffset(c024.x);
+  float cameraNearPlane : packoffset(c024.z);
+  float cameraFarPlane : packoffset(c024.w);
+  float4 viewFrustum[8] : packoffset(c025.x);
+  float4 clipplane : packoffset(c033.x);
+  float2 vrsVelocityThreshold : packoffset(c034.x);
+  uint GPUVisibleMask : packoffset(c034.z);
+  uint resolutionRatioPacked : packoffset(c034.w);
+  float3 worldOffset : packoffset(c035.x);
+  uint sceneInfoMisc : packoffset(c035.w);
+  uint4 rayTracingParams : packoffset(c036.x);
+  float4 sceneExtendedData : packoffset(c037.x);
+  float2 projectionSpaceJitterOffset : packoffset(c038.x);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  float SceneInfo_Reserve2 : packoffset(c039.x);
+};
+
+cbuffer EnvironmentInfo : register(b1) {
+  uint timeMillisecond : packoffset(c000.x);
+  uint frameCount : packoffset(c000.y);
+  uint isOddFrame : packoffset(c000.z);
+  uint reserveEnvironmentInfo : packoffset(c000.w);
+  float breakingPBRSpecularIntensity : packoffset(c001.x);
+  float breakingPBRIBLReflectanceBias : packoffset(c001.y);
+  float breakingPBRIBLIntensity : packoffset(c001.z);
+  float breakingPBR_Reserved : packoffset(c001.w);
+  uint vrsTier2Enable : packoffset(c002.x);
+  uint dynamicTextureTableNullBlackHandle : packoffset(c002.y);
+  uint prevTimeMillisecond : packoffset(c002.z);
+  uint bindlessMaterialMaxNum : packoffset(c002.w);
+  float rtLightRadius : packoffset(c003.x);
+  float accurateVelocityDistanceSq : packoffset(c003.y);
+  uint texture1DDummyHandle : packoffset(c003.z);
+  uint texture1DArrayDummyHandle : packoffset(c003.w);
+  uint texture2DDummyHandle : packoffset(c004.x);
+  uint texture2DArrayDummyHandle : packoffset(c004.y);
+  uint texture3DDummyHandle : packoffset(c004.z);
+  uint textureCubeDummyHandle : packoffset(c004.w);
+  uint textureCubeArrayDummyHandle : packoffset(c005.x);
+  uint byteAddressBufferDummyHandle : packoffset(c005.y);
+  float EnvironmentInfoReserved1 : packoffset(c005.z);
+  float EnvironmentInfoReserved2 : packoffset(c005.w);
+  float4 userGlobalParams[32] : packoffset(c006.x);
+  uint4 dynamicTextureTableHandles[256] : packoffset(c038.x);
+  uint4 bakedResourceSharedTablesHandles[32] : packoffset(c294.x);
+};
+
+cbuffer CheckerBoardInfo : register(b2) {
+  float2 cbr : packoffset(c000.x);
+  float cbr_scale : packoffset(c000.z);
+  float cbr_using : packoffset(c000.w);
+  float2 cbr_padding : packoffset(c001.x);
+  float cbr_mipmapReadjustRatio : packoffset(c001.z);
+  int cbr_mipmapReadjustable : packoffset(c001.w);
+};
+
+cbuffer RayTracingDenoiserConstantBufferInfo : register(b3) {
+  uint WaveletStep : packoffset(c000.x);
+  float AODistance : packoffset(c000.y);
+  uint UserStencilMask : packoffset(c000.z);
+  float compressEV : packoffset(c000.w);
+  uint diff_RT_WIDTH : packoffset(c001.x);
+  uint diff_RT_HEIGHT : packoffset(c001.y);
+  float diff_INV_RT_WIDTH : packoffset(c001.z);
+  float diff_INV_RT_HEIGHT : packoffset(c001.w);
+  uint spec_RT_WIDTH : packoffset(c002.x);
+  uint spec_RT_HEIGHT : packoffset(c002.y);
+  float spec_INV_RT_WIDTH : packoffset(c002.z);
+  float spec_INV_RT_HEIGHT : packoffset(c002.w);
+  float diffuseMultipler : packoffset(c003.x);
+  float specularMultipler : packoffset(c003.y);
+  float modelScaler : packoffset(c003.z);
+  float depthRejectionThresold : packoffset(c003.w);
+  float specularRoughnessThreshold : packoffset(c004.x);
+  uint disocclusionStep : packoffset(c004.y);
+  float maxDiffuseHistory : packoffset(c004.z);
+  float maxSpecularHistory : packoffset(c004.w);
+  float4 Rotator0 : packoffset(c005.x);
+  float4 Rotator1 : packoffset(c006.x);
+  float4 Rotator2 : packoffset(c007.x);
+  float4 Rotator3 : packoffset(c008.x);
+  row_major float4x4 prevViewProjInvMat : packoffset(c009.x);
+  uint diffuseMaxIterationCount : packoffset(c013.x);
+  uint specularMaxIterationCount : packoffset(c013.y);
+  uint ps5HeatmapMode : packoffset(c013.z);
+  float heatmapMaxIntersectionCount : packoffset(c013.w);
+  float2 diffResolutionRatio : packoffset(c014.x);
+  float GIHistoryThreshold : packoffset(c014.z);
+  float GIFilterCenterWeight : packoffset(c014.w);
+  float VFXDiffuseBoost : packoffset(c015.x);
+  float VFXSpecularBoost : packoffset(c015.y);
+  uint VFXSpecularMipBias : packoffset(c015.z);
+  float VFXDiffuseResolutionRatio : packoffset(c015.w);
+  float VFXSpecularResolutionRatio : packoffset(c016.x);
+  float VFXInvalidateTemporalRatio : packoffset(c016.y);
+  float VFXPrevSpecularResolutionRatio : packoffset(c016.z);
+  float VFXTemporalCompositeRate : packoffset(c016.w);
+  uint medianFilterStepSize : packoffset(c017.x);
+  float specularSecondaryBounceRoughnessThreshold : packoffset(c017.y);
+  float2 diffInvResolutionRatio : packoffset(c017.z);
+  float2 specResolutionRatio : packoffset(c018.x);
+  float2 specInvResolutionRatio : packoffset(c018.z);
+  float specularTraceRoughnessThreshold : packoffset(c019.x);
+  uint diffuseDisocclusionFrameRange : packoffset(c019.y);
+  float diffuseDisocclusionFilteringStrength : packoffset(c019.z);
+  float reserved0 : packoffset(c019.w);
+  float iblLeakingAmountDiff : packoffset(c020.x);
+  float iblLeakingAmountSpec : packoffset(c020.y);
+  float iblLeakingDistanceDiff : packoffset(c020.z);
+  float iblLeakingDistanceSpec : packoffset(c020.w);
+  float2 diffUVAdjuster : packoffset(c021.x);
+  float2 specUVAdjuster : packoffset(c021.z);
+};
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+[noinline]
+precise float AddPrecise0(float lhs, float rhs) {
+  return lhs + rhs;
+}
+[noinline]
+precise float AddPrecise1(float lhs, float rhs) {
+  return lhs + rhs;
+}
+[noinline]
+precise float AddPrecise2(float lhs, float rhs) {
+  return lhs + rhs;
+}
+
+static const float _global_0[16] = { -0.6455659866333008f, 0.0266201663762331f, -0.41894465684890747f, 0.8573530316352844f, 0.04460543394088745f, 0.5316708087921143f, 0.5317319631576538f, 0.3773360848426819f, 0.649772047996521f, -0.1614876240491867f, 0.12475734949111938f, -0.2891661524772644f, 0.2474198341369629f, -0.8544320464134216f, -0.47650110721588135f, -0.6853070855140686f };
+
+[numthreads(16, 16, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float _60;
+  float _155;
+  float _156;
+  float _318;
+  float _319;
+  float _320;
+  float _321;
+  float _322;
+  float _323;
+  float _355;
+  float _356;
+  float _375;
+  float _416;
+  float _417;
+  float _418;
+  float _446;
+  float _447;
+  float _448;
+  float _449;
+  int _450;
+  float _620;
+  float _690;
+  float _691;
+  float _692;
+  float _713;
+  float _714;
+  float _715;
+  float _716;
+  float _28;
+  float _34;
+  float _35;
+  float _36;
+  float _38;
+  float _39;
+  float _46;
+  bool _49;
+  float _66;
+  float _68;
+  float _70;
+  float _71;
+  float _107;
+  float _108;
+  float _109;
+  float _110;
+  float _117;
+  float _118;
+  float _119;
+  float _121;
+  float _122;
+  float _123;
+  float _124;
+  float _130;
+  float4 _132;
+  float _139;
+  float _140;
+  float _142;
+  float _143;
+  float _144;
+  float _147;
+  float _158;
+  float _159;
+  float _160;
+  float _161;
+  float _176;
+  float _179;
+  float _183;
+  float _190;
+  float _191;
+  float _192;
+  float _195;
+  float4 _197;
+  float _199;
+  float _200;
+  float4 _204;
+  bool _208;
+  float _209;
+  float _213;
+  float _216;
+  float _223;
+  float _224;
+  float _225;
+  float _226;
+  float _228;
+  float _241;
+  float _242;
+  float _243;
+  float _245;
+  float _246;
+  float _247;
+  float _248;
+  float _255;
+  float _260;
+  float _261;
+  float _262;
+  float _264;
+  float _268;
+  float _269;
+  float _270;
+  float _273;
+  float _276;
+  float _279;
+  float _281;
+  float _282;
+  float _283;
+  float _284;
+  float _298;
+  float _304;
+  float _306;
+  float _307;
+  float _308;
+  float _309;
+  float _330;
+  float _331;
+  float _332;
+  float _333;
+  float _334;
+  float _335;
+  float _336;
+  float _359;
+  float _364;
+  float _380;
+  float _381;
+  float _397;
+  float _406;
+  float _409;
+  float _429;
+  float _438;
+  float _440;
+  float _441;
+  float _454;
+  float _458;
+  float _468;
+  float _469;
+  float _476;
+  float _477;
+  float _478;
+  float _506;
+  float _517;
+  float _519;
+  float _528;
+  float _529;
+  float _534;
+  float _535;
+  int _536;
+  int _537;
+  float4 _548;
+  bool _561;
+  float _562;
+  float _563;
+  uint _564;
+  uint _565;
+  float2 _567;
+  float _572;
+  float _573;
+  float _577;
+  float _579;
+  float _581;
+  float _585;
+  float _586;
+  float _588;
+  float _596;
+  float _606;
+  float _630;
+  float _631;
+  float _667;
+  float _679;
+  float4 _685;
+  float4 _698;
+  if (((int)(int)(SV_DispatchThreadID.y) < (int)spec_RT_HEIGHT) && (((int)((int)(SV_DispatchThreadID.y) | (int)(SV_DispatchThreadID.x)) > (int)-1) && ((int)(int)(SV_DispatchThreadID.x) < (int)spec_RT_WIDTH))) {
+    _28 = depthSRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0));
+    if (!(!(_28.x <= 0.0f))) {
+      _34 = specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))].x;
+      _35 = specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))].y;
+      _36 = specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))].z;
+      specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(_34, _35, _36, -1.0f);
+    } else {
+      _38 = (float)((uint)SV_DispatchThreadID.x);
+      _39 = (float)((uint)SV_DispatchThreadID.y);
+      _46 = floor(specResolutionRatio.y * _39);
+      _49 = cbr_using != 0.0f;
+      do {
+        _60 = 0.5f;
+        if (_49) {
+          _60 = ((((float)((uint)((uint)(((int)((uint)(isOddFrame) + (uint)(int(_46)))) & 1)))) * 0.5f) + 0.25f);
+        }
+        _66 = screenInverseSize.x * 2.0f;
+        _68 = screenInverseSize.y * 2.0f;
+        float centerProjectedXSum = AddPrecise0(floor(specResolutionRatio.x * _38), _60);
+        _70 = (_66 * centerProjectedXSum) + -1.0f;
+        _71 = 1.0f - (_68 * (_46 + 0.5f));
+        _107 = mad(_28.x, (viewProjInvMat[2].w), mad(_71, (viewProjInvMat[1].w), (_70 * (viewProjInvMat[0].w)))) + (viewProjInvMat[3].w);
+        _108 = (mad(_28.x, (viewProjInvMat[2].x), mad(_71, (viewProjInvMat[1].x), (_70 * (viewProjInvMat[0].x)))) + (viewProjInvMat[3].x)) / _107;
+        _109 = (mad(_28.x, (viewProjInvMat[2].y), mad(_71, (viewProjInvMat[1].y), (_70 * (viewProjInvMat[0].y)))) + (viewProjInvMat[3].y)) / _107;
+        _110 = (mad(_28.x, (viewProjInvMat[2].z), mad(_71, (viewProjInvMat[1].z), (_70 * (viewProjInvMat[0].z)))) + (viewProjInvMat[3].z)) / _107;
+        _117 = (transposeViewInvMat[0].w) - _108;
+        _118 = (transposeViewInvMat[1].w) - _109;
+        _119 = (transposeViewInvMat[2].w) - _110;
+        _121 = rsqrt(dot(float3(_117, _118, _119), float3(_117, _118, _119)));
+        _122 = _121 * _117;
+        _123 = _121 * _118;
+        _124 = _119 * _121;
+        _130 = sqrt(((_118 * _118) + (_117 * _117)) + (_119 * _119));
+        _132 = normalRoughnessSRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0));
+        _139 = (_132.x * 2.0f) + -1.0f;
+        _140 = (_132.y * 2.0f) + -1.0f;
+        _142 = 1.0f - abs(_139);
+        _143 = abs(_140);
+        _144 = _142 - _143;
+        do {
+          _155 = _139;
+          _156 = _140;
+          if (_144 < 0.0f) {
+            _147 = 1.0f - _143;
+            _155 = select((_139 >= 0.0f), _147, (-0.0f - _147));
+            _156 = select((_140 >= 0.0f), _142, (-0.0f - _142));
+          }
+          _158 = rsqrt(dot(float3(_155, _156, _144), float3(_155, _156, _144)));
+          _159 = _158 * _155;
+          _160 = _158 * _156;
+          _161 = _158 * _144;
+          _176 = mad(_161, (transposeViewMat[2].x), mad(_160, (transposeViewMat[1].x), ((transposeViewMat[0].x) * _159)));
+          _179 = mad(_161, (transposeViewMat[2].y), mad(_160, (transposeViewMat[1].y), ((transposeViewMat[0].y) * _159)));
+          _183 = mad(_161, (transposeViewMat[2].z), mad(_160, (transposeViewMat[1].z), ((transposeViewMat[0].z) * _159)));
+          if (floor(_132.w * 3.0999999046325684f) == 3.0f) {
+            _190 = specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))].x;
+            _191 = specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))].y;
+            _192 = specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))].z;
+            specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(_190, _191, _192, -1.0f);
+          } else {
+            _195 = min(max(_132.z, 0.0010000000474974513f), 0.9990000128746033f);
+            _197 = specularGlossySRV.Load(int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), 0));
+            _199 = _38 * 0.5f;
+            _200 = _39 * 0.5f;
+            _204 = specularRoughSRV.Load(int3((int)(uint(_199)), (int)(uint(_200)), 0));
+            _208 = (_132.z > specularRoughnessThreshold);
+            _209 = select(_208, _204.w, _197.w);
+            _213 = log2(39.4114990234375f - (_195 * 39.002899169921875f)) * 0.20688709616661072f;
+            _216 = 1.0f - abs(dot(float3(_176, _179, _183), float3(_122, _123, _124)));
+            _223 = saturate(((pow(_216, 10.864899635314941f)) * (1.0f - _213)) + _213);
+            _224 = -0.0f - _122;
+            _225 = -0.0f - _123;
+            _226 = -0.0f - _124;
+            _228 = dot(float3(_224, _225, _226), float3(_176, _179, _183)) * 2.0f;
+            _241 = (((_224 - _176) - (_228 * _176)) * _223) + _176;
+            _242 = (((_225 - _179) - (_228 * _179)) * _223) + _179;
+            _243 = (((_226 - _183) - (_228 * _183)) * _223) + _183;
+            _245 = rsqrt(dot(float3(_241, _242, _243), float3(_241, _242, _243)));
+            _246 = _241 * _245;
+            _247 = _242 * _245;
+            _248 = _243 * _245;
+            _255 = saturate(_132.z * 5.0f);
+            do {
+              if (_195 < 0.949999988079071f) {
+                _260 = -0.0f - _246;
+                _261 = -0.0f - _247;
+                _262 = -0.0f - _248;
+                _264 = dot(float3(_260, _261, _262), float3(_176, _179, _183)) * 2.0f;
+                _268 = _260 - (_264 * _176);
+                _269 = _261 - (_264 * _179);
+                _270 = _262 - (_264 * _183);
+                _273 = (_270 * _179) - (_269 * _183);
+                _276 = (_268 * _183) - (_270 * _176);
+                _279 = (_269 * _176) - (_268 * _179);
+                _281 = rsqrt(dot(float3(_273, _276, _279), float3(_273, _276, _279)));
+                _282 = _273 * _281;
+                _283 = _276 * _281;
+                _284 = _279 * _281;
+                _298 = (sqrt(saturate(_216)) * (_195 + -1.0f)) + 1.0f;
+                _318 = (_298 * _282);
+                _319 = (_298 * _283);
+                _320 = (_298 * _284);
+                _321 = ((_284 * _269) - (_283 * _270));
+                _322 = ((_282 * _270) - (_284 * _268));
+                _323 = ((_283 * _268) - (_282 * _269));
+              } else {
+                _304 = select((_183 >= 0.0f), 1.0f, -1.0f);
+                _306 = -1.0f / (_304 + _183);
+                _307 = _306 * _179;
+                _308 = _307 * _176;
+                _309 = _304 * _176;
+                _318 = (((_309 * _176) * _306) + 1.0f);
+                _319 = (_308 * _304);
+                _320 = (-0.0f - _309);
+                _321 = _308;
+                _322 = (_304 + (_307 * _179));
+                _323 = (-0.0f - _179);
+              }
+              _330 = modelScaler * (((_255 * _255) * (min(max((log2(_223 * _209) * 5.545177459716797f), 2.0f), 12.0f) * _130)) * (3.0f - (_255 * 2.0f)));
+              _331 = _330 * _318;
+              _332 = _330 * _319;
+              _333 = _330 * _320;
+              _334 = _330 * _321;
+              _335 = _330 * _322;
+              _336 = _330 * _323;
+              do {
+                _355 = _38;
+                _356 = _39;
+                if (_208) {
+                  _355 = (floor(_199) * 2.0f);
+                  _356 = (floor(_200) * 2.0f);
+                }
+                _359 = depthSRV.Load(int3((int)(uint(_355)), (int)(uint(_356)), 0));
+                _364 = floor(_356 * specResolutionRatio.y);
+                do {
+                  _375 = 0.5f;
+                  if (_49) {
+                    _375 = ((((float)((uint)((uint)(((int)((uint)(isOddFrame) + (uint)(int(_364)))) & 1)))) * 0.5f) + 0.25f);
+                  }
+                  float projectedCenterXSum = AddPrecise1(floor(_355 * specResolutionRatio.x), _375);
+                  _380 = (_66 * projectedCenterXSum) + -1.0f;
+                  _381 = 1.0f - (_68 * (_364 + 0.5f));
+                  _397 = mad(_359.x, (viewProjInvMat[2].w), mad(_381, (viewProjInvMat[1].w), (_380 * (viewProjInvMat[0].w)))) + (viewProjInvMat[3].w);
+                  _406 = max(9.999999747378752e-05f, _130);
+                  _409 = saturate(1.0f - (abs(dot(float3((((mad(_359.x, (viewProjInvMat[2].x), mad(_381, (viewProjInvMat[1].x), (_380 * (viewProjInvMat[0].x)))) + (viewProjInvMat[3].x)) / _397) - _108), (((mad(_359.x, (viewProjInvMat[2].y), mad(_381, (viewProjInvMat[1].y), (_380 * (viewProjInvMat[0].y)))) + (viewProjInvMat[3].y)) / _397) - _109), (((mad(_359.x, (viewProjInvMat[2].z), mad(_381, (viewProjInvMat[1].z), (_380 * (viewProjInvMat[0].z)))) + (viewProjInvMat[3].z)) / _397) - _110)), float3(_176, _179, _183))) / _406));
+                  do {
+                    if (!(_132.z <= specularRoughnessThreshold)) {
+                      _416 = 0.0f;
+                      _417 = 0.0f;
+                      _418 = 0.0f;
+                    } else {
+                      _416 = _197.x;
+                      _417 = _197.y;
+                      _418 = _197.z;
+                    }
+                    _429 = _195 * _195;
+                    _446 = (_409 + 9.999999747378752e-05f);
+                    _447 = ((_416 + _204.x) * _409);
+                    _448 = ((_417 + _204.y) * _409);
+                    _449 = ((_418 + _204.z) * _409);
+                    for (_450 = 0; _450 < 8; _450++) {
+                      _454 = _global_0[(uint)(_450 * 2)];
+                      _458 = _global_0[(uint)((_450 * 2) + 1)];
+                      _468 = (Rotator0.x * _454) + (Rotator0.y * _458);
+                      _469 = (Rotator0.z * _454) + (Rotator0.w * _458);
+                      _476 = mad(_469, select(_208, (_334 * 2.0f), _334), (_468 * select(_208, (_331 * 2.0f), _331))) + _108;
+                      _477 = mad(_469, select(_208, (_335 * 2.0f), _335), (_468 * select(_208, (_332 * 2.0f), _332))) + _109;
+                      _478 = mad(_469, select(_208, (_336 * 2.0f), _336), (_468 * select(_208, (_333 * 2.0f), _333))) + _110;
+                      _506 = mad(_478, (viewProjMat[2].w), mad(_477, (viewProjMat[1].w), ((viewProjMat[0].w) * _476))) + (viewProjMat[3].w);
+                      _517 = (float)((uint)(uint)(spec_RT_WIDTH));
+                      _519 = (float)((uint)(uint)(spec_RT_HEIGHT));
+                      _528 = min(max(((_517 * saturate((((mad(_478, (viewProjMat[2].x), mad(_477, (viewProjMat[1].x), ((viewProjMat[0].x) * _476))) + (viewProjMat[3].x)) / _506) * 0.5f) + 0.5f)) - _38), -30.0f), 30.0f) + _38;
+                      _529 = min(max(((_519 * saturate(0.5f - (((mad(_478, (viewProjMat[2].y), mad(_477, (viewProjMat[1].y), ((viewProjMat[0].y) * _476))) + (viewProjMat[3].y)) / _506) * 0.5f))) - _39), -30.0f), 30.0f) + _39;
+                      _534 = _528 * 0.5f;
+                      _535 = _529 * 0.5f;
+                      _536 = int(_534);
+                      _537 = int(_535);
+                      _713 = _446;
+                      _714 = _447;
+                      _715 = _448;
+                      _716 = _449;
+                      if (((int)_537 < (int)(int)(uint(_519 * 0.5f))) && (((int)_536 < (int)(int)(uint(_517 * 0.5f))) && ((int)(_537 | _536) > (int)-1))) {
+                        _548 = normalRoughnessSRV.Load(int3((int)(uint(_528)), (int)(uint(_529)), 0));
+                        if (!(floor(_548.w * 3.0999999046325684f) == 3.0f)) {
+                          _561 = (_548.z > specularRoughnessThreshold);
+                          _562 = select(_561, (floor(_534) * 2.0f), _528);
+                          _563 = select(_561, (floor(_535) * 2.0f), _529);
+                          _564 = uint(_562);
+                          _565 = uint(_563);
+                          _567 = rayDirectionSRV.Load(int3(_564, _565, 0));
+                          _572 = (_567.x * 2.0f) + -1.0f;
+                          _573 = (_567.y * 2.0f) + -1.0f;
+                          _577 = (1.0f - abs(_572)) - abs(_573);
+                          _579 = saturate(-0.0f - _577);
+                          _581 = -0.0f - _579;
+                          _585 = select((_572 >= 0.0f), _581, _579) + _572;
+                          _586 = select((_573 >= 0.0f), _581, _579) + _573;
+                          _588 = rsqrt(dot(float3(_585, _586, _577), float3(_585, _586, _577)));
+                          if (!(dot(float3(_246, _247, _248), float3((_585 * _588), (_586 * _588), (_588 * _577))) < cos((_429 * 3.1415927410125732f) / (_429 + 1.0f)))) {
+                            _596 = depthSRV.Load(int3(_564, _565, 0));
+                            if (!(_596.x <= 0.0f)) {
+                              _606 = floor(specResolutionRatio.y * _563);
+                              do {
+                                _620 = 0.5f;
+                                if (cbr_using != 0.0f) {
+                                  _620 = ((((float)((uint)((uint)(((int)((uint)(isOddFrame) + (uint)(int(_606)))) & 1)))) * 0.5f) + 0.25f);
+                                }
+                                float projectedSampleXSum = AddPrecise2(floor(specResolutionRatio.x * _562), _620);
+                                _630 = ((projectedSampleXSum * 2.0f) * screenInverseSize.x) + -1.0f;
+                                _631 = 1.0f - (((_606 + 0.5f) * 2.0f) * screenInverseSize.y);
+                                _667 = mad(_596.x, (viewProjInvMat[2].w), mad(_631, (viewProjInvMat[1].w), (_630 * (viewProjInvMat[0].w)))) + (viewProjInvMat[3].w);
+                                _679 = saturate(1.0f - ((abs(dot(float3((((mad(_596.x, (viewProjInvMat[2].x), mad(_631, (viewProjInvMat[1].x), (_630 * (viewProjInvMat[0].x)))) + (viewProjInvMat[3].x)) / _667) - _108), (((mad(_596.x, (viewProjInvMat[2].y), mad(_631, (viewProjInvMat[1].y), (_630 * (viewProjInvMat[0].y)))) + (viewProjInvMat[3].y)) / _667) - _109), (((mad(_596.x, (viewProjInvMat[2].z), mad(_631, (viewProjInvMat[1].z), (_630 * (viewProjInvMat[0].z)))) + (viewProjInvMat[3].z)) / _667) - _110)), float3(_176, _179, _183))) * 40.0f) / _406));
+                                if (!(_679 == 0.0f)) {
+                                  do {
+                                    _690 = 0.0f;
+                                    _691 = 0.0f;
+                                    _692 = 0.0f;
+                                    if (!(!(_548.z <= specularRoughnessThreshold))) {
+                                      _685 = specularGlossySRV.Load(int3(_564, _565, 0));
+                                      _690 = _685.x;
+                                      _691 = _685.y;
+                                      _692 = _685.z;
+                                    }
+                                    _698 = specularRoughSRV.Load(int3((int)(uint(_562 * 0.5f)), (int)(uint(_563 * 0.5f)), 0));
+                                    _713 = (_679 + _446);
+                                    _714 = (((_698.x + _690) * _679) + _447);
+                                    _715 = (((_698.y + _691) * _679) + _448);
+                                    _716 = (((_698.z + _692) * _679) + _449);
+                                  } while (false);
+                                }
+                              } while (false);
+                            }
+                          }
+                        }
+                      }
+                      _446 = _713;
+                      _447 = _714;
+                      _448 = _715;
+                      _449 = _716;
+                    }
+                    _438 = (_447 - _449) / _446;
+                    _440 = (_438 * 0.5f) + (_449 / _446);
+                    _441 = (_448 / _446) - _440;
+                    specularColorUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(((_441 * 0.5f) + _440), _438, _441, _209);
+                  } while (false);
+                } while (false);
+              } while (false);
+            } while (false);
+          }
+        } while (false);
+      } while (false);
+    }
+  }
+}
