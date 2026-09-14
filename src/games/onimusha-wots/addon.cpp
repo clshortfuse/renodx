@@ -22,7 +22,35 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
+bool tone_map_output_is_hdr = true;
+bool ui_output_is_hdr = true;
+
+renodx::mods::shader::CustomShaders custom_shaders = {
+    CustomShaderEntryCallback(0x126307A8, [](auto*) {  // HDR tone map
+      tone_map_output_is_hdr = true;
+      return true;
+    }),
+    CustomShaderEntryCallback(0x8BC088A2, [](auto*) {  // HDR FG tone map
+      tone_map_output_is_hdr = true;
+      return true;
+    }),
+    CustomShaderEntryCallback(0x0D876F28, [](auto*) {  // SDR tone map
+      tone_map_output_is_hdr = false;
+      return true;
+    }),
+    CustomShaderEntryCallback(0x02EB4548, [](auto*) {  // SDR FG tone map
+      tone_map_output_is_hdr = false;
+      return true;
+    }),
+    CustomShaderEntryCallback(0xC63E6F15, [](auto*) {  // HDR UI
+      ui_output_is_hdr = true;
+      return true;
+    }),
+    CustomShaderEntryCallback(0xB5FFFD5C, [](auto*) {  // SDR UI
+      ui_output_is_hdr = false;
+      return true;
+    }),
+    __ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -45,6 +73,7 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 4000.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_visible = []() { return tone_map_output_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -56,6 +85,7 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_visible = []() { return tone_map_output_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -67,6 +97,7 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_visible = []() { return ui_output_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "UIEOTFEmulation",
@@ -78,6 +109,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a 2.2 EOTF for the UI",
         .labels = {"Off", "2.2"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_visible = []() { return ui_output_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "UIVisibility",
