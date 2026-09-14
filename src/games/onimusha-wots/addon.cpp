@@ -353,11 +353,6 @@ renodx::utils::settings::Settings settings = {
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game\n"),
-        .section = "About",
-    },
 };
 
 void OnPresetOff() {

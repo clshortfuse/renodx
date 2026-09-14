@@ -68,7 +68,7 @@ float4 main(
   if (TONE_MAP_TYPE != 0.f) {
     float3 untonemapped_ap1 = _11.rgb;
 
-    SV_Target = float4(ApplyToneMapEncodePQ(untonemapped_ap1, displayMaxNits, whitePaperNits, TEXCOORD), SV_Target.w);
+    SV_Target = float4(GenerateOutput(untonemapped_ap1, TEXCOORD, 1u), SV_Target.w);
     return SV_Target;
   }
 
