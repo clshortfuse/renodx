@@ -70,7 +70,7 @@ void main(
   r0.yzw = r2.xyz + -r3.xyz;
   r0.xyz = r0.xxx * r0.yzw + r3.xyz;
   } else {
-    r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.xyz, cb0[137].z + 1u);
+    r0.xyz = renodx::lut::SampleTetrahedral(t2, r1.xyz, cb0[137].z + 1u);
   }
   if (injectedData.countOld == injectedData.countNew) {
     r0.xyz = PostToneMapScale(r0.xyz);
