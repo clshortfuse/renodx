@@ -767,12 +767,12 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Den Discord",
+        .label = "RenoDX Discord",
         .section = "About",
         .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+          renodx::utils::platform::LaunchURL("https://discord.gg/ren", "odx");
         },
     },
     new renodx::utils::settings::Setting{
@@ -782,6 +782,16 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .on_change = []() {
           renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Voosh' Ko-Fi",
+        .section = "About",
+        .group = "button-line-2",
+        .tint = 0xD82D19,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "notvoosh");
         },
     },
     new renodx::utils::settings::Setting{
