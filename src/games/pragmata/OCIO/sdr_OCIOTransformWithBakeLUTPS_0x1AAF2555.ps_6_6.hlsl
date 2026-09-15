@@ -1,5 +1,4 @@
-#include "../../common.hlsli"
-#include "../../RRT.hlsli"
+#include "./OCIO.hlsli"
 
 Texture2D<float4> SrcTexture : register(t0);
 
@@ -10,25 +9,23 @@ SamplerState PointBorder : register(s2, space32);
 SamplerState TrilinearClamp : register(s9, space32);
 
 float4 main(
-    noperspective float4 SV_Position: SV_Position,
-    linear float2 TEXCOORD: TEXCOORD)
-    : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD) : SV_Target {
   float4 SV_Target;
-  SV_Target.w = 1.0f;
-  float4 _9 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-
-#if 0
-  if (TONE_MAP_TYPE != 0.f) {
-    SV_Target.rgb = renodx_custom::aces::odt_srgb_100nits_dim::Apply(
-        renodx_custom::aces::rrt::ApplyToODTInputFromAP1(_9.rgb));
-
-    return SV_Target;
-  }
-#endif
-
+  float4 _9;
   float _27;
   float _42;
   float _57;
+  float4 _66;
+  _9 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+
+  if (TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped_ap1 = _9.rgb;
+
+    SV_Target = float4(GenerateOutput(untonemapped_ap1, TEXCOORD, 0u), 1.f);
+    return SV_Target;
+  }
+
   if (!(_9.x <= 0.0f)) {
     if (_9.x < 3.0517578125e-05f) {
       _27 = ((log2((_9.x * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
@@ -56,9 +53,10 @@ float4 main(
   } else {
     _57 = -0.35844698548316956f;
   }
-  float4 _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_27 * 0.984375f) + 0.0078125f), ((_42 * 0.984375f) + 0.0078125f), ((_57 * 0.984375f) + 0.0078125f)), 0.0f);
+  _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_27 * 0.984375f) + 0.0078125f), ((_42 * 0.984375f) + 0.0078125f), ((_57 * 0.984375f) + 0.0078125f)), 0.0f);
   SV_Target.x = _66.x;
   SV_Target.y = _66.y;
   SV_Target.z = _66.z;
+  SV_Target.w = 1.0f;
   return SV_Target;
 }

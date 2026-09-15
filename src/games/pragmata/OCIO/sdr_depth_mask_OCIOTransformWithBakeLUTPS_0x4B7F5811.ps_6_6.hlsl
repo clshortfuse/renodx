@@ -1,4 +1,4 @@
-#include "../OCIO.hlsli"
+#include "./OCIO.hlsli"
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -31,8 +31,9 @@ cbuffer SceneInfo : register(b0) {
   uint4 rayTracingParams : packoffset(c036.x);
   float4 sceneExtendedData : packoffset(c037.x);
   float2 projectionSpaceJitterOffset : packoffset(c038.x);
-  float tessellationParam : packoffset(c038.z);
-  uint sceneInfoAdditionalFlags : packoffset(c038.w);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  uint sceneInfoAdditionalFlags : packoffset(c039.x);
 };
 
 cbuffer ImageSizeInfo : register(b1) {
@@ -48,16 +49,28 @@ SamplerState PointBorder : register(s2, space32);
 SamplerState TrilinearClamp : register(s9, space32);
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD) : SV_Target {
   float4 SV_Target;
-  float _19 = screenInverseSize.x * TEXCOORD.x;
-  float _21 = screenInverseSize.y * TEXCOORD.y;
-  float4 _25 = SrcTexture.SampleLevel(PointBorder, float2((_19 * (screenSize.x + -0.5009999871253967f)), (_21 * (screenSize.y + -0.5009999871253967f))), 0.0f);
+  float _19;
+  float _21;
+  float4 _25;
   float _43;
   float _58;
   float _73;
+  float4 _82;
+  _19 = screenInverseSize.x * TEXCOORD.x;
+  _21 = screenInverseSize.y * TEXCOORD.y;
+  _25 = SrcTexture.SampleLevel(PointBorder, float2((_19 * (screenSize.x + -0.5009999871253967f)), (_21 * (screenSize.y + -0.5009999871253967f))), 0.0f);
+  const float depth_mask = select((((ReadonlyDepth.Load(int3(int((_19 * screenSize.x) * readOnlyDepthSize.x), int((_21 * screenSize.y) * readOnlyDepthSize.y), 0))).x) <= 0.0f), 0.0f, 1.0f);
+
+  if (TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped_ap1 = _25.rgb;
+
+    SV_Target = float4(GenerateOutput(untonemapped_ap1, screenInverseSize * TEXCOORD, 0u), depth_mask);
+    return SV_Target;
+  }
+
   if (!(_25.x <= 0.0f)) {
     if (_25.x < 3.0517578125e-05f) {
       _43 = ((log2((_25.x * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
@@ -85,16 +98,10 @@ float4 main(
   } else {
     _73 = -0.35844698548316956f;
   }
-  float4 _82 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_43 * 0.984375f) + 0.0078125f), ((_58 * 0.984375f) + 0.0078125f), ((_73 * 0.984375f) + 0.0078125f)), 0.0f);
-  float _96 = ReadonlyDepth.Load(int3(int((_19 * screenSize.x) * readOnlyDepthSize.x), int((_21 * screenSize.y) * readOnlyDepthSize.y), 0));
+  _82 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_43 * 0.984375f) + 0.0078125f), ((_58 * 0.984375f) + 0.0078125f), ((_73 * 0.984375f) + 0.0078125f)), 0.0f);
   SV_Target.x = _82.x;
   SV_Target.y = _82.y;
   SV_Target.z = _82.z;
-  SV_Target.w = select((_96.x <= 0.0f), 0.0f, 1.0f);
-
-  // SV_Target.rgb *= 999.f;
-
+  SV_Target.w = depth_mask;
   return SV_Target;
 }
-
-
