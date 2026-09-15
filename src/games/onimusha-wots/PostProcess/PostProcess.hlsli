@@ -1,127 +1,98 @@
 #include "../common.hlsli"
 
-#ifdef TONE_MAP_PARAM_CBUFFER_REGISTER
-cbuffer TonemapParam : register(TONE_MAP_PARAM_CBUFFER_REGISTER) {
-  float contrast : packoffset(c000.x);
-  float linearBegin : packoffset(c000.y);
-  float linearLength : packoffset(c000.z);
-  //   float toe : packoffset(c000.w);
-  float ORIGINAL_toe : packoffset(c000.w);
+float3 ApplyCapcomExponentialToneMap(
+    float3 color,
+    float curve_contrast,
+    float linear_begin,
+    float curve_toe,
+    float max_nit,
+    float linear_start,
+    float display_max_nit_sub_contrast_factor,
+    float contrast_factor,
+    float mul_linear_start_contrast_factor,
+    float inverse_linear_begin,
+    float mad_linear_start_contrast_factor,
+    float is_hdr_mode) {
+  bool match_sdr = TONE_MAP_TYPE == 3.f;
 
-  //   float maxNit : packoffset(c001.x);
-  float ORIGINAL_maxNit : packoffset(c001.x);
-
-  //   float linearStart : packoffset(c001.y);
-  float ORIGINAL_linearStart : packoffset(c001.y);
-
-  float displayMaxNitSubContrastFactor : packoffset(c001.z);
-  float contrastFactor : packoffset(c001.w);
-  float mulLinearStartContrastFactor : packoffset(c002.x);
-  float invLinearBegin : packoffset(c002.y);
-  //   float madLinearStartContrastFactor : packoffset(c002.z);
-  float madLinearStartContrastFactor : packoffset(c002.z);
-
-  float tonemapParam_isHDRMode : packoffset(c002.w);
-
-  float useDynamicRangeConversion : packoffset(c003.x);
-  float useHuePreserve : packoffset(c003.y);
-  float exposureScale : packoffset(c003.z);
-  float kneeStartNit : packoffset(c003.w);
-  float knee : packoffset(c004.x);
-  float curve_HDRip : packoffset(c004.y);
-  float curve_k2 : packoffset(c004.z);
-  float curve_k4 : packoffset(c004.w);
-  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
-  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
-  float tonemapGraphScale : packoffset(c013.x);
-};
-
-static float maxNit = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_maxNit : renodx::math::FLT32_MAX;
-static float linearStart = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_linearStart : renodx::math::FLT32_MAX;
-static float toe = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_toe : 1.f;
-
-float3 ApplyCapcomExponentialToneMap(float3 color) {
   // Vanilla follows the game's output mode; Match SDR always applies the curve.
-  if ((TONE_MAP_TYPE == 0.f && tonemapParam_isHDRMode == 0.f)
-      || TONE_MAP_TYPE == 3.f) {
-    float3 t = color * invLinearBegin;  // color / linearBegin
-
-    float3 toeSmooth = select(color < linearBegin, t * t * (3.f - 2.f * t), 1.f);  // smoothstep(0, linearBegin, color)
-
-    float3 shoulderWeight = select(color < linearStart, 0.f, 1.f);
-
-    float3 toeValue = pow(t, toe) * linearBegin;
-
-    float3 linearValue = contrast * color + madLinearStartContrastFactor;
-
-    float3 shoulderValue = maxNit - exp2(contrastFactor * color + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor;
-
-    color = ((1.f - toeSmooth) * toeValue)
-            + ((toeSmooth - shoulderWeight) * linearValue)
-            + (shoulderWeight * shoulderValue);
+  [branch]
+  if (!match_sdr
+      && (TONE_MAP_TYPE != 0.f || is_hdr_mode != 0.f)) {
+    return color;
   }
 
-  return color;
+  float3 t = color * inverse_linear_begin;  // color / linear_begin
+  float3 toe_smooth = smoothstep(0.f, linear_begin, color);
+  float3 linear_value = mad(curve_contrast, color, mad_linear_start_contrast_factor);
+
+  [branch]
+  if (match_sdr) {
+    return lerp(t * linear_begin, linear_value, toe_smooth);
+  }
+
+  float3 toe_value = pow(t, curve_toe) * linear_begin;
+  float3 shoulder_weight = select(color < linear_start, 0.f, 1.f);
+  float3 shoulder_value = max_nit
+                          - exp2(mad(contrast_factor, color, mul_linear_start_contrast_factor))
+                                * display_max_nit_sub_contrast_factor;
+
+  float3 toe_linear_value = lerp(toe_value, linear_value, toe_smooth);
+  return mad(shoulder_weight, shoulder_value - linear_value, toe_linear_value);
 }
 
-void ApplyCapcomExponentialToneMap(float in_r, float in_g, float in_b, out float out_r, out float out_g, out float out_b) {
-  float3 color = ApplyCapcomExponentialToneMap(float3(in_r, in_g, in_b));
-  out_r = color.r, out_g = color.g, out_b = color.b;
+void ApplyCapcomExponentialToneMap(
+    float in_r,
+    float in_g,
+    float in_b,
+    out float out_r,
+    out float out_g,
+    out float out_b,
+    float curve_contrast,
+    float linear_begin,
+    float curve_toe,
+    float max_nit,
+    float linear_start,
+    float display_max_nit_sub_contrast_factor,
+    float contrast_factor,
+    float mul_linear_start_contrast_factor,
+    float inverse_linear_begin,
+    float mad_linear_start_contrast_factor,
+    float is_hdr_mode) {
+  float3 color = ApplyCapcomExponentialToneMap(
+      float3(in_r, in_g, in_b),
+      curve_contrast,
+      linear_begin,
+      curve_toe,
+      max_nit,
+      linear_start,
+      display_max_nit_sub_contrast_factor,
+      contrast_factor,
+      mul_linear_start_contrast_factor,
+      inverse_linear_begin,
+      mad_linear_start_contrast_factor,
+      is_hdr_mode);
+  out_r = color.r;
+  out_g = color.g;
+  out_b = color.b;
 }
 
-float3 PrintPostProcessCbuffers(float3 color, float2 uv) {
-  const float2 text_origin = float2(0.01f, 0.15f);
-  const float2 glyph_size = float2(0.006f, 0.012f);
-  const float line_height = 1.15f;
-  const float text_alpha = 0.95f;
-  const float text_intensity = 1.0f;
-  const float3 header_color = float3(1.0f, 0.85f, 0.25f);
-  const float3 body_color = float3(1.0f, 1.0f, 1.0f);
+float3 NormalizeBlackFloor(float3 graded, float3 source, float3 lut_black) {
+  // Separate the common neutral floor from the LUT's residual black tint.
+  const float black_floor = max(renodx::math::Min(lut_black), 0.f);
+  const float3 neutral_floor = black_floor;
+  const float3 black_tint = lut_black - neutral_floor;
+  // Smooth energy weighting localizes removal without per-pixel channel-winner seams.
+  const float floor_energy = dot(neutral_floor, neutral_floor);
+  const float floor_weight = renodx::math::DivideSafe(
+      floor_energy,
+      floor_energy + dot(source, source) + dot(black_tint, black_tint),
+      0.f);
+  // Bound one scalar removal to shared lift, preserving RGB differences and staying above source.
+  const float common_lift = max(renodx::math::Min(graded - source), 0.f);
+  const float floor_remove = min(black_floor * floor_weight, common_lift);
 
-  renodx::canvas::Context context = renodx::canvas::CreateContext(
-      uv,
-      text_origin,
-      glyph_size,
-      color,
-      text_intensity,
-      body_color,
-      text_alpha,
-      text_intensity,
-      renodx::canvas::MODE_NORMAL,
-      0.0f,
-      line_height);
-
-  renodx::canvas::SetColor(context, header_color, text_alpha, text_intensity);
-  DrawLabel(context, 'T', 'o', 'n', 'e', 'm', 'a', 'p', 'P', 'a', 'r', 'a', 'm');
-  renodx::canvas::NewLine(context);
-  renodx::canvas::SetColor(context, body_color, text_alpha, text_intensity);
-
-  DrawFloatRow(context, tonemapParam_isHDRMode, 'i', 's', 'H', 'D', 'R', 'M', 'o', 'd', 'e');
-  DrawFloatRow(context, invLinearBegin, 'i', 'n', 'v', 'L', 'i', 'n', 'e', 'a', 'r', 'B', 'e', 'g');
-  DrawFloatRow(context, linearBegin, 'l', 'i', 'n', 'e', 'a', 'r', 'B', 'e', 'g', 'i', 'n');
-  DrawFloatRow(context, linearStart, 'l', 'i', 'n', 'e', 'a', 'r', 'S', 't', 'a', 'r', 't');
-  DrawFloatRow(context, toe, 't', 'o', 'e');
-  DrawFloatRow(context, contrast, 'c', 'o', 'n', 't', 'r', 'a', 's', 't');
-  DrawFloatRow(context, madLinearStartContrastFactor, 'm', 'a', 'd', 'S', 't', 'a', 'r', 't', 'C', 'F');
-  DrawFloatRow(context, maxNit, 'm', 'a', 'x', 'N', 'i', 't');
-  DrawFloatRow(context, contrastFactor, 'c', 'o', 'n', 't', 'r', 'a', 's', 't', 'F', 'a', 'c');
-  DrawFloatRow(context, mulLinearStartContrastFactor, 'm', 'u', 'l', 'S', 't', 'a', 'r', 't', 'C', 'F');
-  DrawFloatRow(context, displayMaxNitSubContrastFactor, 'd', 'i', 's', 'p', 'M', 'a', 'x', 'S', 'u', 'b');
-
-  return renodx::canvas::GetOutput(context).rgb;
-}
-#endif  // TONE_MAP_PARAM_CBUFFER_REGISTER
-
-float3 Unclamp(float3 original, float3 black, float3 mid_gray, float3 neutral) {
-  const float3 added_gamma = black;
-
-  // Remove from 0 to mid-gray
-  const float shadow_length = renodx::math::Min(mid_gray);
-  const float shadow_stop = renodx::math::Max(neutral);
-  const float3 floor_remove = added_gamma * renodx::math::DivideSafe(max(0, shadow_length - shadow_stop), shadow_length, 0.f);
-
-  const float3 unclamped = max(0, original - floor_remove);
-  return unclamped;
+  return graded - floor_remove;
 }
 
 float3 SampleAndBlendLUTs(
@@ -138,24 +109,22 @@ float3 SampleAndBlendLUTs(
   const float lutScale = fOneMinusTextureInverseSize;
   const float lutOffset = fHalfTextureInverseSize;
   float3 lutEncoded = renodx::color::acescct::Encode(color_input);
+  float3 lutCoordinates = mad(lutEncoded, lutScale, lutOffset);
   float3 correctedColor = renodx::color::acescct::Decode(
-      tTextureMap0.SampleLevel(TrilinearClamp, lutEncoded * lutScale + lutOffset, 0.f).rgb);
+      tTextureMap0.SampleLevel(TrilinearClamp, lutCoordinates, 0.f).rgb);
 
+  [branch]
   if (fTextureBlendRate > 0.0f) {
     float3 blendColor = renodx::color::acescct::Decode(
-        tTextureMap1.SampleLevel(TrilinearClamp, lutEncoded * lutScale + lutOffset, 0.f).rgb);
+        tTextureMap1.SampleLevel(TrilinearClamp, lutCoordinates, 0.f).rgb);
     correctedColor = lerp(correctedColor, blendColor, fTextureBlendRate);
+  }
 
-    if (fTextureBlendRate2 > 0.0f) {
-      float3 lutEncoded2 = renodx::color::acescct::Encode(correctedColor);
-      float3 blendColor2 = renodx::color::acescct::Decode(
-          tTextureMap2.SampleLevel(TrilinearClamp, lutEncoded2 * lutScale + lutOffset, 0.f).rgb);
-      correctedColor = lerp(correctedColor, blendColor2, fTextureBlendRate2);
-    }
-  } else if (fTextureBlendRate2 > 0.0f) {
+  [branch]
+  if (fTextureBlendRate2 > 0.0f) {
     float3 lutEncoded2 = renodx::color::acescct::Encode(correctedColor);
     float3 blendColor2 = renodx::color::acescct::Decode(
-        tTextureMap2.SampleLevel(TrilinearClamp, lutEncoded2 * lutScale + lutOffset, 0.f).rgb);
+        tTextureMap2.SampleLevel(TrilinearClamp, mad(lutEncoded2, lutScale, lutOffset), 0.f).rgb);
     correctedColor = lerp(correctedColor, blendColor2, fTextureBlendRate2);
   }
 
@@ -185,6 +154,7 @@ float3 ApplyColorGradingLUTs(
       tTextureMap2,
       TrilinearClamp);
 
+  [branch]
   if (COLOR_GRADE_LUT_SCALING > 0.f) {
     float3 lut_black = SampleAndBlendLUTs(
         0.f,
@@ -198,23 +168,10 @@ float3 ApplyColorGradingLUTs(
         tTextureMap2,
         TrilinearClamp);
 
-    float lut_black_y = renodx::color::y::from::AP1(lut_black);
-    if (lut_black_y > 0.f) {
-      float3 lut_mid = SampleAndBlendLUTs(
-          0.18f,
-          fTextureBlendRate,
-          fTextureBlendRate2,
-          fTextureSize,
-          fOneMinusTextureInverseSize,
-          fHalfTextureInverseSize,
-          tTextureMap0,
-          tTextureMap1,
-          tTextureMap2,
-          TrilinearClamp);
-
-      float3 unclamped_linear = Unclamp(color_output, lut_black, lut_mid, color_input);
-
-      color_output = lerp(color_output, unclamped_linear, COLOR_GRADE_LUT_SCALING);
+    [branch]
+    if (renodx::math::Min(lut_black) > 0.f) {
+      const float3 color_scaled = NormalizeBlackFloor(color_output, color_input, lut_black);
+      color_output = lerp(color_output, color_scaled, COLOR_GRADE_LUT_SCALING);
     }
   }
 
@@ -239,27 +196,36 @@ void ApplyColorCorrectTexturePass(
     out float _1802,
     out float _1803,
     out float _1804) {
-  if (enabled) {
-    float3 input = float3(_1573, _1574, _1575);
-    float3 correctedColor = ApplyColorGradingLUTs(
-        input,
-        fTextureBlendRate,
-        fTextureBlendRate2,
-        fTextureSize,
-        fOneMinusTextureInverseSize,
-        fHalfTextureInverseSize,
-        tTextureMap0,
-        tTextureMap1,
-        tTextureMap2,
-        TrilinearClamp);
-    correctedColor = lerp(input, correctedColor, COLOR_GRADE_LUT_STRENGTH);
-
-    _1802 = mad(correctedColor.z, (fColorMatrix[2].x), mad(correctedColor.y, (fColorMatrix[1].x), (correctedColor.x * (fColorMatrix[0].x)))) + (fColorMatrix[3].x);
-    _1803 = mad(correctedColor.z, (fColorMatrix[2].y), mad(correctedColor.y, (fColorMatrix[1].y), (correctedColor.x * (fColorMatrix[0].y)))) + (fColorMatrix[3].y);
-    _1804 = mad(correctedColor.z, (fColorMatrix[2].z), mad(correctedColor.y, (fColorMatrix[1].z), (correctedColor.x * (fColorMatrix[0].z)))) + (fColorMatrix[3].z);
-  } else {
+  [branch]
+  if (!enabled) {
     _1802 = _1573;
     _1803 = _1574;
     _1804 = _1575;
+    return;
   }
+
+  const float3 input = float3(_1573, _1574, _1575);
+  float3 correctedColor = input;
+  [branch]
+  if (COLOR_GRADE_LUT_STRENGTH != 0.f) {
+    correctedColor = lerp(
+        input,
+        ApplyColorGradingLUTs(
+            input,
+            fTextureBlendRate,
+            fTextureBlendRate2,
+            fTextureSize,
+            fOneMinusTextureInverseSize,
+            fHalfTextureInverseSize,
+            tTextureMap0,
+            tTextureMap1,
+            tTextureMap2,
+            TrilinearClamp),
+        COLOR_GRADE_LUT_STRENGTH);
+  }
+
+  const float3 transformedColor = mul(float4(correctedColor, 1.f), fColorMatrix).rgb;
+  _1802 = transformedColor.r;
+  _1803 = transformedColor.g;
+  _1804 = transformedColor.b;
 }

@@ -1,4 +1,3 @@
-#define TONE_MAP_PARAM_CBUFFER_REGISTER b2
 #include "../PostProcess.hlsli"
 struct RGCParam {
   float CyanLimit;
@@ -78,31 +77,31 @@ cbuffer CameraKerare : register(b1) {
   float film_aspect : packoffset(c000.w);
 };
 
-// cbuffer TonemapParam : register(b2) {
-//   float contrast : packoffset(c000.x);
-//   float linearBegin : packoffset(c000.y);
-//   float linearLength : packoffset(c000.z);
-//   float toe : packoffset(c000.w);
-//   float maxNit : packoffset(c001.x);
-//   float linearStart : packoffset(c001.y);
-//   float displayMaxNitSubContrastFactor : packoffset(c001.z);
-//   float contrastFactor : packoffset(c001.w);
-//   float mulLinearStartContrastFactor : packoffset(c002.x);
-//   float invLinearBegin : packoffset(c002.y);
-//   float madLinearStartContrastFactor : packoffset(c002.z);
-//   float tonemapParam_isHDRMode : packoffset(c002.w);
-//   float useDynamicRangeConversion : packoffset(c003.x);
-//   float useHuePreserve : packoffset(c003.y);
-//   float exposureScale : packoffset(c003.z);
-//   float kneeStartNit : packoffset(c003.w);
-//   float knee : packoffset(c004.x);
-//   float curve_HDRip : packoffset(c004.y);
-//   float curve_k2 : packoffset(c004.z);
-//   float curve_k4 : packoffset(c004.w);
-//   row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
-//   row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
-//   float tonemapGraphScale : packoffset(c013.x);
-// };
+cbuffer TonemapParam : register(b2) {
+  float contrast : packoffset(c000.x);
+  float linearBegin : packoffset(c000.y);
+  float linearLength : packoffset(c000.z);
+  float toe : packoffset(c000.w);
+  float maxNit : packoffset(c001.x);
+  float linearStart : packoffset(c001.y);
+  float displayMaxNitSubContrastFactor : packoffset(c001.z);
+  float contrastFactor : packoffset(c001.w);
+  float mulLinearStartContrastFactor : packoffset(c002.x);
+  float invLinearBegin : packoffset(c002.y);
+  float madLinearStartContrastFactor : packoffset(c002.z);
+  float tonemapParam_isHDRMode : packoffset(c002.w);
+  float useDynamicRangeConversion : packoffset(c003.x);
+  float useHuePreserve : packoffset(c003.y);
+  float exposureScale : packoffset(c003.z);
+  float kneeStartNit : packoffset(c003.w);
+  float knee : packoffset(c004.x);
+  float curve_HDRip : packoffset(c004.y);
+  float curve_k2 : packoffset(c004.z);
+  float curve_k4 : packoffset(c004.w);
+  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
+  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
+  float tonemapGraphScale : packoffset(c013.x);
+};
 
 cbuffer LDRPostProcessParam : register(b3) {
   float fHazeFilterStart : packoffset(c000.x);
@@ -1655,7 +1654,10 @@ float4 main(
 
 #if 1
   ApplyCapcomExponentialToneMap(_2600, _2601, _2602,
-                                _2707, _2708, _2709);
+                                _2707, _2708, _2709,
+                                contrast, linearBegin, toe, maxNit, linearStart,
+                                displayMaxNitSubContrastFactor, contrastFactor, mulLinearStartContrastFactor,
+                                invLinearBegin, madLinearStartContrastFactor, tonemapParam_isHDRMode);
 #else
   if (tonemapParam_isHDRMode == 0.0f) {
     _2610 = invLinearBegin * _2600;
