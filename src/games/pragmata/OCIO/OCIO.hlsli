@@ -56,13 +56,16 @@ float3 GenerateOutput(float3 untonemapped_ap1, float2 uv, uint output_mode) {
     const float mid_gray_out = 0.102317f;
     const float highlight_contrast = 45.f / 50.f;
     const float cone_response_exponent = 1.255f;
+    const float shadow_contrast = 1.55f;
+    const float shadows = 0.5f;
+    const float flare = 0.72f;
 
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
     float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_custom_test30(
         untonemapped_bt709,
-        peak_nits / diffuse_white_nits, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
-        cone_response_exponent * RENODX_TONE_MAP_CONTRAST, 0.10f * pow(0.72f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
-        highlight_contrast * RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
+        peak_nits / diffuse_white_nits, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, shadows * RENODX_TONE_MAP_SHADOWS,
+        cone_response_exponent * RENODX_TONE_MAP_CONTRAST, 0.10f * pow(flare, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+        highlight_contrast * RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, shadow_contrast * RENODX_TONE_MAP_CONTRAST_SHADOWS,
         RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA,
         mid_gray_in, mid_gray_out, 0.f, 1.f, gamut_compression_mode, 1.5f, 0.35f);
     tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
