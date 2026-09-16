@@ -540,6 +540,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
       renodx::mods::shader::expected_constant_buffer_index = 14;
+      renodx::mods::shader::use_root_signature_cbv = true;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       break;
