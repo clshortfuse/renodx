@@ -24,31 +24,32 @@ float4 main(
   float4 _9 = tLinearImage.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
   return float4(FinalOutput(_9.rgb), 1.f);
 
-  float _23;
-  float _34;
-  float _45;
-  [branch]
-  if (!(!(_9.x <= 0.0031308000907301903f))) {
-    _23 = (_9.x * 12.920000076293945f);
-  } else {
-    _23 = (((pow(_9.x, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-  }
-  [branch]
-  if (!(!(_9.y <= 0.0031308000907301903f))) {
-    _34 = (_9.y * 12.920000076293945f);
-  } else {
-    _34 = (((pow(_9.y, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-  }
-  [branch]
-  if (!(!(_9.z <= 0.0031308000907301903f))) {
-    _45 = (_9.z * 12.920000076293945f);
-  } else {
-    _45 = (((pow(_9.z, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-  }
-  SV_Target.x = ((fConvertToLimit * (pow(_23, fGamma))) + fLowerLimit);
-  SV_Target.y = ((fConvertToLimit * (pow(_34, fGamma))) + fLowerLimit);
-  SV_Target.z = ((fConvertToLimit * (pow(_45, fGamma))) + fLowerLimit);
+  // float _23;
+  // float _34;
+  // float _45;
+  // [branch]
+  // if (!(!(_9.x <= 0.0031308000907301903f))) {
+  //   _23 = (_9.x * 12.920000076293945f);
+  // } else {
+  //   _23 = (((pow(_9.x, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+  // }
+  // [branch]
+  // if (!(!(_9.y <= 0.0031308000907301903f))) {
+  //   _34 = (_9.y * 12.920000076293945f);
+  // } else {
+  //   _34 = (((pow(_9.y, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+  // }
+  // [branch]
+  // if (!(!(_9.z <= 0.0031308000907301903f))) {
+  //   _45 = (_9.z * 12.920000076293945f);
+  // } else {
+  //   _45 = (((pow(_9.z, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+  // }
+  // SV_Target.x = ((fConvertToLimit * (pow(_23, fGamma))) + fLowerLimit);
+  // SV_Target.y = ((fConvertToLimit * (pow(_34, fGamma))) + fLowerLimit);
+  // SV_Target.z = ((fConvertToLimit * (pow(_45, fGamma))) + fLowerLimit);
 
+  // SV_Target.rgb = renodx::color::gamma::EncodeSafe(_9.rgb);
   SV_Target.w = 1.0f;
   return SV_Target;
 }
