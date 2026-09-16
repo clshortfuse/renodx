@@ -486,7 +486,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
   peak_nits_default_initialized = true;
   peak_nits_default = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(FALLBACK_PEAK_NITS);
 
-  const bool was_using_default = tone_map_peak_nits_setting->IsUsingDefault();
+  const bool was_using_default = tone_map_peak_nits_setting->GetValue() == tone_map_peak_nits_setting->default_value;
   tone_map_peak_nits_setting->default_value = peak_nits_default;
   if (was_using_default) tone_map_peak_nits_setting->Set(peak_nits_default)->Write();
 }
