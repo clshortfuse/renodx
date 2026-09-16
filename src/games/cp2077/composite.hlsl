@@ -177,16 +177,20 @@ float3 composite(bool useTexArray = false) {
     lutStrength = useLUT3;
   }
   if (useLUT) {
-    if (injectedData.processingInternalSampling == 1.f) {
+    if (CUSTOM_SAMPLING_ENCODE_PQ) {
       float3 pqColor = renodx::color::pq::Encode(fallbackColor, 100.f);  // reset scale to 0-1 for 0-10000 nits
-
-      lutColor = renodx::lut::Sample(textureLUT[lutIndex], sampler0, pqColor).rgb;
+      lutColor = renodx::lut::SampleTetrahedral(textureLUT[lutIndex], pqColor).rgb;
     } else {
       // cb6[6u].x 0.05888671
       // cb6[6u].y 0.59765625
       float3 lutInputColor = (cb6[6u].x * log2(fallbackColor)) + cb6[6u].y;
       lutColor = textureLUT[lutIndex].SampleLevel(sampler0, lutInputColor, 0.0f).rgb;
     }
+
+    if (CUSTOM_SAMPLING_DECODE_PQ) {
+      lutColor = sign(lutColor) * renodx::color::pq::Decode(abs(lutColor), 100.f);
+    }
+
     outputColor = lerp(outputColor, lutColor, float(lutStrength));
   } else {
     outputColor = fallbackColor;

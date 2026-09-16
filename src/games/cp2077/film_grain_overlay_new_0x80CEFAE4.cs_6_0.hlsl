@@ -55,13 +55,13 @@ void comp_main() {
   // Custom: Add back film grain
   if (cb6[12u].x > 0.0f) {
     float3 grainColor = t1.Load(int3(uint2(_71 & 255u, _72 & 255u), 0u)).rgb;
-    if (injectedData.fxFilmGrain) {
+    if (CUSTOM_FILM_GRAIN_PERCEPTUAL) {
       // float3 grainColor = _13.Load(int3(uint2(_82 & 255u, _83 & 255u), 0u)).rgb;
       float3 grainedColor = renodx::effects::ApplyFilmGrain(
           _73.rgb,
           grainColor.xy,
           frac(cb0[0u].x / 1000.f),
-          injectedData.fxFilmGrain * 0.03f,
+          CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
           (cb6[12u].y == 1.f) ? 1.f : (203.f / 100.f)
           // ,injectedData.debugValue02 != 1.f
       );
@@ -70,6 +70,7 @@ void comp_main() {
       _78 = grainedColor.b;
     } else {
       // Add back Vanilla
+      grainColor = ScaleVanillaFilmGrainNoise(grainColor);
       uint _113 = 1u << (t51.Load(int3(uint2(uint(cb12[79u].x * _79), uint(cb12[79u].y * _80)), 0u)).y & 31u);
       float3 grainStrengthAdjusted = _73.rgb * cb6[12u].x;
 
@@ -388,16 +389,16 @@ void comp_main() {
   float3 outputColor1 = float3(_171, _173, _175);
   if (_179.y != 0u) {
     ConvertColorParams params = {
-        _179.w,      // outputTypeEnum
-        cb6[14u].x,  // paperWhiteScaling
-        cb6[14u].y,  // blackFloorAdjust
-        cb6[14u].z,  // gammaCorrection
-        cb6[16u].x,  // pqSaturation
-        float3x3(
-            cb6[22u].x, cb6[22u].y, cb6[22u].z,
-            cb6[23u].x, cb6[23u].y, cb6[23u].z,
-            cb6[24u].x, cb6[24u].y, cb6[24u].z),  // pqMatrix
-        float3(_79, _80, cb0[0u].x)               // random3
+      _179.w,      // outputTypeEnum
+      cb6[14u].x,  // paperWhiteScaling
+      cb6[14u].y,  // blackFloorAdjust
+      cb6[14u].z,  // gammaCorrection
+      cb6[16u].x,  // pqSaturation
+      float3x3(
+          cb6[22u].x, cb6[22u].y, cb6[22u].z,
+          cb6[23u].x, cb6[23u].y, cb6[23u].z,
+          cb6[24u].x, cb6[24u].y, cb6[24u].z),  // pqMatrix
+      float3(_79, _80, cb0[0u].x)               // random3
     };
     outputColor1 = convertColor(outputColor1, params);
   }
@@ -406,16 +407,16 @@ void comp_main() {
 
   if (asuint(cb6[15u]).x != 0u) {
     ConvertColorParams params = {
-        _179.w,      // outputTypeEnum
-        cb6[15u].y,  // paperWhiteScaling
-        cb6[15u].z,  // blackFloorAdjust
-        cb6[15u].w,  // gammaCorrection
-        cb6[16u].x,  // pqSaturation
-        float3x3(
-            cb6[26u].x, cb6[26u].y, cb6[26u].z,
-            cb6[27u].x, cb6[27u].y, cb6[27u].z,
-            cb6[28u].x, cb6[28u].y, cb6[28u].z),  // pqMatrix
-        float3(_79, _80, cb0[0u].x)               // random3
+      _179.w,      // outputTypeEnum
+      cb6[15u].y,  // paperWhiteScaling
+      cb6[15u].z,  // blackFloorAdjust
+      cb6[15u].w,  // gammaCorrection
+      cb6[16u].x,  // pqSaturation
+      float3x3(
+          cb6[26u].x, cb6[26u].y, cb6[26u].z,
+          cb6[27u].x, cb6[27u].y, cb6[27u].z,
+          cb6[28u].x, cb6[28u].y, cb6[28u].z),  // pqMatrix
+      float3(_79, _80, cb0[0u].x)               // random3
     };
 
     float3 outputColor2 = float3(_107, _110, _112);
@@ -424,7 +425,8 @@ void comp_main() {
   }
 }
 
-[numthreads(16, 16, 1)] void main(SPIRV_Cross_Input stage_input) {
+[numthreads(16, 16, 1)]
+void main(SPIRV_Cross_Input stage_input) {
   gl_WorkGroupID = stage_input.gl_WorkGroupID;
   gl_LocalInvocationID = stage_input.gl_LocalInvocationID;
   comp_main();

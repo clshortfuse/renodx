@@ -252,12 +252,12 @@ void comp_main() {
         float4 _944 = _14.Load(int3(uint2(gl_GlobalInvocationID.x & 255u, gl_GlobalInvocationID.y & 255u), 0u));
         // Custom: Add Film Grain
         [branch]
-        if (injectedData.fxFilmGrain) {
+        if (CUSTOM_FILM_GRAIN_PERCEPTUAL) {
           float3 grainedColor = renodx::effects::ApplyFilmGrain(
               float3(_573, _574, _575),
               _944.xy,
               frac(cb0[0u].x / 1000.f),
-              injectedData.fxFilmGrain * 0.03f,
+              CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
               (cb6[12u].y == 1.f) ? 1.f : (203.f / 100.f));
           frontier_phi_14_6_ladder = grainedColor.b;
           frontier_phi_14_6_ladder_1 = grainedColor.g;
@@ -266,9 +266,10 @@ void comp_main() {
           frontier_phi_14_6_ladder_4 = _292;
         } else {
           uint _941 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _77), uint(cb12[79u].y * _78)), 0u)).y & 31u);
-          float _946 = _944.x;
-          float _947 = _944.y;
-          float _948 = _944.z;
+          float3 _944_scaled = ScaleVanillaFilmGrainNoise(_944.rgb);
+          float _946 = _944_scaled.x;
+          float _947 = _944_scaled.y;
+          float _948 = _944_scaled.z;
           float _951 = ((_946 + _947) + _948) * 0.3333333432674407958984375f;
           float _952 = cb6[16u].x * _573;
           float _953 = cb6[16u].x * _574;
@@ -582,21 +583,22 @@ void comp_main() {
     float _782;
     if (cb6[16u].x > 0.0f) {
       float4 _621 = _14.Load(int3(uint2(gl_GlobalInvocationID.x & 255u, gl_GlobalInvocationID.y & 255u), 0u));
-      if (injectedData.fxFilmGrain) {
+      if (CUSTOM_FILM_GRAIN_PERCEPTUAL) {
         float3 grainedColor = renodx::effects::ApplyFilmGrain(
             float3(_313, _314, _315),
             _621.xy,
             frac(cb0[0u].x / 1000.f),
-            injectedData.fxFilmGrain * 0.03f,
+            CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
             (cb6[12u].y == 1.f) ? 1.f : (203.f / 100.f));
         _780 = grainedColor.r;
         _781 = grainedColor.g;
         _782 = grainedColor.b;
       } else {
         uint _617 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _77), uint(cb12[79u].y * _78)), 0u)).y & 31u);
-        float _623 = _621.x;
-        float _624 = _621.y;
-        float _625 = _621.z;
+        float3 _621_scaled = ScaleVanillaFilmGrainNoise(_621.rgb);
+        float _623 = _621_scaled.x;
+        float _624 = _621_scaled.y;
+        float _625 = _621_scaled.z;
         float _628 = ((_623 + _624) + _625) * 0.3333333432674407958984375f;
         float _630 = cb6[16u].x * _313;
         float _631 = cb6[16u].x * _314;
@@ -687,11 +689,14 @@ void comp_main() {
       float _1637 = cb6[13u].x * _1633;
       float _1638 = cb6[13u].x * _1634;
       float3 _1652;
-      if (injectedData.processingInternalSampling == 1.f) {
+      if (CUSTOM_SAMPLING_ENCODE_PQ) {
         float3 pq_color = renodx::color::pq::Encode(float3(_1636, _1637, _1638), 100.f);
         _1652.rgb = renodx::lut::Sample(_21, _49, pq_color).rgb;
       } else {
         _1652.rgb = _21.SampleLevel(_49, float3((cb6[12u].x * log2(_1636)) + cb6[12u].y, (cb6[12u].x * log2(_1637)) + cb6[12u].y, (cb6[12u].x * log2(_1638)) + cb6[12u].y), 0.0f).rgb;
+      }
+      if (CUSTOM_SAMPLING_DECODE_PQ) {
+        _1652.rgb = sign(_1652.rgb) * renodx::color::pq::Decode(abs(_1652.rgb), 100.f);
       }
       float _1654 = _1652.x;
       float _1655 = _1652.y;

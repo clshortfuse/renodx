@@ -49,12 +49,12 @@ void comp_main() {
   float _282;
   if (cb6[16u].x > 0.0f) {
     float4 _115 = _13.Load(int3(uint2(_81 & 255u, _82 & 255u), 0u));
-    if (injectedData.fxFilmGrain) {
+    if (CUSTOM_FILM_GRAIN_PERCEPTUAL) {
       float3 grainedColor = renodx::effects::ApplyFilmGrain(
           float3(_86, _87, _88),
           _115.xy,
           frac(cb0[0u].x / 1000.f),
-          injectedData.fxFilmGrain * 0.03f,
+          CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
           (cb6[16u].y == 1.f) ? 1.f : (203.f / 100.f)
           // ,injectedData.debugValue02 != 1.f
       );
@@ -63,9 +63,10 @@ void comp_main() {
       _282 = grainedColor.b;
     } else {
       uint _111 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _95), uint(cb12[79u].y * _96)), 0u)).y & 31u);
-      float _117 = _115.x;
-      float _118 = _115.y;
-      float _119 = _115.z;
+      float3 _115_scaled = ScaleVanillaFilmGrainNoise(_115.rgb);
+      float _117 = _115_scaled.x;
+      float _118 = _115_scaled.y;
+      float _119 = _115_scaled.z;
       float _122 = ((_117 + _118) + _119) * 0.3333333432674407958984375f;
       float _127 = cb6[16u].x * _86;
       float _128 = cb6[16u].x * _87;
