@@ -1,0 +1,78 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "unityengine",
+  "title": "Unity Engine",
+  "category": "engine",
+  "compatibility": "working",
+  "maintainers": ["Voosh"],
+  "support": "generic",
+  "urls": [
+    {
+      "kind": "snapshot",
+      "label": "Snapshot 64-bit",
+      "url": "https://notvoosh.github.io/renodx-unity/renodx-unityengine.addon64"
+    },
+    {
+      "kind": "snapshot",
+      "label": "Snapshot 32-bit",
+      "url": "https://notvoosh.github.io/renodx-unity/renodx-unityengine.addon32"
+    }
+  ],
+  "games": [
+    {
+      "id": "deathsdoor",
+      "title": "Death's Door",
+      "support": "generic",
+      "compatibility": "working",
+      "deploy": {
+        "steam_appid": 894020
+      }
+    },
+    {
+      "id": "descenders",
+      "title": "Descenders",
+      "support": "generic",
+      "compatibility": "working",
+      "deploy": {
+        "steam_appid": 681280
+      }
+    },
+    {
+      "id": "haste",
+      "title": "Haste",
+      "support": "generic",
+      "compatibility": "working",
+      "deploy": {
+        "steam_appid": 1796470
+      }
+    },
+    {
+      "id": "outerwilds",
+      "title": "Outer Wilds",
+      "support": "generic",
+      "compatibility": "working",
+      "notes": ["Tone mapping and color grading changes are not applied in real time."],
+      "deploy": {
+        "steam_appid": 753640
+      }
+    },
+    {
+      "id": "spark3",
+      "title": "Spark the Electric Jester 3",
+      "support": "generic",
+      "compatibility": "working",
+      "deploy": {
+        "steam_appid": 1629530
+      }
+    },
+    {
+      "id": "xfextremeformula",
+      "title": "XF Extreme Formula",
+      "support": "generic",
+      "compatibility": "working",
+      "deploy": {
+        "steam_appid": 2539910
+      }
+    }
+  ]
+}

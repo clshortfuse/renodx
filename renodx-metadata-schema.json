@@ -22,6 +22,16 @@
       "type": "string",
       "description": "Human-friendly addon title or primary supported game title."
     },
+    "category": {
+      "type": "string",
+      "enum": ["game", "engine", "related", "deprecated"],
+      "description": "Catalog section; engine compatibility lists belong in a linked discussion."
+    },
+    "compatibility": {
+      "type": "string",
+      "enum": ["working", "in-progress", "unsupported", "unknown"],
+      "description": "Playability assessment, independent of release channel. Omission means unknown. Explain caveats in notes."
+    },
     "variant": {
       "type": "string",
       "description": "Short package variant label when multiple RenoDX addon packages target the same game (e.g., Archive, SDR, Generic)."
@@ -37,6 +47,10 @@
     "support": {
       "type": "string",
       "description": "Free-form package support relationship, e.g. bespoke, generic, engine, alternate, legacy. Can be overridden per games[] entry."
+    },
+    "mod_name": {
+      "type": "string",
+      "description": "Optional: Friendly name for this specific mod implementation (e.g., 'Silksong Mod', 'Generic Unity Mod'). Useful when multiple mods support the same game."
     },
     "summary": {
       "type": "string",
@@ -61,7 +75,7 @@
     },
     "urls": {
       "type": "array",
-      "description": "List of relevant URLs with a descriptive tag (free-form kind, e.g., homepage/support/discord/donate/etc).",
+      "description": "External downloads and resources, including nexus, snapshot, discord, gamebanana, discussion, support and replacement links. Rendered even without a built addon.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -73,6 +87,10 @@
           "url": {
             "type": "string",
             "format": "uri"
+          },
+          "label": {
+            "type": "string",
+            "description": "Optional display label, e.g. Snapshot 32-bit or Compatibility discussion."
           },
           "kind": {
             "type": "string",
@@ -141,6 +159,9 @@
               "experimental"
             ],
             "description": "Game-target-specific support status."
+          },
+          "compatibility": {
+            "$ref": "#/properties/compatibility"
           },
           "aliases": {
             "type": "array",

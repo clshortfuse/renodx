@@ -1,0 +1,7 @@
+{
+  "id": "residentevilrequiem",
+  "title": "Resident Evil Requiem",
+  "maintainers": ["Musa"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/residentevilrequiem/mods/20"}]
+}

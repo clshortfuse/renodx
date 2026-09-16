@@ -1,0 +1,7 @@
+{
+  "id": "acsyndicate",
+  "title": "Assassin’s Creed® Syndicate",
+  "maintainers": ["Voosh"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/assassinscreedsyndicate/mods/157"}]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "ghostreconwildlands",
+  "title": "Ghost Recon® Wildlands",
+  "maintainers": ["Voosh"],
+  "compatibility": "in-progress",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/ghostreconwildlands/mods/60"}]
+}

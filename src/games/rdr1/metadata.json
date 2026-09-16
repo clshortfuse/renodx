@@ -2,6 +2,11 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "rdr1",
   "title": "Red Dead Redemption",
+  "maintainers": ["Musa"],
+  "compatibility": "working",
+  "urls": [
+    {"kind": "nexus", "url": "https://www.nexusmods.com/reddeadredemption/mods/434"}
+  ],
   "deploy": {
     "steam_appid": 2668510
   }

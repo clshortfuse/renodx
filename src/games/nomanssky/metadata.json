@@ -1,0 +1,7 @@
+{
+  "id": "nomanssky",
+  "title": "No Man's Sky",
+  "maintainers": ["OopyDoopy (Jon)"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/nomanssky/mods/4061"}]
+}

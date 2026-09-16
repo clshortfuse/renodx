@@ -1,0 +1,8 @@
+{
+  "id": "aceziotrilogy",
+  "title": "Assassin’s Creed® Ezio Trilogy (dgVoodoo)",
+  "maintainers": ["Hartapfel"],
+  "compatibility": "in-progress",
+  "notes": ["Playable, but some unresolved graphical bugs."],
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/assassinscreedii/mods/250"}]
+}

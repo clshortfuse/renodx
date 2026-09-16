@@ -1,0 +1,7 @@
+{
+  "id": "ac3remastered",
+  "title": "Assassin’s Creed® III Remastered",
+  "maintainers": ["Hartapfel"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/assassinscreediiiremastered/mods/169"}]
+}

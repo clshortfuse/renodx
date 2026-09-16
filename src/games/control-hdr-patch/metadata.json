@@ -1,0 +1,8 @@
+{
+  "id": "control-hdr-patch",
+  "title": "CONTROL - HDR Ultrawide DLSS RT Patch",
+  "category": "related",
+  "maintainers": ["Pumbo"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/control/mods/90"}]
+}

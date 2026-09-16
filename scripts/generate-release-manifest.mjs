@@ -136,13 +136,15 @@ function getGameTargets(mod) {
   }];
 }
 
-function buildGamesIndex(mods) {
+export function buildGamesIndex(mods) {
   const games = new Map();
 
   for (const mod of mods) {
     for (const game of getGameTargets(mod)) {
       const artifacts = (mod.artifacts ?? []).filter((artifact) => isDeployArchitectureSupported(game.deploy, artifact.arch));
-      if (artifacts.length === 0) continue;
+      const urls = [...(mod.urls ?? []), ...(game.urls ?? [])]
+        .filter((link, index, all) => all.findIndex(other => other.url === link.url && other.kind === link.kind) === index);
+      if (artifacts.length === 0 && urls.length === 0) continue;
 
       const key = getGameKey(game, mod);
       const title = isGenericTitle(game.title) ? mod.id : game.title;
@@ -180,6 +182,15 @@ function buildGamesIndex(mods) {
         title: mod.title,
         variant: game.variant ?? mod.variant ?? null,
         support: game.support ?? mod.support ?? null,
+        category: mod.category ?? 'game',
+        compatibility: game.compatibility ?? mod.compatibility ?? 'unknown',
+        status: game.status ?? mod.status ?? null,
+        maintainers: mod.maintainers ?? [],
+        summary: mod.summary ?? '',
+        notes: mergeStringArrays(mod.notes, game.notes),
+        tags: mergeStringArrays(mod.tags, game.tags),
+        urls,
+        deploy: game.deploy ?? {},
         artifacts,
       });
     }
@@ -307,6 +318,34 @@ async function main() {
     mods.get(modId).artifacts.push(artifact);
   }
 
+  // Optional local preview: use actual published assets, never guessed URLs.
+  if (process.argv.includes('--published-snapshot')) {
+    const response = await fetch('https://api.github.com/repos/clshortfuse/renodx/releases/tags/snapshot');
+    if (!response.ok) throw new Error(`Snapshot release lookup failed: ${response.status}`);
+    const release = await response.json();
+    for (const asset of release.assets ?? []) {
+      const match = asset.name.match(/^renodx-(.+)\.addon(64|32)$/i);
+      if (!match) continue;
+      const mod = await loadModMetadata(match[1]);
+      const arch = match[2] === '64' ? 'x64' : 'x86';
+      if (!mod || !isDeployArchitectureSupported(mod.deploy, arch)
+          || mod.artifacts.some(artifact => artifact.arch === arch)) continue;
+      const artifact = { name: asset.name, mod: mod.id, arch, size: asset.size, url: asset.browser_download_url };
+      mod.artifacts.push(artifact);
+      artifacts.push(artifact);
+      mods.set(match[1], mod);
+    }
+  }
+
+  // Catalog entries may be distributed externally and have no local binary.
+  for (const folder of await fs.readdir(srcGamesDir, { withFileTypes: true })) {
+    if (!folder.isDirectory() || folder.name.startsWith('.')) continue;
+    const mod = await loadModMetadata(folder.name);
+    if (mod && (mod.urls?.length || mod.games?.some(game => game.urls?.length))) {
+      mods.set(folder.name, mod);
+    }
+  }
+
   // Compute stats
   const stats = {
     mods_count: mods.size,
@@ -355,7 +394,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) main().catch((err) => {
   console.error('Error:', err);
   process.exit(1);
 });

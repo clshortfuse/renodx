@@ -1,0 +1,7 @@
+{
+  "id": "farcryprimal",
+  "title": "Far Cry Primal",
+  "maintainers": ["Voosh"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/farcryprimal/mods/28"}]
+}

@@ -2,6 +2,9 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "dirtrally2",
   "title": "DiRT Rally 2.0",
+  "maintainers": ["Bit Viper"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/dirtrally2/mods/8"}],
   "deploy": {
     "steam_appid": 690790
   }

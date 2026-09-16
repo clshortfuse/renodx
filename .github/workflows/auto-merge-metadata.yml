@@ -1,0 +1,82 @@
+name: Auto-merge approved metadata PRs
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: metadata-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Repository owner approves contributors by editing this JSON array.
+      APPROVED_CONTRIBUTORS: '[]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install schema validator outside checkout
+        run: npm install --prefix "$RUNNER_TEMP/metadata-validator" --ignore-scripts --no-audit --no-fund ajv@8.17.1 ajv-formats@3.0.1
+      - name: Validate and merge metadata-only PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const Ajv = require(path.join(process.env.RUNNER_TEMP, 'metadata-validator/node_modules/ajv/dist/2020.js'));
+            const addFormats = require(path.join(process.env.RUNNER_TEMP, 'metadata-validator/node_modules/ajv-formats'));
+            const approved = JSON.parse(process.env.APPROVED_CONTRIBUTORS).map(login => login.toLowerCase());
+            const params = { ...context.repo, pull_number: context.payload.pull_request.number };
+            const { data: pr } = await github.rest.pulls.get(params);
+            if (pr.state !== 'open' || pr.draft || !approved.includes(pr.user.login.toLowerCase())) {
+              core.info('Not an open, non-draft PR from an approved contributor.');
+              return;
+            }
+            if (pr.base.sha !== context.payload.pull_request.base.sha) {
+              core.setFailed('Base changed; rerun on the updated PR.');
+              return;
+            }
+            const files = await github.paginate(github.rest.pulls.listFiles, { ...params, per_page: 100 });
+            if (!files.length || files.length !== pr.changed_files || files.some(file =>
+              !/^src\/games\/[^/.][^/]*\/metadata\.json$/.test(file.filename)
+              || !['added', 'modified'].includes(file.status))) {
+              core.info('Only metadata.json additions/modifications are eligible; mixed, deleted or renamed files require manual review.');
+              return;
+            }
+            const ajv = new Ajv({ allErrors: true });
+            addFormats(ajv);
+            const validate = ajv.compile(JSON.parse(fs.readFileSync('renodx-metadata-schema.json', 'utf8')));
+            for (const file of files) {
+              // Read immutable blobs as data. Never check out or execute PR code.
+              const { data: blob } = await github.rest.git.getBlob({ ...context.repo, file_sha: file.sha });
+              if (blob.size > 1024 * 1024 || blob.encoding !== 'base64') throw new Error('Invalid metadata blob');
+              const metadata = JSON.parse(Buffer.from(blob.content, 'base64').toString('utf8'));
+              if (!validate(metadata)) throw new Error(`${file.filename}: ${ajv.errorsText(validate.errors)}`);
+              if (metadata.id !== file.filename.split('/')[2]) throw new Error('Metadata ID must match folder');
+              for (const entry of [metadata, ...(metadata.games ?? [])]) {
+                for (const link of entry.urls ?? []) {
+                  const url = new URL(link.url);
+                  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Links must be HTTP(S) without credentials');
+                }
+              }
+            }
+            const { data: current } = await github.rest.pulls.get(params);
+            if (current.head.sha !== pr.head.sha || current.base.sha !== pr.base.sha || current.draft || current.state !== 'open') {
+              throw new Error('PR changed during validation; no merge attempted');
+            }
+            // Normal merge API: no admin bypass, and SHA prevents head races.
+            // Protected branches may require checks/reviews before this succeeds.
+            const { data: result } = await github.rest.pulls.merge({ ...params, sha: pr.head.sha, merge_method: 'squash' });
+            if (!result.merged) core.setFailed(result.message);

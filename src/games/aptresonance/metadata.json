@@ -1,0 +1,7 @@
+{
+  "id": "aptresonance",
+  "title": "Resonance: A Plague Tale Legacy",
+  "maintainers": ["Hartapfel"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/resonanceaplaguetalelegacy/mods/38"}]
+}

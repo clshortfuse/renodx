@@ -1,0 +1,8 @@
+{
+  "id": "starfield-luma",
+  "title": "Starfield Luma - Native HDR and more",
+  "category": "related",
+  "maintainers": ["Ersh", "Pumbo", "Nukem", "Lilium", "ShortFuse"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/starfield/mods/4821"}]
+}
