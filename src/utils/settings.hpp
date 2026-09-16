@@ -2,23 +2,57 @@
 
 #define ImTextureID ImU64
 
+#include <algorithm>
+#include <cstring>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <deps/imgui/imgui.h>
+#include <frozen/map.h>
 #include <include/reshade.hpp>
 
 #include "./bitwise.hpp"
 #include "./icons.hpp"
 #include "./mutex.hpp"
+#include "./settings/segmentedbuttons.hpp"
 
 namespace renodx::utils::settings {
 
 extern "C" __declspec(dllexport) const char* const NAME;
 
+template <typename T = float>
+using SettingChangeCallback = std::conditional_t<
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, std::string>
+        || std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, std::string_view>
+        || std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, const char*>,
+    std::function<void(std::string_view previous, std::string_view current)>,
+    std::function<void(T previous, T current)>>;
+
+enum class SettingStyle : uint8_t {
+  DEFAULT = 0,
+  SEGMENTED = 1 << 0,
+  MULTILINE = 1 << 1,
+};
+
+constexpr SettingStyle operator|(SettingStyle lhs, SettingStyle rhs) {
+  return static_cast<SettingStyle>(
+      static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
+}
+
+constexpr SettingStyle operator&(SettingStyle lhs, SettingStyle rhs) {
+  return static_cast<SettingStyle>(
+      static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs));
+}
+
 static bool use_presets = true;
+static SettingStyle preset_style = SettingStyle::DEFAULT;
+static bool open_sections_by_default = true;
+static std::vector<std::string> default_open_sections;
 static std::string overlay_title = NAME;
 static std::string global_name = "renodx";
 static int preset_index = 1;
@@ -27,6 +61,10 @@ static std::vector<std::string> preset_strings = {
     "Preset #1",
     "Preset #2",
     "Preset #3",
+};
+static const std::vector<std::string> BOOLEAN_STRINGS = {
+    "Off",
+    "On",
 };
 
 static std::vector<std::function<void()>> on_preset_off_callbacks;
@@ -51,24 +89,31 @@ enum class SettingValueType : uint8_t {
   TEXT = 6,
   TEXT_NOWRAP = 7,
   CUSTOM = 8,
+  INPUT_TEXT = 9,
 };
 
 struct Setting {
   std::string key;
   float* binding = nullptr;
+  char* text_binding = nullptr;
+  size_t text_binding_size = 0;
   SettingValueType value_type = SettingValueType::FLOAT;
   float default_value = 0.f;
+  std::string default_text;
   std::vector<uint32_t> packed_values;
   bool can_reset = true;
   std::string label = key;
   std::string section;
   std::string group;
   std::string tooltip;
+  std::string placeholder;
   std::vector<std::string> labels;
+  SettingStyle style = SettingStyle::DEFAULT;
   std::optional<uint32_t> tint;  // HEX notation
   float min = 0.f;
   float max = 100.f;
   std::string format = "%.0f";
+  ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_None;
 
   std::function<bool()> is_enabled = [] {
     return true;
@@ -80,7 +125,8 @@ struct Setting {
 
   std::function<void()> on_change = [] {};
 
-  std::function<void(float previous, float current)> on_change_value = [](float previous, float current) {};
+  SettingChangeCallback<> on_change_value = [](float previous, float current) {};
+  SettingChangeCallback<std::string_view> on_change_text = [](std::string_view previous, std::string_view current) {};
 
   // Return true to save settings
   std::function<bool()> on_click = [] { return true; };
@@ -100,6 +146,53 @@ struct Setting {
 
   float value = default_value;
   int value_as_int = static_cast<int>(default_value);
+  std::string value_as_string;
+
+  [[nodiscard]]
+  bool HasTextBinding() const {
+    return this->text_binding != nullptr && this->text_binding_size > 0;
+  }
+
+  [[nodiscard]]
+  bool HasNumericValue() const {
+    switch (this->value_type) {
+      case SettingValueType::FLOAT:
+      case SettingValueType::INTEGER:
+      case SettingValueType::BOOLEAN:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  [[nodiscard]]
+  bool SupportsReset() const {
+    switch (this->value_type) {
+      case SettingValueType::FLOAT:
+      case SettingValueType::INTEGER:
+      case SettingValueType::BOOLEAN:
+      case SettingValueType::INPUT_TEXT:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  [[nodiscard]]
+  std::string GetTextValue() const {
+    if (this->HasTextBinding()) {
+      return std::string(this->text_binding);
+    }
+    return this->value_as_string;
+  }
+
+  [[nodiscard]]
+  bool IsUsingDefault() const {
+    if (this->value_type == SettingValueType::INPUT_TEXT) {
+      return this->GetTextValue() == this->default_text;
+    }
+    return this->GetValue() == this->default_value;
+  }
 
   [[nodiscard]]
   float GetMax() const {
@@ -129,6 +222,15 @@ struct Setting {
       case SettingValueType::BOOLEAN:
         return ((this->value_as_int == 0) ? 0.f : 1.f);
         break;
+      case SettingValueType::INPUT_TEXT:
+      case SettingValueType::BUTTON:
+      case SettingValueType::LABEL:
+      case SettingValueType::BULLET:
+      case SettingValueType::TEXT:
+      case SettingValueType::TEXT_NOWRAP:
+      case SettingValueType::CUSTOM:
+        return 0.f;
+        break;
     }
   }
 
@@ -138,7 +240,85 @@ struct Setting {
     return this;
   }
 
+  Setting* Set(const std::string& value) {
+    this->value_as_string = value;
+    return this;
+  }
+
+  Setting* ReadFromConfig(const std::string& config_section) {
+    switch (this->value_type) {
+      case SettingValueType::FLOAT:
+        if (!reshade::get_config_value(nullptr, config_section.c_str(), this->key.c_str(), this->value)) {
+          this->value = this->default_value;
+        }
+        if (this->value > this->GetMax()) {
+          this->value = this->GetMax();
+        } else if (this->value < this->min) {
+          this->value = this->min;
+        }
+        break;
+      case SettingValueType::BOOLEAN:
+      case SettingValueType::INTEGER:
+        if (!reshade::get_config_value(nullptr, config_section.c_str(), this->key.c_str(), this->value_as_int)) {
+          this->value_as_int = static_cast<int>(this->default_value);
+        }
+        if (this->value_as_int > this->GetMax()) {
+          this->value_as_int = this->GetMax();
+        } else if (this->value_as_int < static_cast<int>(this->min)) {
+          this->value_as_int = static_cast<int>(this->min);
+        }
+        break;
+      case SettingValueType::INPUT_TEXT: {
+        size_t size = 0;
+        if (!reshade::get_config_value(nullptr, config_section.c_str(), this->key.c_str(), nullptr, &size)
+            || size == 0) {
+          this->value_as_string = this->default_text;
+          break;
+        }
+
+        std::vector<char> temp(size + 1, '\0');
+        if (!reshade::get_config_value(nullptr, config_section.c_str(), this->key.c_str(), temp.data(), &size)) {
+          this->value_as_string = this->default_text;
+          break;
+        }
+        temp.back() = '\0';
+        this->value_as_string = temp.data();
+        break;
+      }
+      default:
+        break;
+    }
+    return this;
+  }
+
+  Setting* WriteToConfig(const std::string& config_section) {
+    switch (this->value_type) {
+      case SettingValueType::FLOAT:
+        reshade::set_config_value(nullptr, config_section.c_str(), this->key.c_str(), this->value);
+        break;
+      case SettingValueType::INTEGER:
+      case SettingValueType::BOOLEAN:
+        reshade::set_config_value(nullptr, config_section.c_str(), this->key.c_str(), this->value_as_int);
+        break;
+      case SettingValueType::INPUT_TEXT:
+        reshade::set_config_value(nullptr, config_section.c_str(), this->key.c_str(), this->GetTextValue().c_str());
+        break;
+      default:
+        break;
+    }
+    return this;
+  }
+
   Setting* Write() {
+    if (this->value_type == SettingValueType::INPUT_TEXT) {
+      if (this->HasTextBinding()) {
+        size_t copy_size = std::min(this->value_as_string.size(), this->text_binding_size - 1);
+        std::memcpy(this->text_binding, this->value_as_string.data(), copy_size);
+        this->text_binding[copy_size] = '\0';
+      }
+      return this;
+    }
+
     if (this->binding != nullptr) {
       if (!this->packed_values.empty()) {
         float packed_binding = *this->binding;
@@ -193,6 +373,16 @@ static Setting* FindSetting(const std::string& key) {
 static bool UpdateSetting(const std::string& key, float value) {
   auto* setting = FindSetting(key);
   if (setting == nullptr) return false;
+  if (!setting->HasNumericValue()) return false;
+  const std::unique_lock lock(renodx::utils::mutex::global_mutex);
+  setting->Set(value)->Write();
+  return true;
+}
+
+static bool UpdateSetting(const std::string& key, const std::string& value) {
+  auto* setting = FindSetting(key);
+  if (setting == nullptr) return false;
+  if (setting->value_type != SettingValueType::INPUT_TEXT) return false;
   const std::unique_lock lock(renodx::utils::mutex::global_mutex);
   setting->Set(value)->Write();
   return true;
@@ -204,7 +394,11 @@ static void ResetSettings(bool reset_global = false) {
     if (setting->key.empty()) continue;
     if (setting->is_global && !reset_global) continue;
     if (!setting->can_reset) continue;
-    setting->Set(setting->default_value)->Write();
+    if (setting->value_type == SettingValueType::INPUT_TEXT) {
+      setting->Set(setting->default_text)->Write();
+    } else {
+      setting->Set(setting->default_value)->Write();
+    }
   }
 }
 
@@ -222,73 +416,24 @@ static bool UpdateSettings(const std::vector<std::pair<std::string, float>>& pai
   return !missing_key;
 }
 
-static void LoadSetting(const std::string& section, Setting* setting) {
-  switch (setting->value_type) {
-    case SettingValueType::FLOAT:
-      if (!reshade::get_config_value(nullptr, section.c_str(), setting->key.c_str(), setting->value)) {
-        setting->value = setting->default_value;
-      }
-      if (setting->value > setting->GetMax()) {
-        setting->value = setting->GetMax();
-      } else if (setting->value < setting->min) {
-        setting->value = setting->min;
-      }
-      break;
-    case SettingValueType::BOOLEAN:
-    case SettingValueType::INTEGER:
-      if (!reshade::get_config_value(nullptr, section.c_str(), setting->key.c_str(), setting->value_as_int)) {
-        setting->value_as_int = static_cast<int>(setting->default_value);
-      }
-      if (setting->value_as_int > setting->GetMax()) {
-        setting->value_as_int = setting->GetMax();
-      } else if (setting->value_as_int < static_cast<int>(setting->min)) {
-        setting->value_as_int = static_cast<int>(setting->min);
-      }
-      break;
-    default:
-      break;
-  }
+[[deprecated("Use Setting::ReadFromConfig directly")]]
+static void LoadSetting(const std::string& config_section, Setting* setting) {
+  setting->ReadFromConfig(config_section);
 }
 
-static void LoadSettings(const std::string& section) {
+static void LoadSettings(const std::string& config_section) {
   for (auto* setting : *settings) {
     if (setting->is_global) continue;
-    LoadSetting(section, setting);
     const std::unique_lock lock(renodx::utils::mutex::global_mutex);
-    setting->Write();
+    setting->ReadFromConfig(config_section)->Write();
   }
 }
 
 static void LoadGlobalSettings() {
   for (auto* setting : *settings) {
-    switch (setting->value_type) {
-      if (!setting->is_global) continue;
-      case SettingValueType::FLOAT:
-        if (!reshade::get_config_value(nullptr, global_name.c_str(), setting->key.c_str(), setting->value)) {
-          setting->value = setting->default_value;
-        }
-        if (setting->value > setting->GetMax()) {
-          setting->value = setting->GetMax();
-        } else if (setting->value < setting->min) {
-          setting->value = setting->min;
-        }
-        break;
-      case SettingValueType::BOOLEAN:
-      case SettingValueType::INTEGER:
-        if (!reshade::get_config_value(nullptr, global_name.c_str(), setting->key.c_str(), setting->value_as_int)) {
-          setting->value_as_int = static_cast<int>(setting->default_value);
-        }
-        if (setting->value_as_int > setting->GetMax()) {
-          setting->value_as_int = setting->GetMax();
-        } else if (setting->value_as_int < static_cast<int>(setting->min)) {
-          setting->value_as_int = static_cast<int>(setting->min);
-        }
-        break;
-      default:
-        break;
-    }
+    if (!setting->is_global) continue;
     const std::unique_lock lock(renodx::utils::mutex::global_mutex);
-    setting->Write();
+    setting->ReadFromConfig(global_name)->Write();
   }
 }
 
@@ -307,21 +452,11 @@ static std::string GetCurrentPresetName() {
   return "";
 }
 
-static void SaveSettings(const std::string& section = GetCurrentPresetName()) {
+static void SaveSettings(const std::string& config_section = GetCurrentPresetName()) {
   for (auto* setting : *settings) {
     if (setting->key.empty()) continue;
     if (setting->is_global) continue;
-    switch (setting->value_type) {
-      case SettingValueType::FLOAT:
-        reshade::set_config_value(nullptr, section.c_str(), setting->key.c_str(), setting->value);
-        break;
-      case SettingValueType::INTEGER:
-      case SettingValueType::BOOLEAN:
-        reshade::set_config_value(nullptr, section.c_str(), setting->key.c_str(), setting->value_as_int);
-        break;
-      default:
-        break;
-    }
+    setting->WriteToConfig(config_section);
   }
 }
 
@@ -329,17 +464,7 @@ static void SaveGlobalSettings() {
   for (auto* setting : *settings) {
     if (setting->key.empty()) continue;
     if (!setting->is_global) continue;
-    switch (setting->value_type) {
-      case SettingValueType::FLOAT:
-        reshade::set_config_value(nullptr, global_name.c_str(), setting->key.c_str(), setting->value);
-        break;
-      case SettingValueType::INTEGER:
-      case SettingValueType::BOOLEAN:
-        reshade::set_config_value(nullptr, global_name.c_str(), setting->key.c_str(), setting->value_as_int);
-        break;
-      default:
-        break;
-    }
+    setting->WriteToConfig(global_name);
   }
 }
 
@@ -361,6 +486,10 @@ static void WriteGlobalString(const std::string& key, const std::string& value) 
   reshade::set_config_value(nullptr, global_name.c_str(), key.c_str(), value.c_str());
 }
 
+static bool IsPresetOff() {
+  return use_presets && preset_index == 0;
+}
+
 // Runs first
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
@@ -369,13 +498,23 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   auto draw_presets = [&]() {
     if (use_presets) {
-      changed_preset = ImGui::SliderInt(
-          "Preset",
-          &preset_index,
-          0,
-          preset_strings.size() - 1,
-          preset_strings[preset_index].c_str(),
-          ImGuiSliderFlags_NoInput);
+      if ((preset_style & SettingStyle::SEGMENTED)
+          == SettingStyle::SEGMENTED) {
+        changed_preset = SegmentedButtons(
+            "Preset",
+            &preset_index,
+            preset_strings,
+            (preset_style & SettingStyle::MULTILINE)
+                == SettingStyle::MULTILINE);
+      } else {
+        changed_preset = ImGui::SliderInt(
+            "Preset",
+            &preset_index,
+            0,
+            preset_strings.size() - 1,
+            preset_strings[preset_index].c_str(),
+            ImGuiSliderFlags_NoInput);
+      }
     }
 
     if (changed_preset) {
@@ -476,7 +615,14 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       }
       open_node = ImGui::TreeNodeEx(
           setting->section.c_str(),
-          ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanFullWidth);
+          ImGuiTreeNodeFlags_SpanFullWidth
+              | (open_sections_by_default
+                         || std::ranges::find(
+                                default_open_sections,
+                                setting->section)
+                                != default_open_sections.end()
+                     ? ImGuiTreeNodeFlags_DefaultOpen
+                     : ImGuiTreeNodeFlags_None));
       if (open_node) {
         ImGui::Unindent();
       }
@@ -498,13 +644,21 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         ImGui::BeginDisabled();
       }
       bool changed = false;
-      float previous_value = setting->GetValue();
+      float previous_value = setting->HasNumericValue()
+                                 ? setting->GetValue()
+                                 : 0.f;
+      std::string previous_text = setting->value_type == SettingValueType::INPUT_TEXT
+                                      ? setting->GetTextValue()
+                                      : std::string();
       const auto identifier = (setting->key.empty() ? setting->label : setting->key);
       ImGui::PushID(("##Key" + identifier).c_str());
       ImGuiSliderFlags slider_flags = ImGuiSliderFlags_None;
       if (setting->is_logarithmic) {
         slider_flags |= ImGuiSliderFlags_Logarithmic;
       }
+      const bool is_multiline = renodx::utils::bitwise::HasFlag(
+          setting->style,
+          SettingStyle::MULTILINE);
       switch (setting->value_type) {
         case SettingValueType::FLOAT:
           changed |= ImGui::SliderFloat(
@@ -516,26 +670,56 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               slider_flags);
           break;
         case SettingValueType::INTEGER:
-          changed |= ImGui::SliderInt(
-              setting->label.c_str(),
-              &setting->value_as_int,
-              setting->min,
-              setting->GetMax(),
-              setting->labels.empty()
-                  ? setting->format.c_str()
-                  : setting->labels.at(setting->value_as_int).c_str(),
-              slider_flags | ImGuiSliderFlags_NoInput);
+          if (renodx::utils::bitwise::HasFlag(
+                  setting->style,
+                  SettingStyle::SEGMENTED)
+              && !setting->labels.empty()) {
+            changed |= SegmentedButtons(
+                setting->label.c_str(),
+                &setting->value_as_int,
+                setting->labels,
+                is_multiline);
+          } else {
+            changed |= ImGui::SliderInt(
+                setting->label.c_str(),
+                &setting->value_as_int,
+                setting->min,
+                setting->GetMax(),
+                setting->labels.empty()
+                    ? setting->format.c_str()
+                    : setting->labels.at(setting->value_as_int).c_str(),
+                slider_flags | ImGuiSliderFlags_NoInput);
+          }
           break;
         case SettingValueType::BOOLEAN:
-          changed |= ImGui::SliderInt(
-              setting->label.c_str(),
-              &setting->value_as_int,
-              0,
-              1,
-              setting->labels.empty()
-                  ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
-                  : setting->labels.at(setting->value_as_int).c_str(),
-              slider_flags | ImGuiSliderFlags_NoInput);
+          if (renodx::utils::bitwise::HasFlag(
+                  setting->style,
+                  SettingStyle::SEGMENTED)) {
+            IM_ASSERT(setting->labels.empty() || setting->labels.size() >= 2);
+            if (setting->labels.size() < 2) {
+              changed |= SegmentedButtons(
+                  setting->label.c_str(),
+                  &setting->value_as_int,
+                  BOOLEAN_STRINGS,
+                  is_multiline);
+            } else {
+              changed |= SegmentedButtons(
+                  setting->label.c_str(),
+                  &setting->value_as_int,
+                  std::span<const std::string>(setting->labels).first(2),
+                  is_multiline);
+            }
+          } else {
+            changed |= ImGui::SliderInt(
+                setting->label.c_str(),
+                &setting->value_as_int,
+                0,
+                1,
+                setting->labels.empty()
+                    ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
+                    : setting->labels.at(setting->value_as_int).c_str(),
+                slider_flags | ImGuiSliderFlags_NoInput);
+          }
           break;
         case SettingValueType::BUTTON:
           if (ImGui::Button(setting->label.c_str())) {
@@ -557,6 +741,34 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         case SettingValueType::CUSTOM:
           changed |= setting->on_draw();
           break;
+        case SettingValueType::INPUT_TEXT:
+          if (setting->HasTextBinding()) {
+            changed |= ImGui::InputTextWithHint(
+                setting->label.c_str(),
+                setting->placeholder.c_str(),
+                setting->text_binding,
+                setting->text_binding_size,
+                setting->input_text_flags);
+            if (changed) {
+              setting->value_as_string = setting->GetTextValue();
+            }
+          } else {
+            changed |= ImGui::InputTextWithHint(
+                setting->label.c_str(),
+                setting->placeholder.c_str(),
+                setting->value_as_string.data(),
+                setting->value_as_string.capacity() + 1,
+                setting->input_text_flags | ImGuiInputTextFlags_CallbackResize,
+                [](ImGuiInputTextCallbackData* data) {
+                  if (data->EventFlag != ImGuiInputTextFlags_CallbackResize) return 0;
+                  auto* value = static_cast<std::string*>(data->UserData);
+                  value->resize(static_cast<size_t>(data->BufTextLen));
+                  data->Buf = value->data();
+                  return 0;
+                },
+                &setting->value_as_string);
+          }
+          break;
       }
       ImGui::PopID();
       if (changed) {
@@ -568,9 +780,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
       if (preset_index != 0
           && setting->can_reset
-          && setting->value_type < SettingValueType::BUTTON) {
+          && setting->SupportsReset()) {
         ImGui::SameLine();
-        const bool is_using_default = (setting->GetValue() == setting->default_value);
+        const bool is_using_default = setting->IsUsingDefault();
         ImGui::BeginDisabled(is_using_default);
         if (is_using_default) {
           ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ImColor::HSV(0, 0, 0.6f)));
@@ -592,7 +804,11 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
         ImGui::PushID(("##Reset" + identifier).c_str());
         if (ImGui::Button(renodx::utils::icons::View(renodx::utils::icons::UNDO))) {
-          setting->Set(setting->default_value);
+          if (setting->value_type == SettingValueType::INPUT_TEXT) {
+            setting->Set(setting->default_text);
+          } else {
+            setting->Set(setting->default_value);
+          }
           changed = true;
         }
         ImGui::PopID();
@@ -610,7 +826,11 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         const std::unique_lock lock(renodx::utils::mutex::global_mutex);
         setting->Write();
         any_change = true;
-        setting->on_change_value(previous_value, setting->GetValue());
+        if (setting->HasNumericValue()) {
+          setting->on_change_value(previous_value, setting->GetValue());
+        } else if (setting->value_type == SettingValueType::INPUT_TEXT) {
+          setting->on_change_text(previous_text, setting->GetTextValue());
+        }
       }
       if (is_disabled) {
         ImGui::EndDisabled();
@@ -644,7 +864,11 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
 static bool attached = false;
 
-static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_off)() = nullptr) {
+static void Use(
+    DWORD fdw_reason,
+    Settings* new_settings,
+    void (*new_on_preset_off)() = nullptr,
+    void (*new_on_preset_changed)() = nullptr) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
@@ -653,6 +877,9 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
       settings = new_settings;
       if (new_on_preset_off != nullptr) {
         on_preset_off_callbacks.emplace_back(new_on_preset_off);
+      }
+      if (new_on_preset_changed != nullptr) {
+        on_preset_changed_callbacks.emplace_back(new_on_preset_changed);
       }
       LoadGlobalSettings();
       LoadSettings(global_name + "-preset1");
@@ -663,6 +890,9 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
       if (!attached) return;
       attached = false;
       reshade::unregister_overlay(overlay_title.c_str(), OnRegisterOverlay);
+      on_preset_off_callbacks.clear();
+      on_preset_changed_callbacks.clear();
+      settings = nullptr;
       break;
   }
 }
