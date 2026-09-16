@@ -1,6 +1,6 @@
-#include "./common.hlsl"
-// used by loading screens/fade out on title screen.
-// ---- Created with 3Dmigoto v1.4.1 on Sat Nov  8 01:34:09 2025
+#include "./shared.h"
+// used on the main menu
+// ---- Created with 3Dmigoto v1.4.1 on Sat Nov  8 01:34:19 2025
 Texture2D<float4> t5 : register(t5);
 
 Texture2D<float4> t4 : register(t4);
@@ -34,30 +34,16 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   r0.xyz = max(float3(0, 0, 0), r0.xyz);
-  r1.xy = cb0[419].zw + -v1.xy;
-  r1.xy = cb0[419].xx * r1.xy;
-  r1.xy = r1.xy * cb0[419].yy + v1.xy;
-  r2.xyzw = t5.Sample(s0_s, v1.xy).xyzw;
-  r1.yz = -cb0[419].zw + r1.xy;
-  r1.x = cb0[420].z * r1.y;
-  r0.w = dot(r1.xz, r1.xz);
-  r0.w = sqrt(r0.w);
-  r0.w = -cb0[420].x + r0.w;
-  r1.x = 1 / cb0[420].y;
-  r0.w = saturate(r1.x * r0.w);
-  r1.x = r0.w * -2 + 3;
-  r0.w = r0.w * r0.w;
-  r0.w = r1.x * r0.w;
-  r0.w = cb0[420].w * r0.w;
-  r1.xyz = r2.xyz + -r0.xyz;
-  r0.xyz = r0.www * r1.xyz + r0.xyz;
+  r1.xyzw = t2.Sample(s0_s, v1.xy).xyzw;
+  r1.xyz = r1.xyz + -r0.xyz;
+  r0.xyz = r1.www * r1.xyz + r0.xyz;
   r1.xyzw = t1.SampleLevel(s0_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz * cb0[145].xxx + r0.xyz;
-  r1.xyzw = t2.SampleLevel(s1_s, v1.xy, 0).xyzw;
+  r1.xyzw = t3.SampleLevel(s1_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz + r0.xyz;
   r0.w = cmp(0 < cb0[138].x);
   if (r0.w != 0) {
-    r1.xyzw = t4.SampleLevel(s0_s, v1.xy, 0).xyzw;
+    r1.xyzw = t5.SampleLevel(s0_s, v1.xy, 0).xyzw;
     r1.xyz = cb0[138].xxx * r1.xyz;
     r0.xyz = max(r1.xyz, r0.xyz);
   }
@@ -109,11 +95,11 @@ void main(
   r1.xy = float2(0.5, 0.5) * cb0[70].xy;
   r1.yz = r0.zw * cb0[70].xy + r1.xy;
   r1.x = r0.y * cb0[70].y + r1.y;
-  r2.xyzw = t3.SampleLevel(s0_s, r1.xz, 0).xyzw;
+  r2.xyzw = t4.SampleLevel(s0_s, r1.xz, 0).xyzw;
   r3.x = cb0[70].y;
   r3.y = 0;
   r0.zw = r3.xy + r1.xz;
-  r1.xyzw = t3.SampleLevel(s0_s, r0.zw, 0).xyzw;
+  r1.xyzw = t4.SampleLevel(s0_s, r0.zw, 0).xyzw;
   r0.x = r0.x * cb0[70].z + -r0.y;
   r0.yzw = r1.xyz + -r2.xyz;
   r0.xyz = r0.xxx * r0.yzw + r2.xyz;
@@ -131,7 +117,9 @@ void main(
   // r0.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= abs(r0.xyz));
   // r0.xyz = r0.xyz ? r2.xyz : r3.xyz;
   // o0.xyz = r1.xyz * r0.xyz;
-  o0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
-  o0.xyz = PostToneMapScale(o0.xyz);
+  // Vanilla: sRGB encode into an 8-bit target (LUT output is linear SDR).
+  // RenoDX: the LUT holds the tone mapped result; write the RenoDX intermediate
+  // encoding so UI blends on top in the upgraded float buffer.
+  o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
   return;
 }

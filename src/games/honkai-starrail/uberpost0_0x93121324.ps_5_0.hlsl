@@ -1,6 +1,6 @@
-#include "./common.hlsl"
-// used in character ults  (herta)
-// ---- Created with 3Dmigoto v1.4.1 on Sat Nov  8 01:47:26 2025
+#include "./shared.h"
+// used on the title screen/open-world
+// ---- Created with 3Dmigoto v1.4.1 on Sat Nov  8 01:13:26 2025
 Texture2D<float4> t4 : register(t4);
 
 Texture2D<float4> t3 : register(t3);
@@ -30,23 +30,8 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = v1.xyxy * float4(2, 2, 2, 2) + float4(-1, -1, -1, -1);
-  r1.x = dot(r0.zw, r0.zw);
-  r0.xyzw = r1.xxxx * r0.xyzw;
-  r0.xyzw = cb0[426].zzzz * r0.xyzw;
-  r0.xyzw = r0.xyzw * float4(-0.333333343, -0.333333343, -0.666666687, -0.666666687) + v1.xyxy;
-  r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
-  r1.xyz = max(float3(0, 0, 0), r1.xyz);
-  r2.xyzw = t0.SampleLevel(s0_s, r0.xy, 0).xyzw;
-  r2.xyz = max(float3(0, 0, 0), r2.xyz);
-  r0.xyzw = t0.SampleLevel(s0_s, r0.zw, 0).xyzw;
+  r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   r0.xyz = max(float3(0, 0, 0), r0.xyz);
-  r2.xyz = cb0[428].xyz * r2.xyz;
-  r1.xyz = r1.xyz * cb0[427].xyz + r2.xyz;
-  r0.xyz = r0.xyz * cb0[429].xyz + r1.xyz;
-  r1.xyz = cb0[428].xyz + cb0[427].xyz;
-  r1.xyz = cb0[429].xyz + r1.xyz;
-  r0.xyz = r0.xyz / r1.xyz;
   r1.xyzw = t1.SampleLevel(s0_s, v1.xy, 0).xyzw;
   r0.xyz = r1.xyz * cb0[145].xxx + r0.xyz;
   r1.xyzw = t2.SampleLevel(s1_s, v1.xy, 0).xyzw;
@@ -127,7 +112,9 @@ void main(
   // r0.xyz = cmp(float3(0.00313080009, 0.00313080009, 0.00313080009) >= abs(r0.xyz));
   // r0.xyz = r0.xyz ? r2.xyz : r3.xyz;
   // o0.xyz = r1.xyz * r0.xyz;
-  o0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
-  o0.xyz = PostToneMapScale(o0.xyz);
+  // Vanilla: sRGB encode into an 8-bit target (LUT output is linear SDR).
+  // RenoDX: the LUT holds the tone mapped result; write the RenoDX intermediate
+  // encoding so UI blends on top in the upgraded float buffer.
+  o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
   return;
 }
