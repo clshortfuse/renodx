@@ -1543,6 +1543,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     return true;
     }),
     CustomShaderEntryCallback(0x3BB46D74, &CountTonemap1),  // MK Glow SM40
+    CustomShaderEntryCallback(0x2749CA46, &CountTonemap1),   // Bloom
     /*CustomShaderEntry(0x6CA6AD34),  // FinalVisualAdjustments
     CustomShaderEntry(0x3D4B34E8),*/
     //CustomShaderEntry(0x25AD4F0D),
