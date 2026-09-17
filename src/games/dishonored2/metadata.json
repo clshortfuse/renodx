@@ -1,0 +1,16 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "dishonored2",
+  "title": "Dishonored 2",
+  "status": "beta",
+  "deploy": {
+    "game_exe": "Dishonored2.exe",
+    "process_name": "Dishonored2",
+    "api": "d3d11",
+    "steam_appid": 403640,
+    "gog_product_id": 1431426311,
+    "architecture": [
+      "x64"
+    ]
+  }
+}
