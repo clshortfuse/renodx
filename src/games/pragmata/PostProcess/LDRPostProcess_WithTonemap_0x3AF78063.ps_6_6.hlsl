@@ -1236,9 +1236,9 @@ float4 main(
             _1857 = _1856 * 3635641;
             _1866 = ((((float)((uint)((uint)((((uint)(_1857) >> 26) | ((int)(_1856 * 232681024))) ^ _1857)))) * 2.3283064365386963e-10f) + -0.5f);
           }
-          _1867 = _1834 * fNoisePower.x;
-          _1868 = _1866 * fNoisePower.y;
-          _1869 = _1850 * fNoisePower.y;
+          _1867 = _1834 * fNoisePower.x * CUSTOM_NOISE;
+          _1868 = _1866 * fNoisePower.y * CUSTOM_NOISE;
+          _1869 = _1850 * fNoisePower.y * CUSTOM_NOISE;
           _1883 = exp2(log2(1.0f - saturate(dot(float3(saturate(_1793), saturate(_1794), saturate(_1795)), float3(0.29899999499320984f, -0.16899999976158142f, 0.5f)))) * fNoiseContrast) * fBlendRate;
           _1894 = ((_1883 * (mad(_1869, 1.4019999504089355f, _1867) - _1793)) + _1793);
           _1895 = ((_1883 * (mad(_1869, -0.7139999866485596f, mad(_1868, -0.3440000116825104f, _1867)) - _1794)) + _1794);

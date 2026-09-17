@@ -874,9 +874,9 @@ float4 main(
             _1184 = _1183 * 3635641;
             _1193 = ((((float)((uint)((uint)((((uint)(_1184) >> 26) | ((int)(_1183 * 232681024))) ^ _1184)))) * 2.3283064365386963e-10f) + -0.5f);
           }
-          _1194 = _1161 * fNoisePower.x;
-          _1195 = _1193 * fNoisePower.y;
-          _1196 = _1177 * fNoisePower.y;
+          _1194 = _1161 * fNoisePower.x * CUSTOM_NOISE;
+          _1195 = _1193 * fNoisePower.y * CUSTOM_NOISE;
+          _1196 = _1177 * fNoisePower.y * CUSTOM_NOISE;
           _1210 = exp2(log2(1.0f - saturate(dot(float3(saturate(_1129), saturate(_1130), saturate(_1131)), float3(0.29899999499320984f, -0.16899999976158142f, 0.5f)))) * fNoiseContrast) * fBlendRate;
           _1221 = ((_1210 * (mad(_1196, 1.4019999504089355f, _1194) - _1129)) + _1129);
           _1222 = ((_1210 * (mad(_1196, -0.7139999866485596f, mad(_1195, -0.3440000116825104f, _1194)) - _1130)) + _1130);
