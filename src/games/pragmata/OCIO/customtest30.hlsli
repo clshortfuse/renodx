@@ -27,14 +27,26 @@ static const int PSYCHO30_TARGET_GAMUT_DISPLAY_P3 = 3;
 static const int PSYCHO30_CUSTOM_GAMUT_MAPPING_EXACT_PROJECTION = 0;
 static const int PSYCHO30_CUSTOM_GAMUT_MAPPING_SOFT_RADIAL = 1;
 static const float PSYCHO30_CUSTOM_GAMUT_COMPRESSION_KNEE = 0.9f;
-// (0, 1] guarantees monotonic containment; 1 is the firmest valid response.
-static const float PSYCHO30_CUSTOM_GAMUT_COMPRESSION_FIRMNESS = 0.65f;
-static const float PSYCHO30_CUSTOM_GAMUT_COMPRESSION_EXP2_SCALE =
-    PSYCHO30_CUSTOM_GAMUT_COMPRESSION_FIRMNESS / log(2.f);
+static const float PSYCHO30_CUSTOM_GAMUT_COMPRESSION_STRENGTH = 1.5f;
+static const float PSYCHO30_CUSTOM_GAMUT_COMPRESSION_LOW_CUSP_PEAK = 0.8f;
 
+static const float3x3 PSYCHO30_DISPLAY_P3_TO_LMS_MAT = mul(
+    renodx::color::STOCKMAN_CVRL_XYZ_TO_LMS_2DEG_FIT,
+    renodx::color::DISPLAYP3_TO_XYZ_MAT);
 static const float3x3 PSYCHO30_LMS_TO_DISPLAY_P3_MAT = mul(
     renodx::color::XYZ_TO_DISPLAYP3_MAT,
     renodx::color::STOCKMAN_CVRL_LMS_TO_XYZ_2DEG_FIT);
+static const float3 PSYCHO30_DISPLAY_P3_YF_COEFFICIENTS = mul(
+    renodx::color::STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT[1],
+    PSYCHO30_DISPLAY_P3_TO_LMS_MAT);
+static const float3 PSYCHO30_DISPLAY_P3_YF_POSITIVE_COEFFICIENTS = max(
+    PSYCHO30_DISPLAY_P3_YF_COEFFICIENTS,
+    0.f);
+static const float3 PSYCHO30_DISPLAY_P3_YF_WEIGHTS =
+    PSYCHO30_DISPLAY_P3_YF_POSITIVE_COEFFICIENTS
+    / (PSYCHO30_DISPLAY_P3_YF_POSITIVE_COEFFICIENTS.x
+       + PSYCHO30_DISPLAY_P3_YF_POSITIVE_COEFFICIENTS.y
+       + PSYCHO30_DISPLAY_P3_YF_POSITIVE_COEFFICIENTS.z);
 static const float3 PSYCHO30_DISPLAY_P3_D_RGB = mul(
     PSYCHO30_LMS_TO_DISPLAY_P3_MAT,
     PSYCHO30_D_LMS);
@@ -342,8 +354,9 @@ float3 psycho30_MeanA2ResponseFromCustomResponse(
       authored_dt.y);
 }
 
-// Preserve the authored scaled-A2 direction and physiological A while smoothly
-// reducing radius against all six target RGB-cube planes.
+// Compress radially at fixed physiological A in the exact target RGB cube.
+// D/T keep one scalar, preserving authored scaled-A2 direction. Target-primary
+// Yf geometry adds an inner chroma reserve around low-cusp blue/purple hues.
 float3 psycho30_ApplyCustomSoftRadialGamutCompression(
     float3 desired_coord,
     float response_yf,
@@ -362,30 +375,59 @@ float3 psycho30_ApplyCustomSoftRadialGamutCompression(
   float desired_a = (2.f * desired_coord.y + radial_a_numerator) / 6.f;
   float mapped_a = clamp(desired_a, 0.f, saturate(response_yf));
   float3 radial_rgb;
+  float3 target_yf_weights;
   [branch]
   if (target_gamut_mode == PSYCHO30_TARGET_GAMUT_BT709) {
     radial_rgb = desired_coord.x * PSYCHO30_BT709_D_RGB
                  + desired_coord.z * PSYCHO30_BT709_T_RGB;
+    target_yf_weights = PSYCHO30_BT709_SOURCE_YF_WEIGHTS;
   } else if (target_gamut_mode == PSYCHO30_TARGET_GAMUT_DISPLAY_P3) {
     radial_rgb = desired_coord.x * PSYCHO30_DISPLAY_P3_D_RGB
                  + desired_coord.z * PSYCHO30_DISPLAY_P3_T_RGB;
+    target_yf_weights = PSYCHO30_DISPLAY_P3_YF_WEIGHTS;
   } else {
     radial_rgb = desired_coord.x * PSYCHO30_BT2020_D_RGB
                  + desired_coord.z * PSYCHO30_BT2020_T_RGB;
+    target_yf_weights = PSYCHO30_BT2020_SOURCE_YF_WEIGHTS;
   }
 
-  float positive_pressure = renodx::math::Max(radial_rgb);
-  float negative_pressure = -renodx::math::Min(radial_rgb);
-  if (positive_pressure
-          <= PSYCHO30_CUSTOM_GAMUT_COMPRESSION_KNEE * (1.f - mapped_a)
-      && negative_pressure
-             <= PSYCHO30_CUSTOM_GAMUT_COMPRESSION_KNEE * mapped_a) {
+  const float positive_pressure = renodx::math::Max(radial_rgb);
+  const float negative_pressure = -renodx::math::Min(radial_rgb);
+  const float total_pressure = positive_pressure + negative_pressure;
+  if (!(total_pressure > PSYCHO30_EPSILON)) {
     return float3(
         desired_coord.x,
         3.f * mapped_a - 0.5f * radial_a_numerator,
         desired_coord.z);
   }
 
+  const float cusp_a = negative_pressure / total_pressure;
+
+  // Derive the blue/purple sector from target geometry rather than a hue
+  // constant. Its low-A endpoint is the least-luminous target primary, and
+  // the transition ends at the middle primary. Cubing the remaining weight
+  // keeps the reserve concentrated around the low-cusp side of blue.
+  const float target_min_a = renodx::math::Min(target_yf_weights);
+  const float target_max_a = renodx::math::Max(target_yf_weights);
+  const float target_middle_a = target_yf_weights.x
+                                + target_yf_weights.y
+                                + target_yf_weights.z
+                                - target_min_a
+                                - target_max_a;
+  const float low_cusp_position = saturate(
+      (cusp_a - target_min_a)
+      / max(target_middle_a - target_min_a, PSYCHO30_EPSILON));
+  float low_cusp_weight = 1.f
+                          - psycho30_GradeQuinticUnitRamp(low_cusp_position);
+  low_cusp_weight = low_cusp_weight
+                    * low_cusp_weight
+                    * low_cusp_weight;
+  const float chroma_peak = lerp(
+      1.f,
+      PSYCHO30_CUSTOM_GAMUT_COMPRESSION_LOW_CUSP_PEAK,
+      low_cusp_weight);
+
+  // Solve the fixed-A ray against both lower and upper target RGB planes.
   float support_scale = PSYCHO30_LARGE_SUPPORT;
   if (positive_pressure > PSYCHO30_EPSILON) {
     support_scale = min(
@@ -405,19 +447,24 @@ float3 psycho30_ApplyCustomSoftRadialGamutCompression(
   }
 
   support_scale = max(support_scale, 0.f);
-  float knee_scale = PSYCHO30_CUSTOM_GAMUT_COMPRESSION_KNEE * support_scale;
-  float headroom = support_scale - knee_scale;
-  float excess = 1.f - knee_scale;
-  float headroom_per_excess = headroom * rcp(excess);
-  float flat_weight = exp2(
-      -PSYCHO30_CUSTOM_GAMUT_COMPRESSION_EXP2_SCALE * headroom_per_excess);
-  float mapped_scale = knee_scale
-                       + headroom * rcp(headroom_per_excess + flat_weight);
-  mapped_scale = clamp(mapped_scale, 0.f, min(1.f, support_scale));
+  float mapped_t = 0.f;
+  if (support_scale > 0.f) {
+    float input_to_support = rcp(support_scale);
+    float soft_t = psycho30_ApplyAnchoredCInfinityShoulder(
+                       input_to_support.xxx,
+                       chroma_peak.xxx,
+                       (PSYCHO30_CUSTOM_GAMUT_COMPRESSION_KNEE * chroma_peak).xxx,
+                       PSYCHO30_CUSTOM_GAMUT_COMPRESSION_STRENGTH)
+                       .x;
+    mapped_t = clamp(
+        support_scale * soft_t,
+        0.f,
+        min(1.f, support_scale));
+  }
 
-  float2 mapped_dt = desired_coord.xz * mapped_scale;
+  float2 mapped_dt = desired_coord.xz * mapped_t;
   float mapped_c = 3.f * mapped_a
-                   - 0.5f * radial_a_numerator * mapped_scale;
+                   - 0.5f * radial_a_numerator * mapped_t;
   float3 mapped_coord = float3(mapped_dt.x, mapped_c, mapped_dt.y);
   valid = !any(isnan(mapped_coord)) && !any(isinf(mapped_coord)) ? 1u : 0u;
   return valid != 0u ? mapped_coord : 0.f;
