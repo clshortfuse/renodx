@@ -8,6 +8,10 @@ argument-hint: "game title/folder, install path, graphics API, and fresh vs cont
 
 Set up **RenoDX mod development for a specific game**. Cover the local toolchain, DevKit/MCP inspection, game-folder ReShade/addon links, and the initial or continued `src/games/{game}` workflow.
 
+Before planning, reviewing, creating, or editing RenoDX-authored C++ under
+`src/`, read `docs/CXX_STYLE.md` in full and follow it. Loading an instruction
+that references the guide is not a substitute for reading the guide itself.
+
 Focus on the **development environment and mod scaffold**. For swapchain/resource tracing, HDR source proof, resource upgrades, or rejecting final-SDR inverse-tonemap approaches, use `swapchain-resource-analysis`. For shader-side tonemap/LUT math after the target pass is known, use `handle-sdr-tonemap-lut`.
 
 ## Related skills and scope

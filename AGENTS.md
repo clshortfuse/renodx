@@ -39,6 +39,10 @@ For human discoverability, `.agents/skills/README.md` summarizes the skills and 
 - Apply Don't Repeat Yourself logic (DRY) as much as possible.
 - Don't create useless single-use functions.
 - Keep changes small and scoped to the folder or subsystem requested.
+- Before planning, reviewing, creating, or editing RenoDX-authored C++ under
+    `src/`, read `docs/CXX_STYLE.md` in full and follow it. A reference to this
+    guide in the prompt is not a substitute for loading its contents.
+
 - Do not change global CMake presets, CI workflows, vendored dependencies, or external submodules without explicit approval.
 - Prefer existing project abstractions over new framework-style layers.
 - For C++ and HLSL, do not extract single-use helpers for local control flow, one-off switches, simple casts, basic field access, or short condition checks.
