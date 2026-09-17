@@ -56,9 +56,9 @@ float3 GenerateOutput(float3 untonemapped_ap1, float2 uv, uint output_mode) {
     const float mid_gray_out = 0.102317f;
     const float highlight_contrast = 45.f / 50.f;
     const float cone_response_exponent = 1.255f;
-    const float shadow_contrast = 1.55f;
-    const float shadows = 0.5f;
-    const float flare = 0.72f;
+    const float shadow_contrast = 1.f;
+    const float shadows = 1.f;
+    const float flare = 0.95f;
 
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
     float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_custom_test30(
