@@ -9345,7 +9345,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      // while (IsDebuggerPresent() == 0) Sleep(100);
+     //while (IsDebuggerPresent() == 0) Sleep(100);
 
       if (!initialized) {
         renodx::utils::shader::use_replace_async = true;

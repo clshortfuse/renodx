@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg id="svg2331" width="135.47mm" height="135.47mm" version="1.1" viewBox="0 0 135.47 135.47" xmlns="http://www.w3.org/2000/svg">
+ <defs id="defs2328">
+  <filter id="filter16020" x="-.013633" y="-.010717" width="1.0273" height="1.0214" color-interpolation-filters="sRGB">
+   <feGaussianBlur id="feGaussianBlur16022" stdDeviation="2.0004419"/>
+  </filter>
+ </defs>
+ <g id="layer1" transform="translate(-15.03 -32.374)">
+  <g id="use2061" transform="matrix(1.0583 0 0 1.0583 15.03 -2340.4)" enable-background="new" stroke-width=".25">
+   <title id="title2018">text-x-preview</title>
+   <g id="g2068">
+    <g id="g2030" transform="matrix(.25 0 0 .25 0 2295)" stroke-width=".25">
+     <g id="g2026" stroke-width=".25">
+      <path id="path2020" d="m111.83-178.55h200l120.17 119.67 5e-3 296.24c3.1e-4 17.728-14.449 32.088-32.177 32.088h-288c-17.728 0-32-14.272-32-32v-384c0-17.728 14.272-32 32-32z" enable-background="new" filter="url(#filter16020)" opacity=".4"/>
+      <path id="path2022" d="m111.83-179.67h200l120.17 119.67 5e-3 296.24c3.1e-4 17.728-14.449 32.088-32.177 32.088h-288c-17.728 0-32-14.272-32-32v-384c0-17.728 14.272-32 32-32z" enable-background="new" fill="#f6f5f4"/>
+      <path id="path2024" d="m311.83-179.67v88c0 17.728 14.442 31.694 32.17 31.694l88.001-0.022223z" enable-background="new" fill="#deddda"/>
+     </g>
+    </g>
+    <rect id="rect2032" x="-1.5e-6" y="2242" width="128" height="128" enable-background="new" fill="none" style="paint-order:normal"/>
+   </g>
+  </g>
+  <g id="g1223" transform="matrix(.17198 0 0 .17198 -155.61 392.08)" enable-background="new">
+   <rect id="rect3988" x="1218.9" y="-1801.1" width="340.16" height="340.16" rx="2" ry="5.3723e-6" fill="#d6e4ff" stroke="#000" stroke-width="15.118" style="paint-order:normal"/>
+   <g id="g4861" transform="matrix(3.7795 0 0 3.7795 1200 -2572.1)" fill="#006ed6" stroke="#004586">
+    <rect id="rect4803" x="15" y="217" width="70" height="10" rx=".52917" ry="1.4214e-6" style="paint-order:normal"/>
+    <rect id="rect4803-8" x="38" y="228" width="24" height="10" rx=".52917" ry="1.4214e-6" style="paint-order:normal"/>
+    <rect id="rect4803-8-0" x="39" y="239" width="22" height="10" rx=".52917" ry="1.4214e-6" style="paint-order:normal"/>
+    <rect id="rect4803-8-7" x="40" y="250" width="20" height="10" rx=".52917" ry="1.4214e-6" style="paint-order:normal"/>
+    <rect id="rect4803-8-77" x="41" y="261" width="18" height="10" rx=".52917" ry="1.4214e-6" style="paint-order:normal"/>
+    <rect id="rect4803-8-1" x="42" y="272" width="16" height="10" rx=".52917" ry="1.4214e-6" style="paint-order:normal"/>
+   </g>
+  </g>
+ </g>
+</svg>
