@@ -741,8 +741,6 @@ for (const auto old_format : scene_intermediate_formats) {
         .old_format = old_format,
         .new_format = reshade::api::format::r16g16b16a16_float,
         .ignore_size = false,
-        .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = false,
         .aspect_ratio = aspect_ratio,
         .aspect_ratio_tolerance = 0.001f,
         .usage_include = reshade::api::resource_usage::render_target,

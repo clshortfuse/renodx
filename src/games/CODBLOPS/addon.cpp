@@ -2275,6 +2275,37 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 ShaderInjectData shader_injection;
 
+// Carry the composite's film settings into the following color-grade pass.
+// Consume once to avoid using stale coefficients if a frame skips composite.
+std::mutex bo1_film_mutex;
+std::unordered_map<reshade::api::device*, std::array<float, 12>> bo1_film_parameters;
+bool CaptureBO1Film(reshade::api::command_list* cmd) {
+  auto* device = cmd->get_device();
+  std::array<float, 12> values = {};
+  if (device->get_api() == reshade::api::device_api::d3d9) {
+    auto* native = reinterpret_cast<IDirect3DDevice9*>(device->get_native());
+    if (SUCCEEDED(native->GetPixelShaderConstantF(5, values.data(), 3))) {
+      // c7.z is unused by StockCurve; use it as an explicit validity marker.
+      values[10] = 1937.25f;
+    }
+  }
+  std::scoped_lock lock(bo1_film_mutex);
+  bo1_film_parameters[device] = values;
+  return true;
+}
+bool InjectBO1Film(reshade::api::command_list* cmd) {
+  std::scoped_lock lock(bo1_film_mutex);
+  std::fill(std::begin(shader_injection.stock_film_curve),
+            std::end(shader_injection.stock_film_curve), 0.f);
+  auto it = bo1_film_parameters.find(cmd->get_device());
+  if (it != bo1_film_parameters.end()) {
+    std::copy(it->second.begin(), it->second.end(), shader_injection.stock_film_curve);
+    bo1_film_parameters.erase(it);
+  }
+  return true;
+}
+
+
 float current_settings_mode = 0;
 float dx9_auto_output_unclamp_mode = 2.f;
 float force_windowed_borderless = 1.f;
@@ -3316,6 +3347,99 @@ bool DX9MatchesViewmodelSqrtOutput(
       && std::ranges::all_of(wrote_output, [](bool value) { return value; });
 }
 
+// Verified scene-lighting passes from live BO1 captures. These use terminal
+// channel shuffles or interleaved alpha instructions missed by the older matcher.
+// These verified hashes may bypass the conservative sky/utility classifier.
+// Other shaders can use the same terminal matcher only through that classifier.
+const std::unordered_set<uint32_t> DX9_AUDITED_LIGHTING_OUTPUTS = {
+    0x1768089Bu, 0x29D49174u, 0x4482A0F4u, 0x779215CBu,
+    0xCB57F731u, 0xCBC9C0E3u, 0xD27F1AF8u,
+    // Additional lighting variants observed in the second scene (52 draws).
+    0xA1C45FCEu, 0x6D6A8213u, 0xD4D28D0Fu, 0xF1A4907Cu,
+    0x10D0C124u, 0x2920723Bu, 0x46AF72E7u, 0x98C06C76u,
+    0xB24B49F9u, 0x2D9CE29Bu, 0xC9605498u,
+};
+
+bool DX9MatchesAuditedLightingSqrt(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions,
+    size_t candidate_index,
+    uint32_t source_register) {
+  if (source_register >= 32u) return false;
+  // Labels 1..3 = input RGB, 11..13 = reciprocal sqrt, 21..23 = sqrt.
+  // Tracking each lane separately handles compiler register reuse and swizzles.
+  std::array<std::array<uint32_t, 4u>, 32u> lanes = {};
+  lanes[source_register] = {1u, 2u, 3u, 0u};
+  std::array<bool, 3u> output = {};
+  auto read = [&](uint32_t token, uint32_t component) -> uint32_t {
+    if (DX9GetRegisterType(token) != DX9_REGISTER_TEMP) return 0u;
+    const auto reg = DX9GetRegisterNumber(token);
+    if (reg >= lanes.size()) return 0u;
+    return lanes[reg][DX9GetSwizzleComponent(token, component)];
+  };
+  for (size_t i = candidate_index + 1u; i + 1u < instructions.size(); ++i) {
+    const auto& ins = instructions[i];
+    if ((ins.instruction_token & DX9_INSTRUCTION_PREDICATED) != 0u
+        || ins.operand_count < 2u) return false;
+    const auto dest = tokens[ins.token_offset + 1u];
+    const auto type = DX9GetRegisterType(dest);
+    const auto reg = DX9GetRegisterNumber(dest);
+    const auto mask = DX9GetWriteMask(dest);
+    if ((type != DX9_REGISTER_TEMP && type != DX9_REGISTER_COLOR_OUTPUT)
+        || (type == DX9_REGISTER_TEMP && reg >= lanes.size())
+        || (type == DX9_REGISTER_COLOR_OUTPUT && reg != 0u)) return false;
+
+    // Alpha is allowed only when it is independent of the RGB being unclamped.
+    // Scalar reciprocal operations read source.x regardless of destination mask.
+    if (mask == DX9_WRITE_W) {
+      if (ins.opcode != DX9_OP_MOV && ins.opcode != DX9_OP_ADD
+          && ins.opcode != DX9_OP_MUL && ins.opcode != DX9_OP_MAD
+          && ins.opcode != DX9_OP_RSQ && ins.opcode != DX9_OP_RCP) return false;
+      const uint32_t component =
+          (ins.opcode == DX9_OP_RSQ || ins.opcode == DX9_OP_RCP) ? 0u : 3u;
+      for (uint32_t operand = 1u; operand < ins.operand_count; ++operand) {
+        const auto src = tokens[ins.token_offset + 1u + operand];
+        if ((src & 0x00002000u) != 0u || read(src, component) != 0u) return false;
+      }
+      if (type == DX9_REGISTER_TEMP) lanes[reg][3] = 0u;
+      continue;
+    }
+    // Only unmodified scalar RSQ/RCP and lane moves may carry RGB to the output.
+    if ((mask & ~DX9_WRITE_RGB) != 0u || mask == 0u
+        || (dest & (DX9_DEST_MODIFIER_MASK & ~DX9_DEST_PARTIAL_PRECISION)) != 0u
+        || (dest & 0x0F000000u) != 0u || ins.operand_count != 2u) return false;
+    const auto src = tokens[ins.token_offset + 2u];
+    if ((src & (DX9_SOURCE_MODIFIER_MASK | 0x00002000u)) != 0u) return false;
+    if (ins.opcode != DX9_OP_MOV && ins.opcode != DX9_OP_RSQ
+        && ins.opcode != DX9_OP_RCP) return false;
+    if (ins.opcode != DX9_OP_MOV && !DX9IsSingleComponentWrite(mask)) return false;
+    std::array<uint32_t, 4u> values = {};
+    for (uint32_t component = 0u; component < 3u; ++component) {
+      if ((mask & (1u << component)) == 0u) continue;
+      auto value = read(src, ins.opcode == DX9_OP_MOV ? component : 0u);
+      if (ins.opcode == DX9_OP_RSQ) {
+        if (value < 1u || value > 3u) return false;
+        value += 10u;
+      } else if (ins.opcode == DX9_OP_RCP) {
+        if (value < 11u || value > 13u) return false;
+        value += 10u;
+      } else if (value == 0u) return false;
+      values[component] = value;
+      if (type == DX9_REGISTER_COLOR_OUTPUT) {
+        if (output[component] || value != 21u + component) return false;
+        output[component] = true;
+      }
+    }
+    // Commit after every source read so vector moves preserve alias semantics.
+    if (type == DX9_REGISTER_TEMP) {
+      for (uint32_t component = 0u; component < 3u; ++component)
+        if ((mask & (1u << component)) != 0u) lanes[reg][component] = values[component];
+    }
+  }
+  return output[0] && output[1] && output[2];
+}
+
+
 bool DX9MatchesDirectFinalOutput(
     const uint32_t* tokens,
     const std::vector<DX9InstructionInfo>& instructions,
@@ -3346,6 +3470,8 @@ DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
   const bool is_exact_sky_test =
       mode >= DX9_AUTO_UNCLAMP_HEURISTIC_SQRT
       && DX9_AUTO_UNCLAMP_LEVEL3_SKY_TEST_ALLOWLIST.contains(source_crc32);
+  const bool is_audited_lighting = mode >= DX9_AUTO_UNCLAMP_HEURISTIC_SQRT
+      && DX9_AUDITED_LIGHTING_OUTPUTS.contains(source_crc32);
   const DX9ShaderStats stats = DX9CollectShaderStats(tokens, instructions);
 
   const auto used_temps = DX9FindUsedTemporaryRegisters(tokens, instructions);
@@ -3397,6 +3523,7 @@ DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
         && !is_curated_model
         && !is_exact_viewmodel
         && !is_exact_sky_test
+        && !is_audited_lighting
         && !is_structural_extra_sky
         && DX9LooksLikeSkyFogOrUtility(
             stats,
@@ -3420,7 +3547,14 @@ DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
             candidate_index,
             register_number);
 
-    if (matches_strict_sqrt || matches_viewmodel_sqrt) {
+    // Accept equivalent terminal RGB chains in other levels too. Unknown hashes
+    // still pass the sky/fog/utility classifier below; alpha must be independent.
+    const bool matches_lighting_sqrt = mode >= DX9_AUTO_UNCLAMP_HEURISTIC_SQRT
+        && instruction.opcode == DX9_OP_MUL
+        && register_type == DX9_REGISTER_TEMP
+        && DX9MatchesAuditedLightingSqrt(tokens, instructions, candidate_index, register_number);
+
+    if (matches_strict_sqrt || matches_viewmodel_sqrt || matches_lighting_sqrt) {
       bool allow_sqrt = false;
       bool use_guarded_geometry = false;
 
@@ -3461,7 +3595,8 @@ DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
               || is_exact_sky_test
               || is_structural_extra_sky
               || is_broad_viewmodel
-              || matches_strict_sqrt;
+              || matches_strict_sqrt
+              || matches_lighting_sqrt;
 
           // Every accepted shader uses:
           //
@@ -4292,6 +4427,71 @@ reshade::api::resource_desc SelectCloneDescForCopy(
     return endpoint.clone_desc;
   }
   return endpoint.input_desc;
+}
+
+// The lens samples a resolve made BEFORE color grading. Refresh it from the
+// finished scene once per grading pass, immediately before the lens draws.
+std::unordered_set<reshade::api::device*> bo1_scope_scene_ready;
+void MarkBO1ScopeScene(reshade::api::command_list* cmd) {
+  std::scoped_lock lock(bo1_film_mutex);
+  bo1_scope_scene_ready.insert(cmd->get_device());
+}
+IDirect3DSurface9* BO1CopySurface(reshade::api::resource resource) {
+  if (resource.handle == 0) return nullptr;
+  auto* native = reinterpret_cast<IDirect3DResource9*>(resource.handle);
+  if (native->GetType() == D3DRTYPE_SURFACE) {
+    auto* surface = static_cast<IDirect3DSurface9*>(native);
+    surface->AddRef();
+    return surface;
+  }
+  if (native->GetType() == D3DRTYPE_TEXTURE) {
+    IDirect3DSurface9* surface = nullptr;
+    if (SUCCEEDED(static_cast<IDirect3DTexture9*>(native)->GetSurfaceLevel(0, &surface))) return surface;
+  }
+  return nullptr;
+}
+bool RefreshBO1ScopeScene(reshade::api::command_list* cmd) {
+  auto* device = cmd->get_device();
+  if (device->get_api() != reshade::api::device_api::d3d9) return true;
+  {
+    std::scoped_lock lock(bo1_film_mutex);
+    if (bo1_scope_scene_ready.erase(device) == 0) return true;
+  }
+  auto* native = reinterpret_cast<IDirect3DDevice9*>(device->get_native());
+  IDirect3DSurface9* boundSource = nullptr;
+  IDirect3DBaseTexture9* boundTexture = nullptr;
+  if (FAILED(native->GetRenderTarget(0, &boundSource))) return true;
+  if (FAILED(native->GetTexture(2, &boundTexture)) || boundTexture == nullptr) {
+    boundSource->Release();
+    return true;
+  }
+  auto sourceEndpoint = ResolveDX9CopyEndpoint(device, {reinterpret_cast<uintptr_t>(boundSource)});
+  auto targetEndpoint = ResolveDX9CopyEndpoint(device, {reinterpret_cast<uintptr_t>(boundTexture)});
+  auto* source = BO1CopySurface(SelectCloneForCopy(sourceEndpoint));
+  auto* target = BO1CopySurface(SelectCloneForCopy(targetEndpoint));
+  boundSource->Release();
+  boundTexture->Release();
+  HRESULT result = D3DERR_INVALIDCALL;
+  if (source != nullptr && target != nullptr && source != target) {
+    D3DSURFACE_DESC a = {}, b = {};
+    if (SUCCEEDED(source->GetDesc(&a)) && SUCCEEDED(target->GetDesc(&b))
+        && a.Width == b.Width && a.Height == b.Height && a.Format == b.Format
+        && a.MultiSampleType == D3DMULTISAMPLE_NONE && b.MultiSampleType == D3DMULTISAMPLE_NONE) {
+      ScopedDX9ReplacementCopy guard;
+      result = native->StretchRect(source, nullptr, target, nullptr, D3DTEXF_NONE);
+    }
+  }
+  if (target != nullptr) target->Release();
+  if (source != nullptr) source->Release();
+  static bool loggedSuccess = false, loggedFailure = false;
+  if (SUCCEEDED(result) && !loggedSuccess) {
+    reshade::log::message(reshade::log::level::info, "[BO1 scope] Refreshed lens texture with graded HDR scene.");
+    loggedSuccess = true;
+  } else if (FAILED(result) && !loggedFailure) {
+    reshade::log::message(reshade::log::level::warning, "[BO1 scope] Graded scene copy unavailable; retained original lens input.");
+    loggedFailure = true;
+  }
+  return true;
 }
 
 bool IsFloat16RGBA(reshade::api::format format) {
@@ -5934,6 +6134,20 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
+        .key = "SceneITM",
+        .binding = &shader_injection.scene_itm,
+        .default_value = 0.f,
+        .label = "Scene ITM",
+        .section = "Tone Mapping",
+        .tooltip = "Expands scene highlights using bounded luminance inverse tone mapping, preserving the stock bloom calculation. 0 disables it. A scene white of 1 reaches about 3 at 50 and 9 at 100, before grading and display tone mapping. Lower settings offer finer control. Bright surfaces can also brighten.",
+        .min = 0.f,
+        .max = 100.f,
+        .format = "%.0f%%",
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return false; },
+    },
+    /* new renodx::utils::settings::Setting{
         .key = "HDRBoost",
         .binding = &shader_injection.hdr_boost,
         .default_value = 0.f,
@@ -5946,7 +6160,7 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return IsCustomToneMapperEnabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
-    },
+    }, */
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueProcessor",
         .binding = &shader_injection.tone_map_hue_processor,
@@ -6145,7 +6359,7 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return IsPsychoV24Enabled(); },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-    new renodx::utils::settings::Setting{
+   new renodx::utils::settings::Setting{
         .key = "PsychoV24HighlightSaturation",
         .binding = &shader_injection.psychov24_highlight_saturation,
         .default_value = 100.f,
@@ -6188,23 +6402,23 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "BloomBrightness",
         .binding = &shader_injection.bloom_brightness,
-        .default_value = 300.f,
+        .default_value = 100.f,
         .label = "Bloom Brightness",
         .section = "Bloom",
-        .tooltip = "Scales the restored bloom while preserving its corrected color. 100 = original restored brightness.",
+        .tooltip = "Scales bloom before the original game tonemap. 100 = corrected HDR bloom, or stock bloom in Vanilla mode.",
         .min = 0.f,
         .max = 300.f,
         .format = "%.0f%%",
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return false;},
+        .is_visible = []() { return current_settings_mode >= 1;},
     },
     new renodx::utils::settings::Setting{
         .key = "BloomFlareSize",
         .binding = &shader_injection.bloom_flare_size,
         .default_value = 100.f,
-        .label = "Flare Size",
+        .label = "Bloom / Streak Spread",
         .section = "Bloom",
-        .tooltip = "Controls how much of broad, screen-covering lens flare is retained. 0 keeps mostly the bright core; 100 retains the full flare extent.",
+        .tooltip = "HDR bloom/streak blur spread. 100 uses the corrected 80% radius; 0 uses 25%. Does not scale general sprite effects. Vanilla keeps stock radius.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.0f%%",
@@ -6419,7 +6633,12 @@ void OnPresent(reshade::api::command_queue* queue,
                const reshade::api::rect* dest_rect,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
+  // Never let a frame without a lens leave a stale graded-scene marker.
   if (queue == nullptr) return;
+  {
+    std::scoped_lock lock(bo1_film_mutex);
+    bo1_scope_scene_ready.erase(queue->get_device());
+  }
 
   auto* device = queue->get_device();
   if (device == nullptr) return;
@@ -6628,7 +6847,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .labels = {
                   "Disabled",
                   "Enabled",
-              },
+             },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
               .is_global = true,
               .is_visible = []() { return current_settings_mode >= 2; },
@@ -6757,6 +6976,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // upgraded resource.
        
         const reshade::api::format scene_intermediate_formats[] = {
+    // BO1 bloom uses this UNORM format at reduced resolution (480x270 at 4K).
+    // Retain HDR bloom energy on a floating-point clone instead of clipping writes.
+    reshade::api::format::r16g16b16a16_unorm,
     reshade::api::format::r8g8b8a8_unorm,
     reshade::api::format::r8g8b8a8_typeless,
     reshade::api::format::r8g8b8a8_unorm_srgb,
@@ -6839,6 +7061,12 @@ for (const auto old_format : scene_intermediate_formats) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    custom_shaders.at(0xBE8C1926u).on_draw = CaptureBO1Film;
+    custom_shaders.at(0x357DE7FDu).on_draw = InjectBO1Film;
+    custom_shaders.at(0x357DE7FDu).on_drawn = MarkBO1ScopeScene;
+    custom_shaders.at(0xB3227E4Bu).on_draw = RefreshBO1ScopeScene;
+  }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   // Register after RenoDX's shader module so hash-based embedded replacements

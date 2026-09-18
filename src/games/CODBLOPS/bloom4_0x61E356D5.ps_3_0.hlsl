@@ -1,49 +1,9 @@
-// Replacement for BO1 pixel shader 0x79EF3202.
-//
-// Purpose:
-//   Preserve the original weighted blur radius and existing bloom brightness,
-//   while making the outer halo lower-density instead of physically smaller.
-//
-// What changes:
-//   1. BLOOM_RADIUS_SCALE is restored to 1.00 (the authored radius).
-//   2. The old halo cutoff becomes a nonzero density ramp.
-//   3. BLOOM_CONTRIBUTION_SCALE is left at its existing value.
-//   4. Existing luminance-preserving whitening is retained.
-//
-// Important:
-//   This shader only offsets samples vertically. A matching horizontal blur
-//   shader may also exist. Applying the same radius reduction there will shrink
-//   the flare symmetrically in both directions.
-//
-// Suggested tuning:
-//   BLOOM_RADIUS_SCALE
-//     1.00 = original radius
-//     0.50 = half radius
-//     0.25 = strongly reduced
-//     0.15 = extremely small
-//
-//   BLOOM_HALO_START / BLOOM_HALO_FULL
-//     Raise both values to keep only brighter bloom pixels and reduce the
-//     apparent radius further.
-//
-// No final RGB clamp is applied.
-
-#define BLOOM_RADIUS_SCALE        1.00f
-#define BLOOM_HALO_START          0.025f
-#define BLOOM_HALO_FULL           0.350f
-#define BLOOM_HALO_POWER          1.00f
-#define BLOOM_HALO_DENSITY        0.30f
-#define BLOOM_CORE_DENSITY        0.70f
-#define BLOOM_CONTRIBUTION_SCALE  0.85f
-
-// Bloom whitening controls. Whitening happens after hdrControl1.rgb so the
-// game's final bloom tint cannot recolor the flare afterward.
-// The white target has the same luminance as the colored bloom contribution,
-// so this changes saturation/hue without intentionally raising brightness.
-#define BLOOM_WHITE_BASE_AMOUNT   0.35f
-#define BLOOM_WHITE_CORE_AMOUNT   0.30f
-#define BLOOM_WHITE_CORE_START    0.050f
-#define BLOOM_WHITE_CORE_FULL     0.800f
+#include "./shared.h"
+// Vertical bloom blur/composite, reconstructed from the stock 0x61E356D5
+// disassembly retrieved through RenoDX DevKit. Its horizontal pair is 0xD5228145.
+// c5/c6 are HDR desaturation/tint controls; c7-c11 and c20-c30 are blur taps.
+// Preserve all 32 authored taps, the scene sample, and scene alpha.
+// This shader is NOT the luminance-threshold/mask pass.
 
 sampler2D bloomSampler : register(s0);
 sampler2D colorSampler : register(s1);
@@ -73,38 +33,14 @@ struct PS_INPUT
     float2 texcoord : TEXCOORD0;
 };
 
-float BloomMax3(float3 value)
+float3 SampleWeightedBloom(float2 texcoord, float4 blurControl, float direction)
 {
-    return max(value.r, max(value.g, value.b));
-}
-
-float BloomSmooth01(float value)
-{
-    value = saturate(value);
-    return value * value * (3.0f - 2.0f * value);
-}
-
-float BloomRangeMask(float value, float startValue, float fullValue)
-{
-    float width = max(fullValue - startValue, 0.000001f);
-    return BloomSmooth01((value - startValue) / width);
-}
-
-float3 SampleWeightedBloom(
-    float2 texcoord,
-    float4 blurControl,
-    float direction)
-{
-    float2 sampleCoord = texcoord;
-    sampleCoord.y += direction * blurControl.w * BLOOM_RADIUS_SCALE;
-
-    return tex2D(bloomSampler, sampleCoord).rgb * blurControl.rgb;
+    texcoord.y += direction * blurControl.w * (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_VANILLA ? 1.0f : lerp(0.25f, 0.80f, saturate(RENODX_BLOOM_FLARE_SIZE)));
+    return tex2D(bloomSampler, texcoord).rgb * blurControl.rgb;
 }
 
 float4 main(PS_INPUT input) : COLOR0
 {
-    // Preserve the exact original 32-tap weight set. Only the spatial offsets
-    // are compressed by BLOOM_RADIUS_SCALE.
     float3 blurredBloom = 0.0f;
 
     // Negative side. The unusual E/F/D ordering matches the original bytecode.
@@ -143,77 +79,8 @@ float4 main(PS_INPUT input) : COLOR0
     blurredBloom += SampleWeightedBloom(input.texcoord, postFxControlE, 1.0f);
     blurredBloom += SampleWeightedBloom(input.texcoord, postFxControlF, 1.0f);
 
-    // Suppress the low-intensity outer blur. Raising the mask to a power makes
-    // its falloff much steeper without introducing a hard circular boundary.
-    float bloomStrength = max(BloomMax3(blurredBloom), 0.0f);
-
-    float retainedHalo = BloomRangeMask(
-        bloomStrength,
-        BLOOM_HALO_START,
-        BLOOM_HALO_FULL
-    );
-
-    retainedHalo = pow(max(retainedHalo, 0.0f), BLOOM_HALO_POWER);
-
-    // Never cut the halo to zero. Keeping a nonzero floor preserves the original
-    // blur footprint while making the outer bloom less dense. Bright bloom now
-    // tops out at BLOOM_CORE_DENSITY so the core is less solid.
-    retainedHalo = lerp(BLOOM_HALO_DENSITY, BLOOM_CORE_DENSITY, retainedHalo);
-    blurredBloom *= retainedHalo;
-
-    // Preserve the original luminance-based desaturation/color interpolation:
-    //   luminance = dot(blurredBloom, hdrControl0.rgb)
-    //   treatedBloom = lerp(luminance.xxx, blurredBloom, hdrControl0.w)
     float bloomLuminance = dot(blurredBloom, hdrControl0.rgb);
-
-    float3 treatedBloom = lerp(
-        bloomLuminance.xxx,
-        blurredBloom,
-        hdrControl0.w
-    );
-
-    // Apply the game's original final bloom tint first.
-    float3 bloomContribution = treatedBloom * hdrControl1.rgb;
-
-    // Neutralize the surviving flare toward white. The hottest core becomes
-    // much whiter than the halo, while even the halo receives some whitening.
-    // Because whiteBloom uses the same luminance, the interpolation preserves
-    // luminance and should not make the flare larger merely from recoloring it.
-    const float3 luminanceWeights =
-        float3(0.2126f, 0.7152f, 0.0722f);
-
-    float contributionLuminance = max(
-        dot(bloomContribution, luminanceWeights),
-        0.0f
-    );
-
-    float whiteCoreMask = BloomRangeMask(
-        contributionLuminance,
-        BLOOM_WHITE_CORE_START,
-        BLOOM_WHITE_CORE_FULL
-    );
-
-    float whiteAmount = lerp(
-        BLOOM_WHITE_BASE_AMOUNT,
-        BLOOM_WHITE_CORE_AMOUNT,
-        whiteCoreMask
-    );
-
-    float3 whiteBloom = contributionLuminance.xxx;
-
-    bloomContribution = lerp(
-        bloomContribution,
-        whiteBloom,
-        saturate(whiteAmount)
-    );
-
+    float3 treatedBloom = lerp(bloomLuminance.xxx, blurredBloom, hdrControl0.w);
     float4 sceneColor = tex2D(colorSampler, input.texcoord);
-
-    // Preserve the original additive composite, with the existing optional
-    // contribution scale applied after whitening.
-    float3 outputColor =
-        sceneColor.rgb
-        + bloomContribution * BLOOM_CONTRIBUTION_SCALE;
-
-    return float4(outputColor, sceneColor.a);
+    return float4(sceneColor.rgb + treatedBloom * hdrControl1.rgb, sceneColor.a);
 }

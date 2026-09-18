@@ -127,7 +127,8 @@
 // Controlled HDR highlight restoration
 // ============================================================================
 
-// Restores part of the pre-tonemap HDR signal after RenoDRT or PsychoV24.
+// Disabled by default for the raw scene path: let the display mapper control
+// highlights without blending uncompressed energy back over its shoulder.
 // Shadows, midtones, and Vanilla mode remain unchanged.
 //
 // 0.00 = normal tonemapper output
@@ -135,7 +136,7 @@
 // 0.50 = strong restoration
 // 1.00 = approach the pre-tonemap signal in fully selected highlights
 #ifndef RENODX_HDR_HIGHLIGHT_RESTORE
-#define RENODX_HDR_HIGHLIGHT_RESTORE 0.35f
+#define RENODX_HDR_HIGHLIGHT_RESTORE 0.0f
 #endif
 
 // Pre-tonemap peak where restoration begins.
@@ -1175,6 +1176,49 @@ float3 ApplyOriginalColorGrading(
 }
 
 
+
+// Reconstruct the stock film result from the reversible HDR extension.
+// This must match bloom_0xBE8C1926's anchor and slope calculation.
+float3 BO1StockFilm(float3 light) {
+  float4 a = RENODX_STOCK_FILM_0;
+  float4 b = RENODX_STOCK_FILM_1;
+  float4 c = RENODX_STOCK_FILM_2;
+  float3 den = light * (light * a.x + a.y) + a.z;
+  float3 num = light * (light * b.x + b.y) + b.z;
+  return (num / max(den, 0.000001f) + c.x) * c.y;
+}
+float3 BO1RecoverSDRReference(float3 encodedHDR) {
+  float anchor = max(BO1StockFilm(1.0f.xxx).x, 0.0f);
+  float lo = max(BO1StockFilm(0.999f.xxx).x, 0.0f);
+  float hi = max(BO1StockFilm(1.001f.xxx).x, 0.0f);
+  float slope = max((hi * hi - lo * lo) / 0.002f, 0.000001f);
+  float3 e = max(encodedHDR * encodedHDR - anchor * anchor, 0.0f);
+  // e = s*t + max(1-s,0)*t*t/(1+t).
+  float3 t;
+  if (slope >= 1.0f) t = e / slope;
+  else {
+    float3 d = e - slope;
+    t = 0.5f * (d + sqrt(d * d + 4.0f * e));
+  }
+  float3 ref = max(BO1StockFilm(1.0f + t), 0.0f);
+  return float3(encodedHDR.r <= anchor ? encodedHDR.r : ref.r,
+                encodedHDR.g <= anchor ? encodedHDR.g : ref.g,
+                encodedHDR.b <= anchor ? encodedHDR.b : ref.b);
+}
+float3 BO1MatchSDRColor(float3 hdr, float3 reference) {
+  const float3 weights = float3(0.2126f, 0.7152f, 0.0722f);
+  float y = dot(hdr, weights);
+  float refY = dot(reference, weights);
+  if (refY < 0.00001f || y <= 0.0f) return hdr;
+  float3 matched = reference * (y / refY);
+  // Desaturate only as needed to fit the selected display peak. This preserves
+  // luminance and SDR hue, and lets the brightest colors approach white.
+  float peak = max(RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f), 1.0f);
+  float maxChannel = MaxRGB(matched);
+  float chromaScale = saturate((peak - y) / max(maxChannel - y, 0.00001f));
+  return lerp(y.xxx, matched, chromaScale);
+}
+
 // ============================================================================
 // Main shader
 // ============================================================================
@@ -1245,6 +1289,16 @@ float4 main(PS_INPUT input) : COLOR0
     // Tone mapping
     // ------------------------------------------------------------------------
 
+    float3 sdrReference = vanillaColor;
+    bool hasSDRReference = abs(RENODX_STOCK_FILM_2.z - 1937.25f) < 0.01f;
+    if (!IsVanillaMode() && hasSDRReference) {
+        float unusedScale;
+        sdrReference = ApplyOriginalColorGrading(
+            saturate(BO1RecoverSDRReference(sourceRGB)), unusedScale);
+#if RENODX_GAMMA_DECODE_INPUT
+        sdrReference = GammaDecode2(sdrReference);
+#endif
+    }
     float3 toneMappedColor;
 
     if (IsVanillaMode())
@@ -1278,6 +1332,9 @@ float4 main(PS_INPUT input) : COLOR0
                 commonPreTonemapColor
             );
 
+        if (hasSDRReference) {
+            toneMappedColor = BO1MatchSDRColor(toneMappedColor, sdrReference);
+        }
         toneMappedColor =
             ApplyCommonPostTonemapPipeline(
                 toneMappedColor

@@ -9,8 +9,8 @@
 //   linear scene
 //   -> RenoDX pre-tonemap controls
 //   -> original Ghosts rational curve through the 0.18 pivot
-//   -> exact first-derivative linear extension above the pivot
-//   -> select RenoDRT or Pragmap from the same SDR-anchored carrier
+//   -> numerical first-derivative linear extension above the pivot
+//   -> selected HDR mapper, SDR carrier compression, Vanilla reconstruction
 //   -> RenoDX post-tonemap controls
 //   -> RenderIntermediatePass
 //
@@ -763,117 +763,30 @@ float3 ApplyOriginalRationalTonemap(float3 sceneColor)
     );
 }
 
-// Exact first derivative of the original Ghosts rational tonemapper.
-//
-// N(x) = cb2[3] + cb2[7]*cb2[6]*x + cb2[8]*x^2
-// D(x) = cb2[4] + cb2[6]*x          + cb2[8]*x^2
-//
-// F(x) = cb2[9] * (N(x) / D(x) - cb2[5])
-float3 GetOriginalTonemapSlope(float inputValue)
+// Include the game's encoded output-range adjustment in the linear SDR anchor.
+float3 ApplyOriginalEncodedOutput(float3 linearColor);
+float3 ApplyCompleteSDRReference(float3 sceneColor)
 {
-    float x =
-        max(inputValue, 0.0f);
-
-    float xSquared =
-        x * x;
-
-    float3 denominatorLinear =
-        cb2[6].xyz;
-
-    float3 numeratorLinear =
-        cb2[7].xyz * cb2[6].xyz;
-
-    float3 quadratic =
-        cb2[8].xyz;
-
-    float3 numerator =
-        cb2[3].xyz
-        + numeratorLinear * x
-        + quadratic * xSquared;
-
-    float3 denominator =
-        cb2[4].xyz
-        + denominatorLinear * x
-        + quadratic * xSquared;
-
-    float3 numeratorDerivative =
-        numeratorLinear
-        + 2.0f * quadratic * x;
-
-    float3 denominatorDerivative =
-        denominatorLinear
-        + 2.0f * quadratic * x;
-
-    float3 derivativeNumerator =
-        numeratorDerivative * denominator
-        - numerator * denominatorDerivative;
-
-    float3 derivativeDenominator =
-        denominator * denominator;
-
-    float3 rationalSlope = float3(
-        SafeDivideSigned1(
-            derivativeNumerator.r,
-            derivativeDenominator.r
-        ),
-        SafeDivideSigned1(
-            derivativeNumerator.g,
-            derivativeDenominator.g
-        ),
-        SafeDivideSigned1(
-            derivativeNumerator.b,
-            derivativeDenominator.b
-        )
-    );
-
-    return rationalSlope * cb2[9].xyz;
+    return renodx::color::srgb::Decode(
+        ApplyOriginalEncodedOutput(ApplyOriginalRationalTonemap(sceneColor)));
 }
-
 
 float3 ApplyOriginalLinearPiecewiseExtension(float3 sceneColor)
 {
-    sceneColor =
-        SafePositive(
-            max(sceneColor, 0.0f)
-        );
-
-    float pivot =
-        max(
-            RENODX_GHOSTS_LINEAR_EXTENSION_PIVOT,
-            0.000001f
-        );
-
-    float3 originalCurve =
-        ApplyOriginalRationalTonemapUnclamped(
-            sceneColor
-        );
-
-    float3 outputAtPivot =
-        ApplyOriginalRationalTonemapUnclamped(
-            pivot.xxx
-        );
-
-    float3 slopeAtPivot =
-        GetOriginalTonemapSlope(
-            pivot
-        );
-
-    float3 linearExtension =
-        slopeAtPivot * (sceneColor - pivot.xxx)
-        + outputAtPivot;
-
-    return SafePositive(
-        max(
-            float3(
-                sceneColor.r <= pivot ? originalCurve.r : linearExtension.r,
-                sceneColor.g <= pivot ? originalCurve.g : linearExtension.g,
-                sceneColor.b <= pivot ? originalCurve.b : linearExtension.b
-            ),
-            0.0f
-        )
-    );
+    sceneColor = SafePositive(sceneColor);
+    float pivot = max(RENODX_GHOSTS_LINEAR_EXTENSION_PIVOT, 0.000001f);
+    float stepSize = min(0.0001f, pivot * 0.25f);
+    float3 outputAtPivot = ApplyCompleteSDRReference(pivot.xxx);
+    // First derivative of the complete SDR pipeline; no root search required.
+    float3 slope = (ApplyCompleteSDRReference((pivot + stepSize).xxx)
+                  - ApplyCompleteSDRReference((pivot - stepSize).xxx)) / (2.0f * stepSize);
+    float3 lower = ApplyCompleteSDRReference(sceneColor);
+    float3 upper = outputAtPivot + slope * (sceneColor - pivot);
+    return SafePositive(float3(
+        sceneColor.r <= pivot ? lower.r : upper.r,
+        sceneColor.g <= pivot ? lower.g : upper.g,
+        sceneColor.b <= pivot ? lower.b : upper.b));
 }
-
 float3 LinearToSRGB(float3 linearColor)
 {
     linearColor = saturate(SafePositive(linearColor));
@@ -914,6 +827,9 @@ float3 ApplyPreTonemapControls(float3 sceneColor)
     config.shadows = RENODX_TONE_MAP_SHADOWS;
     config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
 
+    if (config.exposure == 1.0f && config.contrast == 1.0f
+        && config.flare == 0.0f && config.shadows == 1.0f && config.highlights == 1.0f)
+        return sceneColor;
     float midGray = max(RENODX_TONEMAPPER_MID_GRAY, 0.000001f);
     float sourceY = max(renodx::color::y::from::BT709(sceneColor), 0.0f);
 
@@ -1560,6 +1476,8 @@ float3 ApplyPostTonemapControls(float3 mappedColor)
     config.blowout =
         -(RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.0f);
 
+    if (config.saturation == 1.0f && config.dechroma == 0.0f && config.blowout == 0.0f)
+        return mappedColor;
     float luminance = max(
         renodx::color::y::from::BT709(mappedColor),
         0.0f);
@@ -1652,6 +1570,26 @@ float3 MatchOriginalSDRShadows(float3 hdrColor, float3 vanillaColor)
         lerp(hdrColor, hdrColor * luminanceScale, matchMask));
 }
 
+// Same HDR -> SDR carrier -> UpgradeToneMap workflow as the working LUT passes.
+// No LUT exists here: the graded reference is the actual Vanilla pass instead.
+// This transfers SDR luminance as well as chromaticity, rather than assuming a
+// tangent at one scene value will match the entire SDR brightness range.
+float3 ReconstructNonLUTSDR(float3 colorU, float3 vanillaReference)
+{
+    colorU = SafePositive(colorU);
+    vanillaReference = saturate(SafePositive(vanillaReference));
+    float hdrPeak = max(RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f), 1.000001f);
+    float3 colorN = saturate(SafePositive(
+        renodx::tonemap::HermiteSplineLuminanceRolloff(colorU, 1.0f, hdrPeak)));
+
+    // Guard roundoff at the identity portion of the SDR compression. This keeps
+    // UpgradeToneMap on its additive branch: Y_out = Y_vanilla + Y_U - Y_N.
+    float yU = max(renodx::color::y::from::BT709(colorU), 0.0f);
+    float yN = max(renodx::color::y::from::BT709(colorN), 0.0f);
+    if (yN > yU) colorN *= yU / max(yN, 0.000001f);
+    return SafePositive(renodx::tonemap::UpgradeToneMap(colorU, colorN, vanillaReference));
+}
+
 void main(
     float4 position : SV_POSITION0,
     float2 texcoord : TEXCOORD0,
@@ -1676,6 +1614,9 @@ void main(
         GhostsFiniteSigned1(
             sceneScale
         );
+
+    float3 vanillaScene = SafePositive(source.rgb * sceneScale
+        * max(RENODX_TONEMAPPER_INPUT_SCALE, 0.0f));
 
     // HDR-only exposure damping.
     //
@@ -1704,7 +1645,7 @@ void main(
         outputColor.rgb = ApplyOriginalEncodedOutput(vanillaLinear);
 #else
         outputColor.rgb = saturate(SafePositive(
-            renodx::draw::RenderIntermediatePass(vanillaLinear)));
+            renodx::draw::RenderIntermediatePass(ApplyCompleteSDRReference(sceneColor))));
 #endif
         outputColor.a = source.a;
         return;
@@ -1730,12 +1671,7 @@ void main(
 
     // No 3D LUT exists in this pass, but its lower/midtone luminance still
     // follows the REAL original Ghosts SDR rational result.
-    hdrColor =
-        ApplyGhostsActualSDRLuminanceMatch(
-            hdrColor,
-            sdrShadowReference,
-            preTonemapColor
-        );
+    hdrColor = ReconstructNonLUTSDR(hdrColor, ApplyCompleteSDRReference(ApplyPreTonemapControls(vanillaScene)));
 
     // No Texture3D LUT exists in this pass, so there is no SDR LUT
     // transfer stage to apply.

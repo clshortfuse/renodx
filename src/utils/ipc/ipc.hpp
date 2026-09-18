@@ -95,6 +95,8 @@ struct ServerConfig {
   std::uint32_t max_message_size = DEFAULT_MAX_MESSAGE_SIZE;
   std::uint32_t max_instances = 1u;
   std::optional<std::wstring> security_descriptor_sddl = std::wstring(DEFAULT_LOCAL_PIPE_RW_SECURITY_DESCRIPTOR_SDDL);
+  // Called on the transport thread; keep the callback thread-safe.
+  std::function<void(std::string_view)> log_handler;
 };
 
 class Server;
@@ -202,6 +204,46 @@ inline std::wstring NormalizePipeName(std::wstring_view pipe_name) {
 
 inline std::wstring NormalizePipeName(std::string_view pipe_name) {
   return NormalizePipeName(ToWide(pipe_name));
+}
+
+// Query the token, not package identity: packaged full-trust games remain Win32.
+// Empty SID means a normal Win32 token. Failures must not silently select Win32.
+inline bool GetCurrentAppContainerSid(std::wstring& sid) {
+  using OpenTokenFn = BOOL(WINAPI*)(HANDLE, DWORD, PHANDLE);
+  using GetTokenInfoFn = BOOL(WINAPI*)(HANDLE, TOKEN_INFORMATION_CLASS, LPVOID, DWORD, PDWORD);
+  using ConvertSidFn = BOOL(WINAPI*)(PSID, LPWSTR*);
+  const auto open_token = LoadModuleProc<OpenTokenFn>(L"advapi32.dll", "OpenProcessToken");
+  const auto get_token_info = LoadModuleProc<GetTokenInfoFn>(L"advapi32.dll", "GetTokenInformation");
+  const auto convert_sid = LoadModuleProc<ConvertSidFn>(L"advapi32.dll", "ConvertSidToStringSidW");
+  if (!open_token || !get_token_info || !convert_sid) {
+    SetLastError(ERROR_PROC_NOT_FOUND);
+    return false;
+  }
+  HANDLE token = nullptr;
+  if (!open_token(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+  DWORD is_app_container = 0, size = 0;
+  auto result = get_token_info(token, TokenIsAppContainer, &is_app_container, sizeof(is_app_container), &size);
+  auto error = result ? ERROR_SUCCESS : GetLastError();
+  sid.clear();
+  if (result && is_app_container) {
+    get_token_info(token, TokenAppContainerSid, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    result = get_token_info(token, TokenAppContainerSid, buffer.data(), size, &size);
+    error = result ? ERROR_SUCCESS : GetLastError();
+    if (result) {
+      auto* info = reinterpret_cast<TOKEN_APPCONTAINER_INFORMATION*>(buffer.data());
+      LPWSTR text = nullptr;
+      result = convert_sid(info->TokenAppContainer, &text);
+      error = result ? ERROR_SUCCESS : GetLastError();
+      if (result) {
+        sid = text;
+        LocalFree(text);
+      }
+    }
+  }
+  CloseHandle(token);
+  SetLastError(error);
+  return result != FALSE;
 }
 
 inline void CloseHandleIfValid(HANDLE& handle) {
@@ -317,6 +359,7 @@ struct SecurityAttributesStorage {
     static const auto convert_security_descriptor =
         LoadModuleProc<ConvertSecurityDescriptorFn>(L"advapi32.dll", "ConvertStringSecurityDescriptorToSecurityDescriptorW");
     if (convert_security_descriptor == nullptr) {
+      SetLastError(ERROR_PROC_NOT_FOUND);
       return false;
     }
 
@@ -370,14 +413,44 @@ class Server {
     max_message_size_ = config.max_message_size;
     max_instances_ = config.max_instances;
     security_descriptor_sddl_ = config.security_descriptor_sddl;
+    log_handler_ = config.log_handler;
+    std::wstring app_container_sid;
+    if (!internal::GetCurrentAppContainerSid(app_container_sid)) {
+      LogFailure("GetTokenInformation(AppContainer)", GetLastError());
+      return false;
+    }
+    if (!app_container_sid.empty()) {
+      const std::wstring prefix = LR"(\\.\pipe\)";
+      const auto suffix = pipe_name_.substr(prefix.size());
+      if (_wcsnicmp(suffix.c_str(), L"LOCAL\\", 6) != 0) {
+        pipe_name_ = prefix + L"LOCAL\\" + suffix;
+      }
+      // Restricted-token access checks need the specific package SID as well as
+      // the existing desktop ACL. GA includes FILE_CREATE_PIPE_INSTANCE, needed
+      // when the listener creates its next instance after accepting a client.
+      // Leave caller-supplied ACLs (including a null/default DACL) untouched.
+      if (security_descriptor_sddl_ == DEFAULT_LOCAL_PIPE_RW_SECURITY_DESCRIPTOR_SDDL) {
+        auto& sddl = *security_descriptor_sddl_;
+        const auto sacl = sddl.find(L"S:");
+        sddl.insert(sacl == std::wstring::npos ? sddl.size() : sacl,
+                    L"(A;;GA;;;" + app_container_sid + L")");
+      }
+    }
     handler_ = std::move(handler);
     connection_closed_handler_ = std::move(connection_closed_handler);
     stop_requested_ = false;
-    running_ = true;
+    running_ = false;
+    startup_complete_ = false;
     connection_count_ = 0u;
     next_connection_id_ = 1u;
     worker_thread_ = std::thread(&Server::Run, this);
-    return true;
+    // Start succeeds only after the first CreateNamedPipe has succeeded.
+    std::unique_lock lock(state_mutex_);
+    state_condition_.wait(lock, [this]() { return startup_complete_; });
+    const bool started = running_;
+    lock.unlock();
+    if (!started) worker_thread_.join();
+    return started;
   }
 
   bool Start(std::wstring_view pipe_name, MessageHandler handler) {
@@ -489,11 +562,31 @@ class Server {
   }
 
  private:
+  void LogFailure(std::string_view operation, DWORD error) {
+    std::ostringstream stream;
+    stream << "ipc::Server(" << operation << " failed, pipe="
+           << internal::ToNarrow(pipe_name_) << ", GetLastError=" << error
+           << ": " << internal::FormatSystemMessage(error) << ")";
+    const auto message = stream.str();
+    internal::DebugLog(message);
+    if (log_handler_) log_handler_(message);
+  }
+
+  void CompleteStartup(bool success) {
+    {
+      std::scoped_lock lock(state_mutex_);
+      if (startup_complete_) return;
+      running_ = success;
+      startup_complete_ = true;
+    }
+    state_condition_.notify_all();
+  }
+
   void Run() {
     internal::SecurityAttributesStorage security_attributes = {};
     if (security_descriptor_sddl_.has_value() && !security_attributes.Initialize(security_descriptor_sddl_.value())) {
-      internal::DebugLog("ipc::Server(Failed to create security descriptor for ", internal::ToNarrow(pipe_name_), ")");
-      running_ = false;
+      LogFailure("ConvertStringSecurityDescriptorToSecurityDescriptorW", GetLastError());
+      CompleteStartup(false);
       return;
     }
 
@@ -519,7 +612,7 @@ class Server {
           security_attributes.Get());
 
       if (pipe == INVALID_HANDLE_VALUE) {
-        internal::DebugLog("ipc::Server(CreateNamedPipeW failed for ", internal::ToNarrow(pipe_name_), ")");
+        LogFailure("CreateNamedPipeW", GetLastError());
         break;
       }
 
@@ -527,6 +620,7 @@ class Server {
         std::scoped_lock lock(state_mutex_);
         listener_pipe_ = pipe;
       }
+      CompleteStartup(true);
 
       const auto connect_result = ConnectNamedPipe(pipe, nullptr);
       const auto connect_error = connect_result != FALSE ? ERROR_SUCCESS : GetLastError();
@@ -539,11 +633,14 @@ class Server {
       }
       if (!connected) {
         if (connect_error != ERROR_OPERATION_ABORTED) {
-          internal::DebugLog("ipc::Server(ConnectNamedPipe failed, error=", connect_error, ")");
+          LogFailure("ConnectNamedPipe", connect_error);
         }
         internal::CloseHandleIfValid(pipe);
         if (stop_requested_) break;
-        continue;
+        // A persistent connect failure must not spin creating pipes. A client
+        // that disconnects before accept is transient and may be retried.
+        if (connect_error == ERROR_NO_DATA) continue;
+        break;
       }
 
       if (stop_requested_) {
@@ -571,6 +668,7 @@ class Server {
       listener_pipe_ = INVALID_HANDLE_VALUE;
     }
     internal::CloseHandleIfValid(listener_pipe);
+    CompleteStartup(false);
     running_ = false;
   }
 
@@ -684,6 +782,8 @@ class Server {
   std::uint32_t max_message_size_ = DEFAULT_MAX_MESSAGE_SIZE;
   std::uint32_t max_instances_ = 1u;
   std::optional<std::wstring> security_descriptor_sddl_;
+  std::function<void(std::string_view)> log_handler_;
+  bool startup_complete_ = false;  // guarded by state_mutex_
   MessageHandler handler_;
   ConnectionClosedHandler connection_closed_handler_;
   std::thread worker_thread_;

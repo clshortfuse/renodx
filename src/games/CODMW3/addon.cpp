@@ -6425,7 +6425,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainDeviceProxyBaseWaitIdle",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
+              .default_value = 1.f,
               .label = "Base Wait Idle",
               .section = "Display Proxy",
               .labels = {"Off", "On"},
@@ -6556,7 +6556,7 @@ for (const auto old_format : scene_intermediate_formats) {
 
         reshade::log::message(
             reshade::log::level::info,
-            "[MW3 V7 Integrated] V36 runtime + adaptive deadline finish + half-resolution filters ON; no Tracy.");
+            "[MW3 V7 Integrated] V36 runtime + adaptive deadline finish + balanced native filters ON; no Tracy.");
 
         initialized = true;
       }

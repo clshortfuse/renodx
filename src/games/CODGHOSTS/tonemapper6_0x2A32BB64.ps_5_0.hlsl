@@ -26,7 +26,7 @@
 //
 // This shader has no 3D LUT and no Ghosts rational filmic curve.
 // Its original SDR mapping before sRGB encoding is just saturate(sceneColor),
-// so the correct HDR extension is the unclamped identity signal.
+// and its extension must also account for the subsequent encoded color grade.
 // ============================================================================
 
 #ifndef RENODX_TONE_MAP_TYPE_VANILLA
@@ -1287,6 +1287,35 @@ float3 ApplyPostTonemapControls(float3 mappedColor)
 // Main
 // ============================================================================
 
+// Same HDR -> SDR carrier -> UpgradeToneMap workflow as the working LUT passes.
+// No LUT exists here: the graded reference is the actual Vanilla pass instead.
+// This transfers SDR luminance as well as chromaticity, rather than assuming a
+// tangent at one scene value will match the entire SDR brightness range.
+float3 ReconstructNonLUTSDR(float3 colorU, float3 vanillaReference)
+{
+    colorU = SafePositive(colorU);
+    vanillaReference = saturate(SafePositive(vanillaReference));
+    float hdrPeak = max(RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f), 1.000001f);
+    float3 colorN = saturate(SafePositive(
+        renodx::tonemap::HermiteSplineLuminanceRolloff(colorU, 1.0f, hdrPeak)));
+
+    // Guard roundoff at the identity portion of the SDR compression. This keeps
+    // UpgradeToneMap on its additive branch: Y_out = Y_vanilla + Y_U - Y_N.
+    float yU = max(renodx::color::y::from::BT709(colorU), 0.0f);
+    float yN = max(renodx::color::y::from::BT709(colorN), 0.0f);
+    if (yN > yU) colorN *= yU / max(yN, 0.000001f);
+    return SafePositive(renodx::tonemap::UpgradeToneMap(colorU, colorN, vanillaReference));
+}
+
+// This pass grades in encoded space and couples the RGB channels. Differentiate
+// along the pixel's RGB direction so its authored grade is included in the slope.
+float3 ApplyCompleteGradeReference(float3 color)
+{
+    float3 sdr = SRGBToLinearSafe(ApplyOriginalVanillaPass(color));
+    return lerp(saturate(color), sdr, saturate(RENODX_COLOR_GRADE_STRENGTH));
+}
+
+
 void main(
     float4 position : SV_POSITION0,
     float2 texcoord : TEXCOORD0,
@@ -1350,10 +1379,7 @@ void main(
         );
 
     hdrColor =
-        ApplyOriginalGradeToHDR(
-            hdrColor,
-            preTonemapColor
-        );
+        ReconstructNonLUTSDR(hdrColor, ApplyCompleteGradeReference(preTonemapColor));
 
     hdrColor =
         ApplyPostTonemapControls(

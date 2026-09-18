@@ -1,19 +1,4 @@
-// Human-readable replacement for DX9 pixel shader 0x039025BC.
-//
-// Goal:
-//   - Keep the original cloud/flare size.
-//   - Make it more transparent / less blob-like.
-//   - Do not reduce the original RGB brightness.
-//
-// Original behavior:
-//   1. Sample texture.
-//   2. Multiply by particleCloudColor.
-//   3. Output premultiplied RGB = rgb * alpha.
-//   4. Output alpha = alpha.
-//
-// This version preserves the original premultiplied RGB brightness,
-// but reduces alpha more in the faint halo than in the bright core.
-
+// Keep RGB premultiplied by the same shaped coverage used for alpha. Bright cores retain full coverage; faint halos fall off smoothly.
 sampler2D colorMapSampler : register(s0);
 
 float4 particleCloudColor : register(c3);
@@ -24,7 +9,7 @@ float4 particleCloudColor : register(c3);
 // Lower = more transparent outer halo.
 // 0.35 is a good starting point.
 #define TRANSPARENCY_HALO_ALPHA_SCALE 0.35f
-#define TRANSPARENCY_CORE_ALPHA_SCALE 0.70f
+#define TRANSPARENCY_CORE_ALPHA_SCALE 1.00f
 
 // Higher = changes how quickly the alpha transitions from halo to core.
 #define TRANSPARENCY_CORE_POWER 1.50f
@@ -63,9 +48,9 @@ float4 main(PS_INPUT input) : COLOR0
     // Original premultiplied RGB output.
     float3 originalPremultipliedRGB = particle.rgb * originalAlpha;
 
-    // Alpha-only transparency remap.
+    // Shape coverage and its premultiplied RGB together.
     float transparencyScale = ComputeTransparencyScale(originalAlpha);
     float adjustedAlpha = originalAlpha * transparencyScale;
 
-    return float4(originalPremultipliedRGB, adjustedAlpha);
+    return float4(originalPremultipliedRGB * transparencyScale, adjustedAlpha);
 }

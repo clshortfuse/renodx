@@ -87,8 +87,11 @@ struct ShaderInjectData {
   // Appended so the original c50-c59 DX9 layout remains byte-for-byte stable.
   float psychov24_highlight_saturation;  // x
   float psychov24_gamut_hue_restore;     // y
-  float psychov24_padding0;              // z
+  float scene_itm;                       // z: scene-only inverse tone mapping
   float psychov24_padding1;              // w
+
+  // c61-c63: stock composite film coefficients, captured per device/draw.
+  float stock_film_curve[12];
 };
 
 
@@ -103,7 +106,7 @@ struct ShaderInjectData {
 // c58 adds custom_flip_uv_y plus the first PsychoV24 controls.
 // c59 adds PsychoV24 cone response, bloom controls, and HDR Boost.
 // c60 adds PsychoV24 highlight saturation and gamut hue restoration.
-float4 shader_injection[11] : register(c50);
+float4 shader_injection[14] : register(c50);
 
 
 #define RENODX_PEAK_WHITE_NITS                 shader_injection[0][0]
@@ -160,6 +163,10 @@ float4 shader_injection[11] : register(c50);
 #define RENODX_BLOOM_BRIGHTNESS                shader_injection[9][1]
 #define RENODX_BLOOM_FLARE_SIZE                shader_injection[9][2]
 #define RENODX_HDR_BOOST                       shader_injection[9][3]
+#define RENODX_STOCK_FILM_0 shader_injection[11]
+#define RENODX_STOCK_FILM_1 shader_injection[12]
+#define RENODX_STOCK_FILM_2 shader_injection[13]
+#define RENODX_SCENE_ITM                       shader_injection[10][2]
 #define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection[10][0]
 #define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE    shader_injection[10][1]
 
@@ -237,6 +244,10 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_BLOOM_BRIGHTNESS                shader_injection.bloom_brightness
 #define RENODX_BLOOM_FLARE_SIZE                shader_injection.bloom_flare_size
 #define RENODX_HDR_BOOST                       shader_injection.hdr_boost
+#define RENODX_STOCK_FILM_0 float4(shader_injection.stock_film_curve[0], shader_injection.stock_film_curve[1], shader_injection.stock_film_curve[2], shader_injection.stock_film_curve[3])
+#define RENODX_STOCK_FILM_1 float4(shader_injection.stock_film_curve[4], shader_injection.stock_film_curve[5], shader_injection.stock_film_curve[6], shader_injection.stock_film_curve[7])
+#define RENODX_STOCK_FILM_2 float4(shader_injection.stock_film_curve[8], shader_injection.stock_film_curve[9], shader_injection.stock_film_curve[10], shader_injection.stock_film_curve[11])
+#define RENODX_SCENE_ITM                       shader_injection.scene_itm
 
 
 #endif

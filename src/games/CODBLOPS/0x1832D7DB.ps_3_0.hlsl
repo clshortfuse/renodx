@@ -1,24 +1,4 @@
-// Human-readable replacement for DX9 pixel shader 0x1832D7DB.
-//
-// Goal:
-//   - Keep the original particle/flare size.
-//   - Make it look less like a dense solid blob.
-//   - Do not reduce the original RGB brightness contribution.
-//   - Only reduce alpha/coverage, mostly in the faint halo.
-//
-// Original behavior:
-//   1. Sample scene depth.
-//   2. Compute a depth-feather factor.
-//   3. Sample the particle texture.
-//   4. Multiply texture RGB by vertex RGB.
-//   5. Build alpha from depth feather * texture alpha.
-//   6. Multiply alpha by a luminance term.
-//   7. Output premultiplied RGB = color * alpha, and output alpha = alpha.
-//
-// This version preserves the original premultiplied RGB brightness,
-// but remaps alpha so the halo becomes more transparent while the core
-// stays much closer to the original opacity.
-
+// Keep RGB premultiplied by the same shaped coverage used for alpha. Bright cores retain full coverage; faint halos fall off smoothly.
 sampler2D colorMapSampler : register(s0);
 sampler2D floatZSampler   : register(s1);
 
@@ -33,7 +13,7 @@ float4 featherParms     : register(c6);
 // 0.20 = much more transparent
 // 0.50 = less transparent
 #define TRANSPARENCY_HALO_ALPHA_SCALE 0.35f
-#define TRANSPARENCY_CORE_ALPHA_SCALE 0.70f
+#define TRANSPARENCY_CORE_ALPHA_SCALE 1.00f
 
 // Higher = keep the core more intact while making the halo more transparent.
 // 1.0 = softer transition
@@ -59,7 +39,7 @@ float ComputeTransparencyScale(float alpha)
     coreMask = pow(max(coreMask, 0.0f), TRANSPARENCY_CORE_POWER);
 
     // Low-alpha halo gets reduced more.
-    // Bright core is also reduced so it does not become a solid center.
+    // Full-coverage cores retain their original brightness.
     return lerp(
         TRANSPARENCY_HALO_ALPHA_SCALE,
         TRANSPARENCY_CORE_ALPHA_SCALE,
@@ -103,13 +83,13 @@ float4 main(PS_INPUT input) : COLOR0
     originalAlpha = saturate(originalAlpha);
 
     // Original premultiplied RGB output.
-    // This is the part we preserve so brightness does not get reduced.
+    // The same coverage factor must be applied to RGB and alpha.
     float3 originalPremultipliedRGB = particleColor * originalAlpha;
 
-    // New alpha-only transparency shaping.
+    // Shape coverage and its premultiplied RGB together.
     // Same size, but the lower-alpha halo becomes more transparent.
     float transparencyScale = ComputeTransparencyScale(originalAlpha);
     float adjustedAlpha = originalAlpha * transparencyScale;
 
-    return float4(originalPremultipliedRGB, adjustedAlpha);
+    return float4(originalPremultipliedRGB * transparencyScale, adjustedAlpha);
 }
