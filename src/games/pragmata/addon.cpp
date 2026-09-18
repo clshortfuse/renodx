@@ -61,7 +61,11 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDX (Enhanced)", "RenoDX (Vanilla+, Matches HDR)", "RenoDX (Vanilla+, Matches SDR)"},
+        .labels = {
+            "Vanilla",
+            "RenoDX (Enhanced)",
+            "RenoDX (Vanilla+, Matches HDR)",
+            "RenoDX (Vanilla+, Matches SDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
