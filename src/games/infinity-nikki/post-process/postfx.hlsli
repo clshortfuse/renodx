@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "../common.hlsli"
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
 /// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
