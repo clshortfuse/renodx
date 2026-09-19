@@ -58,7 +58,6 @@ float3 GenerateOutput(float3 untonemapped_ap1, float2 uv, uint output_mode) {
     const float highlight_contrast = 43.f / 50.f;
     const float flare = 0.72f;
     const float compression = 1.5f;
-    const float mean_a2_source_weight = 0.35f;
 
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
 
@@ -81,7 +80,7 @@ float3 GenerateOutput(float3 untonemapped_ap1, float2 uv, uint output_mode) {
         1.f,
         gamut_compression_mode,
         compression,
-        mean_a2_source_weight,
+        0.f,
         renodx::tonemap::psychov::PSYCHO30_SOURCE_BOUNDARY_AP1,
         1.f);
 

@@ -889,7 +889,8 @@ float3 custom_psycho31_CInfinityTransition(float3 position) {
 }
 
 float custom_psycho31_CInfinityTransition(float position) {
-  position = saturate(position);
+  if (position <= 0.f) return 0.f;
+  if (position >= 1.f) return 1.f;
   return rcp(1.f + exp2((1.f - 2.f * position) / (position * (1.f - position))));
 }
 
@@ -1126,12 +1127,39 @@ float3 custom_psycho31_ApplyAnchoredCInfinityShoulder(
       color - distance_from_anchor);
 }
 
-// Weight 0 uses the display response hue, 1 preserves Test31's existing
-// source/response midpoint, and values above 1 bias toward the source hue.
+// Lab shoulder-weighted policy: physical WHITE-weighted pre-tonal source
+// level gates over one stop above the input anchor. Physical shoulder loss
+// gates over 0..50%, before peak normalization (magnitude-only for signed LMS).
+// Only the weight is fixed below the anchor, not the final mapped color.
+float custom_psycho31_ShoulderMeanA2Weight(
+    float3 source_q,
+    float3 graded_lms,
+    float3 response_lms,
+    float mean_a2_highlight_source_weight) {
+  // Developer-uniform target is trusted to be <= 1; negatives still clamp below.
+  [branch]
+  if (mean_a2_highlight_source_weight == 1.f) return 1.f;
+  float source_level = renodx::color::yf::from::LMS(PSYCHO30_D65_WHITE_LMS * source_q)
+                       / PSYCHO30_D65_WHITE_YF;
+  if (source_level <= 1.f) return 1.f;
+  float graded_yf = renodx::color::yf::from::LMS(graded_lms);
+  float response_yf = renodx::color::yf::from::LMS(response_lms);
+  if (!(graded_yf > 0.f) || isnan(graded_yf) || isinf(graded_yf)
+      || isnan(response_yf) || isinf(response_yf)) return 1.f;
+  float shoulder_loss = saturate(1.f - response_yf / graded_yf);
+  if (shoulder_loss <= 0.f) return 1.f;
+  // Skip only constant plateaus; both C-infinity transition interiors are unchanged.
+  float blend = (source_level >= 2.f ? 1.f : custom_psycho31_CInfinityTransition(log2(source_level)))
+                * custom_psycho31_CInfinityTransition(shoulder_loss / 0.5f);
+  return lerp(1.f, max(mean_a2_highlight_source_weight, 0.f), blend);
+}
+
+// Receives the effective weight, not the highlight target: 0 is response hue,
+// 1 is the original source/response midpoint. A2 reconstruction is unchanged.
 float3 custom_psycho31_MeanA2Response(
     float3 source_q,
     float3 response_u,
-    float mean_a2_source_weight,
+    float effective_mean_a2_weight,  // Computed from the physical response state.
     out float response_yf,
     out uint valid) {
   valid = all(source_q >= 0.f)
@@ -1156,9 +1184,7 @@ float3 custom_psycho31_MeanA2Response(
       && response_radius6 > 6.f * PSYCHO30_EPSILON2) {
     float inverse_response_radius = rsqrt(response_radius6);
     float response_radius = response_radius6 * inverse_response_radius;
-    float2 mean_direction = source_dt
-                                * (rsqrt(source_radius6)
-                                   * mean_a2_source_weight)
+    float2 mean_direction = source_dt * (rsqrt(source_radius6) * effective_mean_a2_weight)
                             + response_dt * inverse_response_radius;
     float mean_radius6 = psycho30_ScaledA2Radius6(mean_direction);
     if (mean_radius6 > 6.f * PSYCHO30_EPSILON2) {
@@ -1646,8 +1672,10 @@ void custom_psycho31_ResponseState(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
+    float mean_a2_highlight_source_weight,
     out float3 source_q,
-    out float3 response_u) {
+    out float3 response_u,
+    out float effective_mean_a2_weight) {
   float3 tonal_input_lms;
   float3 graded_lms = custom_psycho31_GradeLMS(
       source_lms,
@@ -1672,6 +1700,8 @@ void custom_psycho31_ResponseState(
 
   source_q = tonal_input_lms / anchor_in_lms;
   response_u = response_lms / target_peak_lms;
+  effective_mean_a2_weight = custom_psycho31_ShoulderMeanA2Weight(
+      source_q, graded_lms, response_lms, mean_a2_highlight_source_weight);
 }
 
 float3 custom_psycho31_ResponseCoord(
@@ -1690,11 +1720,12 @@ float3 custom_psycho31_ResponseCoord(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
-    float mean_a2_source_weight,
+    float mean_a2_highlight_source_weight,
     out float3 source_q,
     out float response_yf,
     out uint valid) {
   float3 response_u;
+  float effective_mean_a2_weight;
   custom_psycho31_ResponseState(
       source_lms,
       anchor_in_lms,
@@ -1711,12 +1742,14 @@ float3 custom_psycho31_ResponseCoord(
       dechroma,
       sdr_eotf_emulation,
       compression,
+      mean_a2_highlight_source_weight,  // Highlight target; state computes the effective weight.
       source_q,
-      response_u);
+      response_u,
+      effective_mean_a2_weight);
   return custom_psycho31_MeanA2Response(
       source_q,
       response_u,
-      mean_a2_source_weight,
+      effective_mean_a2_weight,  // Never pass the highlight target directly.
       response_yf,
       valid);
 }
@@ -1833,7 +1866,7 @@ float3 custom_psycho31_LinearA2Fallback(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
-    float mean_a2_source_weight,
+    float mean_a2_highlight_source_weight,
     int target_gamut_mode,
     float target_rgb_peak,
     float target_compression_strength) {
@@ -1858,6 +1891,12 @@ float3 custom_psycho31_LinearA2Fallback(
       target_peak_lms,
       anchor_out_lms,
       compression);
+  // Use physical magnitudes before restoring signs, matching the lab fallback.
+  float effective_mean_a2_weight = custom_psycho31_ShoulderMeanA2Weight(
+      tonal_input_magnitude / anchor_in_lms,
+      graded_magnitude,
+      response_magnitude,
+      mean_a2_highlight_source_weight);
   float3 tonal_input_lms = renodx::math::CopySign(
       tonal_input_magnitude,
       source_lms);
@@ -1878,17 +1917,12 @@ float3 custom_psycho31_LinearA2Fallback(
     float inverse_source_radius = rsqrt(source_radius6);
     float inverse_response_radius = rsqrt(response_radius6);
     float response_radius = response_radius6 * inverse_response_radius;
-    float2 authored_direction = source_scaled_a2
-                                    * (inverse_source_radius
-                                       * mean_a2_source_weight)
-                                + response_scaled_a2
-                                      * inverse_response_radius;
-    float authored_direction_radius6 = psycho30_ScaledA2Radius6(
-        authored_direction);
+    float2 authored_direction = source_scaled_a2 * (inverse_source_radius * effective_mean_a2_weight)
+                                + response_scaled_a2 * inverse_response_radius;
+    float authored_direction_radius6 = psycho30_ScaledA2Radius6(authored_direction);
     if (authored_direction_radius6 > PSYCHO30_EPSILON2) {
       authored_lms = psycho30_LMSFromScaledA2(
-          authored_direction * rsqrt(authored_direction_radius6)
-              * response_radius,
+          authored_direction * (rsqrt(authored_direction_radius6) * response_radius),
           response_yf,
           anchor_in_lms);
     }
@@ -1975,7 +2009,7 @@ float3 custom_psycho31_SourceCoordinateCage(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
-    float mean_a2_source_weight,
+    float mean_a2_highlight_source_weight,
     int gamut_mapping_method,
     int target_gamut_mode,
     float target_rgb_peak,
@@ -2018,6 +2052,7 @@ float3 custom_psycho31_SourceCoordinateCage(
 
   float3 neutral_source_q;
   float3 neutral_response_u;
+  float unused_neutral_mean_a2_weight;
   custom_psycho31_ResponseState(
       mul(source_to_lms, neutral_source_rgb.xxx),
       anchor_in_lms,
@@ -2034,8 +2069,10 @@ float3 custom_psycho31_SourceCoordinateCage(
       dechroma,
       sdr_eotf_emulation,
       compression,
+      mean_a2_highlight_source_weight,
       neutral_source_q,
-      neutral_response_u);
+      neutral_response_u,
+      unused_neutral_mean_a2_weight);
   uint neutral_valid = all(neutral_source_q >= 0.f)
                                && all(neutral_response_u >= 0.f)
                                && !any(isnan(neutral_source_q))
@@ -2069,7 +2106,7 @@ float3 custom_psycho31_SourceCoordinateCage(
       dechroma,
       sdr_eotf_emulation,
       compression,
-      mean_a2_source_weight,
+      mean_a2_highlight_source_weight,
       boundary_source_q,
       boundary_response_yf,
       boundary_valid);
@@ -2121,8 +2158,6 @@ float3 custom_psycho31_SourceCoordinateCage(
 }
 
 float3 custom_psychotm_test31(
-    // Extended-range direct linear-light BT.709 transport RGB.
-    // The pixel signal and all configuration values are trusted.
     float3 bt709_linear_input,
     float peak_value = 1000.f / 203.f,
     float exposure = 1.f,
@@ -2139,16 +2174,17 @@ float3 custom_psychotm_test31(
     float3 current_background_state_bt709 = 0.18f,
     float sdr_eotf_emulation = 0.f,
     float gamut_compression = 1.f,
-    int gamut_compression_mode = 1,
-    float compression = 1.5f,
-    float mean_a2_source_weight = 0.35f,
-    int source_boundary = PSYCHO30_SOURCE_BOUNDARY_NONE,
-    float source_awareness = 1.f,
-    int gamut_mapping_method = CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4,
-    float yf_support_q = PSYCHO29_INFINITY_SUPPORT_Q,
-    float yf_dynamic_face_gap = 0.01f,
-    float yf_dynamic_mix = 0.f,
-    float yf_generalized_mix = 1.f) {
+    int gamut_compression_mode = 1,                                             // Target gamut: 0 BT.709, 1 BT.2020, 3 Display P3.
+    float compression = 1.5f,                                                   // C-infinity shoulder strength; 0 selects auto compression.
+    float mean_a2_highlight_source_weight = 0.f,                                // Highlight hue: 0 response, 1 source/response midpoint; weight 1 below anchor.
+    int source_boundary = PSYCHO30_SOURCE_BOUNDARY_NONE,                        // Source cage: 0 none, 1 BT.709, 2 BT.2020, 3 AP1; not input encoding.
+    float source_awareness = 1.f,                                               // Blend target-only (0) to source cage (1); inert with source boundary NONE.
+    int gamut_mapping_method = CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4,  // Endpoint: 0 joint L4, 1 fixed-Yf L4, 2 knee.
+    float yf_support_q = PSYCHO29_INFINITY_SUPPORT_Q,                           // Generic non-knee solver Lq exponent: min 2, 2048 = infinity.
+    float yf_dynamic_face_gap = 0.01f,                                          // Generic solver: per-hue strongest required q targets face ratio 1 - gap.
+    float yf_dynamic_mix = 0.f,                                                 // Generic solver: 0 fixed q, 1 adaptive per-hue q.
+    float yf_generalized_mix = 1.f                                              // Generic solver: 0 Neutwo2 support, 1 Lq; intermediate values lerp q from 2.
+) {
   float3 exposed_input = bt709_linear_input * exposure;
   float3 input_lms;
   float3 anchored_source_rgb = exposed_input;
@@ -2244,7 +2280,7 @@ float3 custom_psychotm_test31(
         dechroma,
         sdr_eotf_emulation,
         response_compression,
-        mean_a2_source_weight,
+        mean_a2_highlight_source_weight,
         source_q,
         response_yf,
         response_valid);
@@ -2269,7 +2305,7 @@ float3 custom_psychotm_test31(
         dechroma,
         sdr_eotf_emulation,
         response_compression,
-        mean_a2_source_weight,
+        mean_a2_highlight_source_weight,
         gamut_compression_mode,
         target_rgb_peak,
         gamut_compression);
@@ -2336,7 +2372,7 @@ float3 custom_psychotm_test31(
         dechroma,
         sdr_eotf_emulation,
         response_compression,
-        mean_a2_source_weight,
+        mean_a2_highlight_source_weight,
         gamut_mapping_method,
         gamut_compression_mode,
         target_rgb_peak,
