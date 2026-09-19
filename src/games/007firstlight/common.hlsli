@@ -1,4 +1,40 @@
+#ifndef SRC_007FIRSTLIGHT_COMMON_HLSLI_
+#define SRC_007FIRSTLIGHT_COMMON_HLSLI_
+
 #include "./shared.h"
+
+// Default GammaSafe (sRGB to gamma 2.2), with a C-infinity toe join.
+// Matches the original outside |color| = [0.002, 0.006]. Zero retains its original C2 behavior.
+#define CINFINITY_GAMMA_SAFE_GENERATOR(T, B)                                                                               \
+  T CInfinityGammaSafe(T color) {                                                                                          \
+    T magnitude = abs(color);                                                                                              \
+    B in_transition = (magnitude > 0.002f) & (magnitude < 0.006f);                                                         \
+    [branch]                                                                                                               \
+    if (!any(in_transition)) {                                                                                             \
+      return renodx::color::correct::GammaSafe(color);                                                                     \
+    }                                                                                                                      \
+    /* Compute the original result once, including channels outside the transition. */                                     \
+    B in_srgb_toe = magnitude <= 0.0031308f;                                                                               \
+    T shadow_encoded = 12.92f * magnitude;                                                                                 \
+    T highlight_encoded = mad(1.055f, pow(magnitude, 1.f / 2.4f), -0.055f);                                                \
+    T original_output = pow(renodx::math::Select(in_srgb_toe, shadow_encoded, highlight_encoded), 2.2f);                   \
+    /* Keep inactive channels' blend arithmetic valid. */                                                                  \
+    T blend_magnitude = renodx::math::Select(in_transition, magnitude, (T)0.004f);                                         \
+    T t = (blend_magnitude - 0.002f) / (0.006f - 0.002f);                                                                  \
+    T weight = exp(-abs(2.f * t - 1.f) / (t * (1.f - t)));                                                                 \
+    T blend = renodx::math::Select(t < 0.5f, weight, (T)1.f) / (1.f + weight);                                             \
+    /* Reuse the decoded original branch; only the other branch needs another power. */                                    \
+    T other_output = pow(renodx::math::Select(                                                                             \
+                             in_transition, renodx::math::Select(in_srgb_toe, highlight_encoded, shadow_encoded), (T)1.f), \
+                         2.2f);                                                                                            \
+    T smoothed_output = lerp(                                                                                              \
+        original_output, other_output, renodx::math::Select(in_srgb_toe, blend, 1.f - blend));                             \
+    return renodx::math::CopySign(renodx::math::Select(in_transition, smoothed_output, original_output), color);           \
+  }
+
+CINFINITY_GAMMA_SAFE_GENERATOR(float, bool)
+CINFINITY_GAMMA_SAFE_GENERATOR(float3, bool3)
+#undef CINFINITY_GAMMA_SAFE_GENERATOR
 
 renodx::canvas::Context CreateDebugOverlayContext(
     float3 color,
@@ -75,13 +111,46 @@ float3 GetDebugOverlayOutput(renodx::canvas::Context context, bool gamma_output 
              : output;
 }
 
-float ComputeMaxChCompressionScale(float3 untonemapped, float gray = 0.18f, float peak = 1.f, float clip = 100.f) {
-  float max_channel = renodx::math::Max(untonemapped);
-  float compressed_max_channel = renodx::math::Select(max_channel <= gray, max_channel, renodx::tonemap::Neutwo(max_channel, peak, clip, gray));
-  float scale = renodx::math::DivideSafe(compressed_max_channel, max_channel, 1.f);
+/// Identity through anchor to every derivative; then approaches peak
+/// monotonically and concave down. Requires anchor < peak and compression_strength >= 1.
+#define APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(T)                                                      \
+  T ApplyAnchoredCInfinityShoulder(T color, T peak, T anchor = 0.18f, float compression_strength = 1.5f) { \
+    T shoulder_range = peak - anchor;                                                                      \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                  \
+    T flat_weight = exp2(-shoulder_range / (compression_strength * distance_from_anchor));                 \
+    T response_denominator = mad(distance_from_anchor, flat_weight, shoulder_range);                       \
+    return mad(shoulder_range, distance_from_anchor / response_denominator, color - distance_from_anchor); \
+  }
 
-  return scale;
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float)
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float3)
+#undef APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR
+
+float ApplyAnchoredCInfinityShoulderMaxChannelScale(float3 color, float peak = 1.f, float anchor = 0.18f, float compression_strength = 1.5f) {
+  float max_channel = renodx::math::Max(abs(color));
+  float compressed_max = ApplyAnchoredCInfinityShoulder(max_channel, peak, anchor, compression_strength);
+  return renodx::math::DivideSafe(compressed_max, max_channel, 1.f);
 }
+
+static const float3x3 BT709_TO_BT2020_EXPANDED_BT709_MAT = float3x3(
+    0.9773816772f, 0.0112560072f, 0.0113623156f,
+    0.0060849375f, 0.9825527470f, 0.0113623156f,
+    0.0060849375f, 0.0112560072f, 0.9826590553f);
+
+static const float3x3 BT2020_EXPANDED_BT709_TO_BT709_MAT = float3x3(
+    1.0232867278f, -0.0115886389f, -0.0116980889f,
+    -0.0062647564f, 1.0179628453f, -0.0116980889f,
+    -0.0062647564f, -0.0115886389f, 1.0178533953f);
+
+static const float3x3 BT709_TO_XFYFZF_EXPANDED_BT709_MAT = float3x3(
+    0.9416502419f, 0.0286279843f, 0.0297217737f,
+    0.0166682791f, 0.9536099471f, 0.0297217737f,
+    0.0166682791f, 0.0286279843f, 0.9547037366f);
+
+static const float3x3 XFYFZF_EXPANDED_BT709_TO_BT709_MAT = float3x3(
+    1.0630820496f, -0.0309497757f, -0.0321322739f,
+    -0.0180201126f, 1.0501523865f, -0.0321322739f,
+    -0.0180201126f, -0.0309497757f, 1.0489698883f);
 
 float3 RenderIntermediatePass(float3 color) {
   if (TONE_MAP_TYPE != 0.f) {
@@ -100,3 +169,5 @@ float3 InvertIntermediatePass(float3 color) {
   }
   return color;
 }
+
+#endif  // SRC_007FIRSTLIGHT_COMMON_HLSLI_

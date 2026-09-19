@@ -1,6 +1,10 @@
 #ifndef SRC_THECALLISTOPROTOCOL_SHARED_H_
 #define SRC_THECALLISTOPROTOCOL_SHARED_H_
 
+#ifndef FORCE_HDR10
+#define FORCE_HDR10 0
+#endif
+
 // Must be 32-bit aligned and grouped in 4x32-bit constant-buffer rows.
 struct ShaderInjectData {
   float tone_map_type;

@@ -1,0 +1,401 @@
+#include "../denoising.hlsli"
+
+static const uint _35[4] = { 0u, 8u, 0u, 8u };
+static const uint _38[4] = { 0u, 0u, 8u, 8u };
+
+cbuffer FFX_SSSR_Constants : register(b0, space0) {
+  uint2 g_buffer_dimensions : packoffset(c000.x);
+  float2 g_inv_buffer_dimensions : packoffset(c000.z);
+  float g_temporal_stability_factor : packoffset(c001.x);
+  float g_depth_buffer_thickness : packoffset(c001.y);
+  float g_roughness_threshold : packoffset(c001.z);
+  float g_temporal_variance_threshold : packoffset(c001.w);
+  uint g_frame_index : packoffset(c002.x);
+  uint g_max_traversal_intersections : packoffset(c002.y);
+  uint g_min_traversal_occupancy : packoffset(c002.z);
+  uint g_most_detailed_mip : packoffset(c002.w);
+  uint g_samples_per_quad : packoffset(c003.x);
+  uint g_temporal_variance_guided_tracing_enabled : packoffset(c003.y);
+  uint g_vignetting_enabled : packoffset(c003.z);
+  float g_max_ray_length : packoffset(c003.w);
+  float g_secondary_ray_offset : packoffset(c004.x);
+  float g_fade_border_roughness : packoffset(c004.y);
+  uint g_reserve_0 : packoffset(c004.z);
+  uint g_reserve_1 : packoffset(c004.w);
+};
+Texture2D<float4> g_normal_roughness : register(t0);
+Texture2D<float3> g_average_radiance : register(t1);
+Texture2D<float4> g_in_radiance : register(t2);
+Texture2D<float4> g_in_reprojected_radiance : register(t3);
+Texture2D<float> g_in_variance : register(t4);
+Texture2D<float> g_in_sample_count : register(t5);
+StructuredBuffer<uint> g_denoiser_tile_list : register(t6);
+RWTexture2D<float4> g_out_radiance : register(u0);
+RWTexture2D<float> g_out_variance : register(u1);
+SamplerState BilinearClamp : register(s5, space32);
+
+static uint3 gl_WorkGroupID;
+static uint3 gl_LocalInvocationID;
+static uint gl_LocalInvocationIndex;
+struct SPIRV_Cross_Input {
+  uint3 gl_WorkGroupID : SV_GroupID;
+  uint3 gl_LocalInvocationID : SV_GroupThreadID;
+  uint gl_LocalInvocationIndex : SV_GroupIndex;
+};
+
+groupshared uint _43[256];
+groupshared uint _44[256];
+
+uint spvPackHalf2x16(float2 value) {
+  uint2 Packed = f32tof16(value);
+  return Packed.x | (Packed.y << 16);
+}
+
+float2 spvUnpackHalf2x16(uint value) {
+  return f16tof32(uint2(value & 0xffff, value >> 16));
+}
+
+void comp_main() {
+  uint4 _61 = g_denoiser_tile_list.Load(gl_WorkGroupID.x);
+  uint _62 = _61.x;
+  uint _77 = ((gl_LocalInvocationIndex >> 2u) & 6u) | (gl_LocalInvocationIndex & 1u);
+  uint _83 = ((gl_LocalInvocationIndex >> 1u) & 3u) | ((gl_LocalInvocationIndex >> 3u) & 4u);
+  uint _86 = (uint(int((_62 & 32767u) + gl_LocalInvocationID.x) / int(8u)) << 3u) | _77;
+  uint _87 = (uint(int(((_62 >> 15u) & 32767u) + gl_LocalInvocationID.y) / int(8u)) << 3u) | _83;
+  uint4 _93 = uint4(g_buffer_dimensions, asuint(g_inv_buffer_dimensions));
+  uint _94 = _93.x;
+  uint _95 = _86 + 4294967292u;
+  uint _97 = _87 + 4294967292u;
+  uint _98;
+  uint _100;
+  uint _102;
+  _98 = 0u;
+  _100 = 0u;
+  _102 = 0u;
+  uint _103;
+  for (;;) {
+    float4 _107 = g_in_radiance.Load(int3(uint2(_95 + _100, _97 + _98), 0u));
+    float _110 = _107.x;
+    float _111 = _107.y;
+    float _112 = _107.z;
+    uint _117 = _100 + _77;
+    uint _118 = _98 + _83;
+    _43[_117 + (_118 * 16u)] = (spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_111, _111))).x, 0.0f)) << 16u) | spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_110, _110))).x, 0.0f));
+    uint _136 = spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_112, _112))).x, 0.0f));
+    _44[_117 + (_118 * 16u)] = (_136 << 16u) | _136;
+    _103 = _102 + 1u;
+    if (_103 == 4u) {
+      break;
+    } else {
+      _98 = _38[_103];
+      _100 = _35[_103];
+      _102 = _103;
+      continue;
+    }
+  }
+  uint _146 = _93.y;
+  GroupMemoryBarrierWithGroupSync();
+  uint _148 = _77 + 4u;
+  uint _149 = _83 + 4u;
+  uint _151 = _148 + (_149 * 16u);
+  float2 _161 = spvUnpackHalf2x16(_43[_151] & 65535u);
+  float _162 = _161.x;
+  float2 _163 = spvUnpackHalf2x16(_43[_151] >> 16u);
+  float _164 = _163.x;
+  float2 _168 = spvUnpackHalf2x16(_44[_148 + (_149 * 16u)] & 65535u);
+  float _169 = _168.x;
+  float4 _172 = g_normal_roughness.Load(int3(uint2(_86, _87), 0u));
+  float _174 = _172.z;
+  float _175 = _174 * _174;
+  half _181 = half(g_in_variance.Load(int3(uint2(_86, _87), 0u)).x);
+  half _228;
+  half _231;
+  half _233;
+  half _235;
+  if (spvUnpackHalf2x16(spvPackHalf2x16(float2(_175, _175))).x < (g_roughness_threshold * g_roughness_threshold)) {
+    float4 _192 = g_in_sample_count.Load(int3(uint2(_86, _87), 0u));
+    float _194 = _192.x;
+    float3 _217 = g_average_radiance.SampleLevel(BilinearClamp, float2((float(int(_86)) + 0.5f) / float(((_94 & 4294967288u) == _94) ? _94 : (_94 + 8u)), (float(int(_87)) + 0.5f) / float(((_146 & 4294967288u) == _146) ? _146 : (_146 + 8u))), 0.0f);
+    float _219 = _217.y;
+    float _220 = _217.z;
+    float4 _223 = g_in_reprojected_radiance.Load(int3(uint2(_86, _87), 0u));
+    float _225 = _223.y;
+    float _226 = _223.z;
+    half _248;
+    half _253;
+    half _255;
+    half _257;
+    float _259;
+    float _261;
+    float _263;
+    half _264;
+    uint _265;
+    half _267;
+    half _268;
+    half _269;
+    float _270;
+    float _271;
+    float _272;
+    half _247 = half(0.0);
+    uint _249 = 4294967295u;
+    half _252 = half(0.0);
+    half _254 = half(0.0);
+    half _256 = half(0.0);
+    float _258 = 0.0f;
+    float _260 = 0.0f;
+    float _262 = 0.0f;
+    for (;;) {
+      _264 = _247;
+      _265 = 4294967295u;
+      _267 = _252;
+      _268 = _254;
+      _269 = _256;
+      _270 = _258;
+      _271 = _260;
+      _272 = _262;
+      half _310;
+      float _286;
+      float _288;
+      half _289;
+      half _290;
+      float _293;
+      half _294;
+      bool _299;
+      for (;;) {
+        uint _273 = _265 + _148;
+        uint _274 = _249 + _149;
+        uint _276 = _273 + (_274 * 16u);
+        _286 = spvUnpackHalf2x16(_43[_276] & 65535u).x;
+        _288 = spvUnpackHalf2x16(_43[_276] >> 16u).x;
+        _289 = half(_286);
+        _290 = half(_288);
+        _293 = spvUnpackHalf2x16(_44[_273 + (_274 * 16u)] & 65535u).x;
+        _294 = half(_293);
+        _299 = ((_289 != half(0.0)) || (_290 != half(0.0))) || (_294 != half(0.0));
+        half frontier_phi_9_pred;
+        if (_299) {
+          half _300 = half(int(_265));
+          half _305 = half(int(_249));
+          frontier_phi_9_pred = exp2((_305 * _305) * half(-1.08203125)) * exp2((_300 * _300) * half(-1.08203125));
+        } else {
+          frontier_phi_9_pred = half(0.0);
+        }
+        _310 = frontier_phi_9_pred;
+        _248 = _310 + _264;
+        _253 = (_310 * _289) + _267;
+        _255 = (_310 * _290) + _268;
+        _257 = (_310 * _294) + _269;
+        float _314 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_286, _286))).x;
+        float _315 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_288, _288))).x;
+        float _316 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_293, _293))).x;
+        float _320 = float(_310);
+        _259 = ((_314 * _314) * _320) + _270;
+        _261 = ((_315 * _315) * _320) + _271;
+        _263 = ((_316 * _316) * _320) + _272;
+        uint _266 = _265 + 1u;
+        if (_266 == 2u) {
+          break;
+        } else {
+          _264 = _248;
+          _265 = _266;
+          _267 = _253;
+          _268 = _255;
+          _269 = _257;
+          _270 = _259;
+          _271 = _261;
+          _272 = _263;
+          continue;
+        }
+      }
+      uint _251 = _249 + 1u;
+      if (_251 == 2u) {
+        break;
+      } else {
+        _247 = _248;
+        _249 = _251;
+        _252 = _253;
+        _254 = _255;
+        _256 = _257;
+        _258 = _259;
+        _260 = _261;
+        _262 = _263;
+        continue;
+      }
+    }
+    float _327 = _217.x;
+    float _330 = _223.x;
+    half _341;
+    half _342;
+    half _343;
+    float _344;
+    float _345;
+    float _346;
+    if (_248 > half(0.0)) {
+      float _337 = float(_248);
+      _341 = _253 / _248;
+      _342 = _255 / _248;
+      _343 = _257 / _248;
+      _344 = _259 / _337;
+      _345 = _261 / _337;
+      _346 = _263 / _337;
+    } else {
+      _341 = _253;
+      _342 = _255;
+      _343 = _257;
+      _344 = _259;
+      _345 = _261;
+      _346 = _263;
+    }
+    float _347 = float(_341);
+    float _348 = float(_342);
+    float _349 = float(_343);
+    float _362 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_327, _327))).x;
+    float _363 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_219, _219))).x;
+    float _364 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_220, _220))).x;
+    float _365 = _347 - _362;
+    float _366 = _348 - _363;
+    float _367 = _349 - _364;
+    float _373 = sqrt(((_366 * _366) + (_365 * _365)) + (_367 * _367));
+    float _377 = g_temporal_stability_factor * 1.39999997615814208984375f;
+    float _395 = float(((half(_327) - _341) * half(0.199951171875)) + _341);
+    float _396 = float(((half(_219) - _342) * half(0.199951171875)) + _342);
+    float _397 = float(((half(_220) - _343) * half(0.199951171875)) + _343);
+    float _402 = float(half((_373 + sqrt(abs(_344 - (_347 * _347)))) * _377) + half(0.00100040435791015625));
+    float _403 = float(half((_373 + sqrt(abs(_345 - (_348 * _348)))) * _377) + half(0.00100040435791015625));
+    float _404 = float(half((_373 + sqrt(abs(_346 - (_349 * _349)))) * _377) + half(0.00100040435791015625));
+    float _408 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_330, _330))).x - _395;
+    float _409 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_225, _225))).x - _396;
+    float _410 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_226, _226))).x - _397;
+    float _418 = max(max(abs(_408 / _402), abs(_409 / _403)), abs(_410 / _404));
+    half _432;
+    half _433;
+    half _434;
+    if (half(_418) > half(1.0)) {
+      float _422 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_418, _418))).x;
+      _432 = half((_408 / _422) + _395);
+      _433 = half((_409 / _422) + _396);
+      _434 = half((_410 / _422) + _397);
+    } else {
+      _432 = half(_330);
+      _433 = half(_225);
+      _434 = half(_226);
+    }
+    half _437 = half(1.0) - (half(1.0) / max(half(_194), half(1.0)));
+    float _442 = 1.0f / max(spvUnpackHalf2x16(spvPackHalf2x16(float2(_194, _194))).x + 1.0f, 1.0f);
+    float _443 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_162, _162))).x;
+    float _444 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_164, _164))).x;
+    float _445 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_169, _169))).x;
+    float _452 = (_442 * (_362 - _443)) + _443;
+    float _453 = (_442 * (_363 - _444)) + _444;
+    float _454 = (_442 * (_364 - _445)) + _445;
+    float _461 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_452, _452))).x - _362;
+    float _462 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_453, _453))).x - _363;
+    float _463 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_454, _454))).x - _364;
+    float _471 = max(max(abs(_461 / _402), abs(_462 / _403)), abs(_463 / _404));
+    half _484;
+    half _485;
+    half _486;
+    if (half(_471) > half(1.0)) {
+      float _474 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_471, _471))).x;
+      _484 = half((_461 / _474) + _362);
+      _485 = half((_462 / _474) + _363);
+      _486 = half((_463 / _474) + _364);
+    } else {
+      _484 = half(_452);
+      _485 = half(_453);
+      _486 = half(_454);
+    }
+    half _230 = ((_432 - _484) * _437) + _484;
+    half _232 = ((_433 - _485) * _437) + _485;
+    half _234 = ((_434 - _486) * _437) + _486;
+    float _493 = float(_230);
+    float _494 = float(_232);
+    float _495 = float(_234);
+    half _505 = half(max(dot(float3(_493, _494, _495), float3(0.2989999949932098388671875f, 0.58700001239776611328125f, 0.114000000059604644775390625f)), 0.001000000047497451305389404296875f));
+    half _513 = half(max(dot(float3(float(_432), float(_433), float(_434)), float3(0.2989999949932098388671875f, 0.58700001239776611328125f, 0.114000000059604644775390625f)), 0.001000000047497451305389404296875f));
+    half _519 = abs(_505 - _513) / max(max(_505, _513), half(0.5));
+    half _520 = _519 * _519;
+    half _236 = ((_181 - _520) * _437) + _520;
+    half frontier_phi_5_17_ladder;
+    half frontier_phi_5_17_ladder_1;
+    half frontier_phi_5_17_ladder_2;
+    half frontier_phi_5_17_ladder_3;
+    if ((isinf(_493) || isinf(_494)) || isinf(_495)) {
+      frontier_phi_5_17_ladder = half(0.0);
+      frontier_phi_5_17_ladder_1 = half(0.0);
+      frontier_phi_5_17_ladder_2 = half(0.0);
+      frontier_phi_5_17_ladder_3 = half(0.0);
+    } else {
+      half frontier_phi_5_17_ladder_19_ladder;
+      half frontier_phi_5_17_ladder_19_ladder_1;
+      half frontier_phi_5_17_ladder_19_ladder_2;
+      half frontier_phi_5_17_ladder_19_ladder_3;
+      if ((isnan(_493) || isnan(_494)) || isnan(_495)) {
+        frontier_phi_5_17_ladder_19_ladder = half(0.0);
+        frontier_phi_5_17_ladder_19_ladder_1 = half(0.0);
+        frontier_phi_5_17_ladder_19_ladder_2 = half(0.0);
+        frontier_phi_5_17_ladder_19_ladder_3 = half(0.0);
+      } else {
+        float _533 = float(_236);
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_1;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_2;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_3;
+        if (isinf(_533)) {
+          frontier_phi_5_17_ladder_19_ladder_20_ladder = half(0.0);
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_1 = half(0.0);
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_2 = half(0.0);
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_3 = half(0.0);
+        } else {
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3;
+          if (isnan(_533)) {
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder = half(0.0);
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1 = half(0.0);
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2 = half(0.0);
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3 = half(0.0);
+          } else {
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder = _230;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1 = _236;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2 = _234;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3 = _232;
+          }
+          frontier_phi_5_17_ladder_19_ladder_20_ladder = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_1 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_2 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_3 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3;
+        }
+        frontier_phi_5_17_ladder_19_ladder = frontier_phi_5_17_ladder_19_ladder_20_ladder;
+        frontier_phi_5_17_ladder_19_ladder_1 = frontier_phi_5_17_ladder_19_ladder_20_ladder_1;
+        frontier_phi_5_17_ladder_19_ladder_2 = frontier_phi_5_17_ladder_19_ladder_20_ladder_2;
+        frontier_phi_5_17_ladder_19_ladder_3 = frontier_phi_5_17_ladder_19_ladder_20_ladder_3;
+      }
+      frontier_phi_5_17_ladder = frontier_phi_5_17_ladder_19_ladder;
+      frontier_phi_5_17_ladder_1 = frontier_phi_5_17_ladder_19_ladder_1;
+      frontier_phi_5_17_ladder_2 = frontier_phi_5_17_ladder_19_ladder_2;
+      frontier_phi_5_17_ladder_3 = frontier_phi_5_17_ladder_19_ladder_3;
+    }
+    _228 = frontier_phi_5_17_ladder;
+    _231 = frontier_phi_5_17_ladder_3;
+    _233 = frontier_phi_5_17_ladder_2;
+    _235 = frontier_phi_5_17_ladder_1;
+  } else {
+    _228 = half(_162);
+    _231 = half(_164);
+    _233 = half(_169);
+    _235 = _181;
+  }
+  float _239 = float(_233);
+  g_out_radiance[uint2(_86, _87)] = float4(float(_228), float(_231), _239, _239);
+  g_out_variance[uint2(_86, _87)] = float(_235);
+}
+
+[numthreads(8, 8, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_WorkGroupID = stage_input.gl_WorkGroupID;
+  gl_LocalInvocationID = stage_input.gl_LocalInvocationID;
+  gl_LocalInvocationIndex = stage_input.gl_LocalInvocationIndex;
+  comp_main();
+}

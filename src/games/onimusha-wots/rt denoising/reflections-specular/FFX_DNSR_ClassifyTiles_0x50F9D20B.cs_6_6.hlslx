@@ -1,0 +1,164 @@
+#include "../denoising.hlsli"
+
+Texture2D<float4> g_normal_roughness_source_0 : register(t0);
+
+Texture2D<float> g_depth_buffer : register(t1);
+
+Texture2D<float> g_variance_history : register(t2);
+
+RWTexture2D<float4> g_normal_roughness : register(u0);
+
+RWTexture2D<float4> g_intersection_output : register(u1);
+
+RWStructuredBuffer<uint> g_ray_list : register(u2);
+
+RWByteAddressBuffer g_ray_counter : register(u3);
+
+RWStructuredBuffer<uint> g_denoiser_tile_list : register(u4);
+
+RWTexture2D<float3> g_out_average_radiance : register(u5);
+
+cbuffer FFX_SSSR_Constants : register(b0) {
+  uint2 g_buffer_dimensions : packoffset(c000.x);
+  float2 g_inv_buffer_dimensions : packoffset(c000.z);
+  float g_temporal_stability_factor : packoffset(c001.x);
+  float g_depth_buffer_thickness : packoffset(c001.y);
+  float g_roughness_threshold : packoffset(c001.z);
+  float g_temporal_variance_threshold : packoffset(c001.w);
+  uint g_frame_index : packoffset(c002.x);
+  uint g_max_traversal_intersections : packoffset(c002.y);
+  uint g_min_traversal_occupancy : packoffset(c002.z);
+  uint g_most_detailed_mip : packoffset(c002.w);
+  uint g_samples_per_quad : packoffset(c003.x);
+  uint g_temporal_variance_guided_tracing_enabled : packoffset(c003.y);
+  uint g_vignetting_enabled : packoffset(c003.z);
+  float g_max_ray_length : packoffset(c003.w);
+  float g_secondary_ray_offset : packoffset(c004.x);
+  float g_fade_border_roughness : packoffset(c004.y);
+  uint g_reserve_0 : packoffset(c004.z);
+  uint g_reserve_1 : packoffset(c004.w);
+};
+
+SamplerState PointClamp : register(s1, space32);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+groupshared uint _global_0;
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  uint _20;
+  uint _21;
+  bool _35;
+  float _46;
+  float _47;
+  float _48;
+  float _49;
+  bool _78;
+  int _104;
+  int _134;
+  float4 _40;
+  int _52;
+  int _53;
+  bool _64;
+  bool _66;
+  bool _79;
+  uint _107;
+  float _111;
+  bool _124;
+  bool _127;
+  int _128;
+  int _129;
+  int _132;
+  int _135;
+  int _160;
+  float _112;
+  float _114;
+  float _116;
+  _20 = SV_GroupThreadID.x + ((int)(SV_GroupID.x) << 3);
+  _21 = SV_GroupThreadID.y + ((int)(SV_GroupID.y) << 3);
+  _35 = (((g_depth_buffer.SampleLevel(PointClamp, float2(((float((int)(_20)) + 0.5f) * g_inv_buffer_dimensions.x), ((float((int)(_21)) + 0.5f) * g_inv_buffer_dimensions.y)), 0.0f)).x) > 0.0f);
+  if (_35) {
+    _40 = g_normal_roughness_source_0.Load(int3(((int)(_20 << 1)), ((int)(_21 << 1)), 0));
+    _46 = _40.x;
+    _47 = _40.y;
+    _48 = _40.z;
+    _49 = _40.w;
+  } else {
+    _46 = 1.0f;
+    _47 = 1.0f;
+    _48 = 1.0f;
+    _49 = 1.0f;
+  }
+  g_normal_roughness[int2(_20, _21)] = float4(_46, _47, _48, _49);
+  _global_0 = 0;
+  _52 = WaveGetLaneIndex();
+  _53 = WaveReadLaneFirst(_52);
+  _64 = ((_48 * _48) < (g_roughness_threshold * g_roughness_threshold));
+  _66 = _35 && ((((uint)_20 < (uint)g_buffer_dimensions.x) && ((uint)_21 < (uint)g_buffer_dimensions.y)) && _64);
+  switch ((int)(g_samples_per_quad)) {
+    case 1: {
+      _78 = (((_21 | _20) & 1) == 0);
+      break;
+    }
+    case 2: {
+      _78 = (((_21 ^ _20) & 1) == 0);
+      break;
+    }
+    default: {
+      _78 = true;
+      break;
+    }
+  }
+  _79 = _78 && _66;
+  if (!(_79 || (!((g_temporal_variance_guided_tracing_enabled != 0) && _66)))) {
+    _104 = ((int)(uint)((int)(((g_variance_history.SampleLevel(PointClamp, float2((g_inv_buffer_dimensions.x * (((float)((uint)_20)) + 0.5f)), (g_inv_buffer_dimensions.y * (((float)((uint)_21)) + 0.5f))), 0.0f)).x) > g_temporal_variance_threshold)));
+  } else {
+    _104 = ((int)(uint)(_79));
+  }
+  GroupMemoryBarrierWithGroupSync();
+  if (_35 && _64) {
+    uint _107;
+    InterlockedAdd(_global_0, 1, _107);
+  }
+  uint _samples_per_quad = g_samples_per_quad;
+  _111 = (float)((bool)((uint)(_66 && (_104 == 0))));
+  _112 = QuadReadAcrossX(_111);
+  _114 = QuadReadAcrossY(_111);
+  _116 = QuadReadAcrossDiagonal(_111);
+  _124 = _78 && (_samples_per_quad == 1);
+  _127 = (_104 != 0);
+  _128 = WavePrefixCountBits(_127);
+  _129 = WaveActiveCountBits(_127);
+  if (_53 == _52) {
+    int _132;
+    g_ray_counter.InterlockedAdd(0, _129, _132);
+    _134 = _132;
+  } else {
+    _134 = 0;
+  }
+  _135 = WaveReadLaneFirst(_134);
+  if (_127) {
+    g_ray_list[((int)(_135 + _128))] = (((((((int)(_21 << 15)) & 536838144) | (_20 & 32767)) | (((int)(uint)((int)((!(_112 == 0.0f)) && (_78 && (_samples_per_quad != 4))))) << 29)) | (((int)(uint)((int)((!(_114 == 0.0f)) && _124))) << 30)) | ((int)(((int)(uint)((int)((!(_116 == 0.0f)) && _124))) << 31)));
+  }
+  GroupMemoryBarrierWithGroupSync();
+  if ((((int)(SV_GroupThreadID.y) | (int)(SV_GroupThreadID.x)) == 0) && (_global_0 != 0)) {
+    int _160;
+    g_ray_counter.InterlockedAdd(8, 1, _160);
+    g_denoiser_tile_list[_160] = ((((int)(_21 << 15)) & 1073709056) | (_20 & 32767));
+  }
+  g_intersection_output[int2(_20, _21)] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+  if ((int)(SV_GroupIndex) == 0) {
+    g_out_average_radiance[int2((int)(SV_GroupID.x), (int)(SV_GroupID.y))] = float3(0.0f, 0.0f, 0.0f);
+  }
+}

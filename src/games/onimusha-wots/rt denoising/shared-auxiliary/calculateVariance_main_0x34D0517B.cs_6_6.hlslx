@@ -1,0 +1,349 @@
+#include "../denoising.hlsli"
+
+Texture2D<float> depthSRV : register(t0);
+
+Texture2D<float4> normalRoughnessSRV : register(t1);
+
+Texture2D<float4> dColorSRV : register(t2);
+
+Texture2D<float4> sColorSRV : register(t3);
+
+RWTexture2D<float> dVarUAV : register(u0);
+
+RWTexture2D<float> sVarUAV : register(u1);
+
+cbuffer SceneInfo : register(b0) {
+  row_major float4x4 viewProjMat : packoffset(c000.x);
+  row_major float3x4 transposeViewMat : packoffset(c004.x);
+  row_major float3x4 transposeViewInvMat : packoffset(c007.x);
+  float4 projElement[2] : packoffset(c010.x);
+  float4 projInvElements[2] : packoffset(c012.x);
+  row_major float4x4 viewProjInvMat : packoffset(c014.x);
+  row_major float4x4 prevViewProjMat : packoffset(c018.x);
+  float3 ZToLinear : packoffset(c022.x);
+  float subdivisionLevel : packoffset(c022.w);
+  float2 screenSize : packoffset(c023.x);
+  float2 screenInverseSize : packoffset(c023.z);
+  float2 cullingHelper : packoffset(c024.x);
+  float cameraNearPlane : packoffset(c024.z);
+  float cameraFarPlane : packoffset(c024.w);
+  float4 viewFrustum[8] : packoffset(c025.x);
+  float4 clipplane : packoffset(c033.x);
+  float2 vrsVelocityThreshold : packoffset(c034.x);
+  uint GPUVisibleMask : packoffset(c034.z);
+  uint resolutionRatioPacked : packoffset(c034.w);
+  float3 worldOffset : packoffset(c035.x);
+  uint sceneInfoMisc : packoffset(c035.w);
+  uint4 rayTracingParams : packoffset(c036.x);
+  float4 sceneExtendedData : packoffset(c037.x);
+  float2 projectionSpaceJitterOffset : packoffset(c038.x);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  float SceneInfo_Reserve2 : packoffset(c039.x);
+};
+
+cbuffer EnvironmentInfo : register(b1) {
+  uint timeMillisecond : packoffset(c000.x);
+  uint frameCount : packoffset(c000.y);
+  uint isOddFrame : packoffset(c000.z);
+  uint reserveEnvironmentInfo : packoffset(c000.w);
+  float breakingPBRSpecularIntensity : packoffset(c001.x);
+  float breakingPBRIBLReflectanceBias : packoffset(c001.y);
+  float breakingPBRIBLIntensity : packoffset(c001.z);
+  float breakingPBR_Reserved : packoffset(c001.w);
+  uint vrsTier2Enable : packoffset(c002.x);
+  uint dynamicTextureTableNullBlackHandle : packoffset(c002.y);
+  uint prevTimeMillisecond : packoffset(c002.z);
+  uint bindlessMaterialMaxNum : packoffset(c002.w);
+  float rtLightRadius : packoffset(c003.x);
+  float accurateVelocityDistanceSq : packoffset(c003.y);
+  uint texture1DDummyHandle : packoffset(c003.z);
+  uint texture1DArrayDummyHandle : packoffset(c003.w);
+  uint texture2DDummyHandle : packoffset(c004.x);
+  uint texture2DArrayDummyHandle : packoffset(c004.y);
+  uint texture3DDummyHandle : packoffset(c004.z);
+  uint textureCubeDummyHandle : packoffset(c004.w);
+  uint textureCubeArrayDummyHandle : packoffset(c005.x);
+  uint byteAddressBufferDummyHandle : packoffset(c005.y);
+  float EnvironmentInfoReserved1 : packoffset(c005.z);
+  float EnvironmentInfoReserved2 : packoffset(c005.w);
+  float4 userGlobalParams[32] : packoffset(c006.x);
+  uint4 dynamicTextureTableHandles[256] : packoffset(c038.x);
+  uint4 bakedResourceSharedTablesHandles[32] : packoffset(c294.x);
+};
+
+cbuffer CheckerBoardInfo : register(b2) {
+  float2 cbr : packoffset(c000.x);
+  float cbr_scale : packoffset(c000.z);
+  float cbr_using : packoffset(c000.w);
+  float2 cbr_padding : packoffset(c001.x);
+  float cbr_mipmapReadjustRatio : packoffset(c001.z);
+  int cbr_mipmapReadjustable : packoffset(c001.w);
+};
+
+cbuffer RayTracingDenoiserConstantBufferInfo : register(b3) {
+  uint WaveletStep : packoffset(c000.x);
+  float AODistance : packoffset(c000.y);
+  uint UserStencilMask : packoffset(c000.z);
+  float compressEV : packoffset(c000.w);
+  uint diff_RT_WIDTH : packoffset(c001.x);
+  uint diff_RT_HEIGHT : packoffset(c001.y);
+  float diff_INV_RT_WIDTH : packoffset(c001.z);
+  float diff_INV_RT_HEIGHT : packoffset(c001.w);
+  uint spec_RT_WIDTH : packoffset(c002.x);
+  uint spec_RT_HEIGHT : packoffset(c002.y);
+  float spec_INV_RT_WIDTH : packoffset(c002.z);
+  float spec_INV_RT_HEIGHT : packoffset(c002.w);
+  float diffuseMultipler : packoffset(c003.x);
+  float specularMultipler : packoffset(c003.y);
+  float modelScaler : packoffset(c003.z);
+  float depthRejectionThresold : packoffset(c003.w);
+  float specularRoughnessThreshold : packoffset(c004.x);
+  uint disocclusionStep : packoffset(c004.y);
+  float maxDiffuseHistory : packoffset(c004.z);
+  float maxSpecularHistory : packoffset(c004.w);
+  float4 Rotator0 : packoffset(c005.x);
+  float4 Rotator1 : packoffset(c006.x);
+  float4 Rotator2 : packoffset(c007.x);
+  float4 Rotator3 : packoffset(c008.x);
+  row_major float4x4 prevViewProjInvMat : packoffset(c009.x);
+  uint diffuseMaxIterationCount : packoffset(c013.x);
+  uint specularMaxIterationCount : packoffset(c013.y);
+  uint ps5HeatmapMode : packoffset(c013.z);
+  float heatmapMaxIntersectionCount : packoffset(c013.w);
+  float2 diffResolutionRatio : packoffset(c014.x);
+  float GIHistoryThreshold : packoffset(c014.z);
+  float GIFilterCenterWeight : packoffset(c014.w);
+  float VFXDiffuseBoost : packoffset(c015.x);
+  float VFXSpecularBoost : packoffset(c015.y);
+  uint VFXSpecularMipBias : packoffset(c015.z);
+  float VFXDiffuseResolutionRatio : packoffset(c015.w);
+  float VFXSpecularResolutionRatio : packoffset(c016.x);
+  float VFXInvalidateTemporalRatio : packoffset(c016.y);
+  float VFXPrevSpecularResolutionRatio : packoffset(c016.z);
+  float VFXTemporalCompositeRate : packoffset(c016.w);
+  uint medianFilterStepSize : packoffset(c017.x);
+  float specularSecondaryBounceRoughnessThreshold : packoffset(c017.y);
+  float2 diffInvResolutionRatio : packoffset(c017.z);
+  float2 specResolutionRatio : packoffset(c018.x);
+  float2 specInvResolutionRatio : packoffset(c018.z);
+  float specularTraceRoughnessThreshold : packoffset(c019.x);
+  uint diffuseDisocclusionFrameRange : packoffset(c019.y);
+  float diffuseDisocclusionFilteringStrength : packoffset(c019.z);
+  float reserved0 : packoffset(c019.w);
+  float iblLeakingAmountDiff : packoffset(c020.x);
+  float iblLeakingAmountSpec : packoffset(c020.y);
+  float iblLeakingDistanceDiff : packoffset(c020.z);
+  float iblLeakingDistanceSpec : packoffset(c020.w);
+  float2 diffUVAdjuster : packoffset(c021.x);
+  float2 specUVAdjuster : packoffset(c021.z);
+};
+
+static uint3 gl_LocalInvocationID;
+static uint3 gl_GlobalInvocationID;
+static uint gl_LocalInvocationIndex;
+struct SPIRV_Cross_Input {
+  uint3 gl_LocalInvocationID : SV_GroupThreadID;
+  uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+  uint gl_LocalInvocationIndex : SV_GroupIndex;
+};
+
+groupshared float _41[648];
+
+void comp_main() {
+  uint _60 = (gl_GlobalInvocationID.y - gl_LocalInvocationID.y) + 4294967295u;
+  float _65 = (float(int(gl_LocalInvocationIndex)) + 0.5f) * 0.0555555559694766998291015625f;
+  uint _71 = uint(int(frac(_65) * 18.0f));
+  uint _72 = uint(int(_65));
+  uint _75 = ((gl_GlobalInvocationID.x + 4294967295u) - gl_LocalInvocationID.x) + _71;
+  uint _76 = _72 + _60;
+  if (int(_72) < int(14u)) {
+    _41[0u + ((_71 + (_72 * 18u)) * 2u)] = dColorSRV.Load(int3(uint2(_75, _76), 0u)).x;
+    _41[1u + ((_71 + (_72 * 18u)) * 2u)] = sColorSRV.Load(int3(uint2(_75, _76), 0u)).x;
+  }
+  uint _101 = _72 + 14u;
+  uint _102 = _101 + _60;
+  if (int(_101) < int(18u)) {
+    _41[0u + ((_71 + (_101 * 18u)) * 2u)] = dColorSRV.Load(int3(uint2(_75, _102), 0u)).x;
+    _41[1u + ((_71 + (_101 * 18u)) * 2u)] = sColorSRV.Load(int3(uint2(_75, _102), 0u)).x;
+  }
+  GroupMemoryBarrierWithGroupSync();
+  float4 _124 = depthSRV.Load(int3(uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), 0u));
+  float _126 = _124.x;
+  if (!(_126 <= 0.0f)) {
+    float4 _130 = normalRoughnessSRV.Load(int3(uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y), 0u));
+    float _137 = (_130.x * 2.0f) + (-1.0f);
+    float _139 = (_130.y * 2.0f) + (-1.0f);
+    float _141 = 1.0f - abs(_137);
+    float _143 = abs(_139);
+    float _144 = _141 - _143;
+    float _160;
+    float _161;
+    if (_144 < 0.0f) {
+      float _152 = 1.0f - _143;
+      _160 = (_137 >= 0.0f) ? _152 : ((-0.0f) - _152);
+      _161 = (_139 >= 0.0f) ? _141 : ((-0.0f) - _141);
+    } else {
+      _160 = _137;
+      _161 = _139;
+    }
+    float _166 = rsqrt(dot(float3(_160, _161, _144), float3(_160, _161, _144)));
+    float _167 = _166 * _160;
+    float _168 = _166 * _161;
+    float _169 = _166 * _144;
+    float _191 = mad(_169, transposeViewMat[2].x, mad(_168, transposeViewMat[1].x, transposeViewMat[0].x * _167));
+    float _194 = mad(_169, transposeViewMat[2].y, mad(_168, transposeViewMat[1].y, transposeViewMat[0].y * _167));
+    float _197 = mad(_169, transposeViewMat[2].z, mad(_168, transposeViewMat[1].z, transposeViewMat[0].z * _167));
+    float _207 = floor(specResolutionRatio.y * float(int(gl_GlobalInvocationID.y)));
+    float _224;
+    if (cbr_using != 0.0f) {
+      _224 = (float((uint4(timeMillisecond, frameCount, isOddFrame, reserveEnvironmentInfo).z + uint(int(_207))) & 1u) * 0.5f) + 0.25f;
+    } else {
+      _224 = 0.5f;
+    }
+    precise float _225 = floor(specResolutionRatio.x * float(int(gl_GlobalInvocationID.x))) + _224;
+    float _236 = ((_225 * 2.0f) * screenInverseSize.x) + (-1.0f);
+    float _237 = 1.0f - (((_207 + 0.5f) * 2.0f) * screenInverseSize.y);
+    float _280 = mad(_126, viewProjInvMat[2].w, mad(_237, viewProjInvMat[1].w, _236 * viewProjInvMat[0].w)) + viewProjInvMat[3].w;
+    float _281 = (mad(_126, viewProjInvMat[2].x, mad(_237, viewProjInvMat[1].x, _236 * viewProjInvMat[0].x)) + viewProjInvMat[3].x) / _280;
+    float _282 = (mad(_126, viewProjInvMat[2].y, mad(_237, viewProjInvMat[1].y, _236 * viewProjInvMat[0].y)) + viewProjInvMat[3].y) / _280;
+    float _283 = (mad(_126, viewProjInvMat[2].z, mad(_237, viewProjInvMat[1].z, _236 * viewProjInvMat[0].z)) + viewProjInvMat[3].z) / _280;
+    float _294 = modelScaler * abs(mad(_283, transposeViewMat[2].z, mad(_282, transposeViewMat[2].y, _281 * transposeViewMat[2].x)) + transposeViewMat[2].w);
+    float _296;
+    float _298;
+    float _300;
+    float _302;
+    float _304;
+    uint _306;
+    float _307;
+    float _308;
+    float _309;
+    float _310;
+    float _311;
+    uint _312;
+    float _295 = 0.0f;
+    float _297 = 0.0f;
+    float _299 = 0.0f;
+    float _301 = 0.0f;
+    float _303 = 0.0f;
+    uint _305 = 4294967295u;
+    for (;;) {
+      _307 = _295;
+      _308 = _297;
+      _309 = _299;
+      _310 = _301;
+      _311 = _303;
+      _312 = 4294967295u;
+      uint _313;
+      uint _314;
+      uint _315;
+      uint _316;
+      uint _317;
+      bool _328;
+      for (;;) {
+        _314 = _312 + gl_GlobalInvocationID.x;
+        _315 = _305 + gl_GlobalInvocationID.y;
+        _313 = _312 + 1u;
+        _316 = _313 + gl_LocalInvocationID.x;
+        _306 = _305 + 1u;
+        _317 = _306 + gl_LocalInvocationID.y;
+        uint4 _320 = uint4(spec_RT_WIDTH, spec_RT_HEIGHT, asuint(spec_INV_RT_WIDTH), asuint(spec_INV_RT_HEIGHT));
+        _328 = (int(_315) < int(_320.y)) && ((int(_314 | _315) > int(4294967295u)) && (int(_314) < int(_320.x)));
+        float frontier_phi_15_pred;
+        float frontier_phi_15_pred_1;
+        float frontier_phi_15_pred_2;
+        float frontier_phi_15_pred_3;
+        float frontier_phi_15_pred_4;
+        if (_328) {
+          float4 _330 = depthSRV.Load(int3(uint2(_314, _315), 0u));
+          float _332 = _330.x;
+          float frontier_phi_15_pred_14_ladder;
+          float frontier_phi_15_pred_14_ladder_1;
+          float frontier_phi_15_pred_14_ladder_2;
+          float frontier_phi_15_pred_14_ladder_3;
+          float frontier_phi_15_pred_14_ladder_4;
+          if (!(_332 <= 0.0f)) {
+            float _349 = floor(specResolutionRatio.y * float(_315));
+            float _365;
+            if (cbr_using != 0.0f) {
+              _365 = (float((uint4(timeMillisecond, frameCount, isOddFrame, reserveEnvironmentInfo).z + uint(int(_349))) & 1u) * 0.5f) + 0.25f;
+            } else {
+              _365 = 0.5f;
+            }
+            precise float _366 = floor(specResolutionRatio.x * float(_314)) + _365;
+            float _376 = ((_366 * 2.0f) * screenInverseSize.x) + (-1.0f);
+            float _377 = 1.0f - (((_349 + 0.5f) * 2.0f) * screenInverseSize.y);
+            float _417 = mad(_332, viewProjInvMat[2].w, mad(_377, viewProjInvMat[1].w, _376 * viewProjInvMat[0].w)) + viewProjInvMat[3].w;
+            float _432 = saturate(1.0f - (abs(dot(float3(((mad(_332, viewProjInvMat[2].x, mad(_377, viewProjInvMat[1].x, _376 * viewProjInvMat[0].x)) + viewProjInvMat[3].x) / _417) - _281, ((mad(_332, viewProjInvMat[2].y, mad(_377, viewProjInvMat[1].y, _376 * viewProjInvMat[0].y)) + viewProjInvMat[3].y) / _417) - _282, ((mad(_332, viewProjInvMat[2].z, mad(_377, viewProjInvMat[1].z, _376 * viewProjInvMat[0].z)) + viewProjInvMat[3].z) / _417) - _283), float3(_191, _194, _197))) / max(9.9999999747524270787835121154785e-07f, _294)));
+            float _439 = _41[0u + ((_316 + (_317 * 18u)) * 2u)] * _432;
+            float _446 = _41[1u + ((_316 + (_317 * 18u)) * 2u)] * _432;
+            frontier_phi_15_pred_14_ladder = _439 + _307;
+            frontier_phi_15_pred_14_ladder_1 = _432 + _311;
+            frontier_phi_15_pred_14_ladder_2 = (_446 * _446) + _310;
+            frontier_phi_15_pred_14_ladder_3 = _446 + _309;
+            frontier_phi_15_pred_14_ladder_4 = (_439 * _439) + _308;
+          } else {
+            frontier_phi_15_pred_14_ladder = _307;
+            frontier_phi_15_pred_14_ladder_1 = _311;
+            frontier_phi_15_pred_14_ladder_2 = _310;
+            frontier_phi_15_pred_14_ladder_3 = _309;
+            frontier_phi_15_pred_14_ladder_4 = _308;
+          }
+          frontier_phi_15_pred = frontier_phi_15_pred_14_ladder;
+          frontier_phi_15_pred_1 = frontier_phi_15_pred_14_ladder_1;
+          frontier_phi_15_pred_2 = frontier_phi_15_pred_14_ladder_2;
+          frontier_phi_15_pred_3 = frontier_phi_15_pred_14_ladder_3;
+          frontier_phi_15_pred_4 = frontier_phi_15_pred_14_ladder_4;
+        } else {
+          frontier_phi_15_pred = _307;
+          frontier_phi_15_pred_1 = _311;
+          frontier_phi_15_pred_2 = _310;
+          frontier_phi_15_pred_3 = _309;
+          frontier_phi_15_pred_4 = _308;
+        }
+        _296 = frontier_phi_15_pred;
+        _304 = frontier_phi_15_pred_1;
+        _302 = frontier_phi_15_pred_2;
+        _300 = frontier_phi_15_pred_3;
+        _298 = frontier_phi_15_pred_4;
+        if (_313 == 2u) {
+          break;
+        } else {
+          _307 = _296;
+          _308 = _298;
+          _309 = _300;
+          _310 = _302;
+          _311 = _304;
+          _312 = _313;
+          continue;
+        }
+      }
+      if (_306 == 2u) {
+        break;
+      } else {
+        _295 = _296;
+        _297 = _298;
+        _299 = _300;
+        _301 = _302;
+        _303 = _304;
+        _305 = _306;
+        continue;
+      }
+    }
+    float _449 = _296 / _304;
+    float _451 = _300 / _304;
+    dVarUAV[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = sqrt(max(0.0f, (_298 / _304) - (_449 * _449)));
+    sVarUAV[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = sqrt(max(0.0f, (_302 / _304) - (_451 * _451)));
+  } else {
+    dVarUAV[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = 0.0f;
+    sVarUAV[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = 0.0f;
+  }
+}
+
+[numthreads(16, 16, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_LocalInvocationID = stage_input.gl_LocalInvocationID;
+  gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+  gl_LocalInvocationIndex = stage_input.gl_LocalInvocationIndex;
+  comp_main();
+}

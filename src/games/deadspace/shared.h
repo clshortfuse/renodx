@@ -1,29 +1,35 @@
 #ifndef SRC_DEADSPACE2023_SHARED_H_
 #define SRC_DEADSPACE2023_SHARED_H_
 
+#ifndef DEADSPACE_ENABLE_RESOURCE_UPGRADES
 #define DEADSPACE_ENABLE_RESOURCE_UPGRADES 1
+#endif
+
+#ifndef DEADSPACE_FORCE_HDR10
+#define DEADSPACE_FORCE_HDR10 0
+#endif
 
 struct ShaderInjectData {
-	float tone_map_type;
-	float tone_map_exposure;
-	float graphics_white_nits;
-	float override_ui_brightness;
-	float sdr_eotf_emulation_ui;
-	float custom_ui_visibility;
-	float peak_white_nits;
-	float override_game_brightness;
-	float diffuse_white_nits;
-	float tone_map_working_color_space;
-	float tone_map_highlights;
-	float tone_map_shadows;
-	float tone_map_contrast;
-	float tone_map_saturation;
-	float tone_map_highlight_saturation;
-	float tone_map_dechroma;
-	float tone_map_flare;
-	float custom_bloom;
-	float custom_grain_type;
-	float custom_grain_strength;
+  float tone_map_type;
+  float tone_map_exposure;
+  float graphics_white_nits;
+  float override_ui_brightness;
+  float sdr_eotf_emulation_ui;
+  float custom_ui_visibility;
+  float peak_white_nits;
+  float override_game_brightness;
+  float diffuse_white_nits;
+  float tone_map_working_color_space;
+  float tone_map_highlights;
+  float tone_map_shadows;
+  float tone_map_contrast;
+  float tone_map_saturation;
+  float tone_map_highlight_saturation;
+  float tone_map_dechroma;
+  float tone_map_flare;
+  float custom_bloom;
+  float custom_grain_type;
+  float custom_grain_strength;
 };
 
 #ifndef __cplusplus
@@ -33,7 +39,7 @@ cbuffer shader_injection : register(b13, space50) {
 #elif (__SHADER_TARGET_MAJOR < 5) || ((__SHADER_TARGET_MAJOR == 5) && (__SHADER_TARGET_MINOR < 1))
 cbuffer shader_injection : register(b13) {
 #endif
-	ShaderInjectData shader_injection : packoffset(c0);
+  ShaderInjectData shader_injection : packoffset(c0);
 }
 
 // With OVERRIDE_GAME_BRIGHTNESS disabled
@@ -46,17 +52,17 @@ cbuffer shader_injection : register(b13) {
 // 4432 = 2500
 // 10081.5 = 4000
 
-#define TONE_MAP_TYPE                         shader_injection.tone_map_type
-#define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
-#define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
-#define RENODX_SDR_EOTF_EMULATION_UI         shader_injection.sdr_eotf_emulation_ui
-#define CUSTOM_SHOW_UI                       shader_injection.custom_ui_visibility
+#define TONE_MAP_TYPE                shader_injection.tone_map_type
+#define RENODX_TONE_MAP_EXPOSURE     shader_injection.tone_map_exposure
+#define RENODX_GRAPHICS_WHITE_NITS   shader_injection.graphics_white_nits
+#define RENODX_SDR_EOTF_EMULATION_UI shader_injection.sdr_eotf_emulation_ui
+#define CUSTOM_SHOW_UI               shader_injection.custom_ui_visibility
 
-#define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
-#define OVERRIDE_GAME_BRIGHTNESS             shader_injection.override_game_brightness
-#define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
-#define OVERRIDE_UI_BRIGHTNESS               shader_injection.override_ui_brightness
-#define RENODX_TONE_MAP_WORKING_COLOR_SPACE  shader_injection.tone_map_working_color_space  // 0 - AP1, 1 - LMS
+#define RENODX_PEAK_WHITE_NITS              shader_injection.peak_white_nits
+#define OVERRIDE_GAME_BRIGHTNESS            shader_injection.override_game_brightness
+#define RENODX_DIFFUSE_WHITE_NITS           shader_injection.diffuse_white_nits
+#define OVERRIDE_UI_BRIGHTNESS              shader_injection.override_ui_brightness
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE shader_injection.tone_map_working_color_space  // 0 - AP1, 1 - LMS
 
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows

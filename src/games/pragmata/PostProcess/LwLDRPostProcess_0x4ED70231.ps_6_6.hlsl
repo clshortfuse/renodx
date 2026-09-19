@@ -1,4 +1,19 @@
-#include "../common.hlsli"
+#include "PostProcess.hlsli"
+
+struct RGCParam {
+  float CyanLimit;
+  float MagentaLimit;
+  float YellowLimit;
+  float CyanThreshold;
+  float MagentaThreshold;
+  float YellowThreshold;
+  float RollOff;
+  uint EnableReferenceGamutCompress;
+  float InvCyanSTerm;
+  float InvMagentaSTerm;
+  float InvYellowSTerm;
+  float InvRollOff;
+};
 
 Texture2D<float4> RE_POSTPROCESS_Color : register(t0);
 
@@ -110,46 +125,29 @@ cbuffer LDRPostProcessParam : register(b2) {
   float cbRadialReserve2 : packoffset(c024.w);
 };
 
-// clang-format off
 cbuffer CBControl : register(b3) {
   float3 CBControl_reserve : packoffset(c000.x);
   uint cPassEnabled : packoffset(c000.w);
   row_major float4x4 fOCIOTransformMatrix : packoffset(c001.x);
-  struct RGCParam {
-    float CyanLimit;
-    float MagentaLimit;
-    float YellowLimit;
-    float CyanThreshold;
-    float MagentaThreshold;
-    float YellowThreshold;
-    float RollOff;
-    uint EnableReferenceGamutCompress;
-    float InvCyanSTerm;
-    float InvMagentaSTerm;
-    float InvYellowSTerm;
-    float InvRollOff;
-  } cbControlRGCParam: packoffset(c005.x);
+  RGCParam cbControlRGCParam : packoffset(c005.x);
 };
-// clang-format on
-
 
 SamplerState BilinearClamp : register(s5, space32);
 
 SamplerState TrilinearClamp : register(s9, space32);
 
 float4 main(
-    noperspective float4 SV_Position: SV_Position,
+    precise noperspective float4 SV_Position: SV_Position,
     linear float4 Kerare: Kerare,
-    linear float Exposure: Exposure)
-    : SV_Target {
+    linear float Exposure: Exposure) : SV_Target {
   float4 SV_Target;
-  float4 _24 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((screenInverseSize.x * SV_Position.x), (screenInverseSize.y * SV_Position.y)));
-  float _30 = rangeDecompress * _24.x;
-  float _31 = rangeDecompress * _24.y;
-  float _32 = rangeDecompress * _24.z;
-  float _47 = mad(_32, (fOCIOTransformMatrix[2].x), mad(_31, (fOCIOTransformMatrix[1].x), (_30 * (fOCIOTransformMatrix[0].x))));
-  float _50 = mad(_32, (fOCIOTransformMatrix[2].y), mad(_31, (fOCIOTransformMatrix[1].y), (_30 * (fOCIOTransformMatrix[0].y))));
-  float _53 = mad(_32, (fOCIOTransformMatrix[2].z), mad(_31, (fOCIOTransformMatrix[1].z), (_30 * (fOCIOTransformMatrix[0].z))));
+  float4 _24;
+  float _30;
+  float _31;
+  float _32;
+  float _47;
+  float _50;
+  float _53;
   float _90;
   float _111;
   float _131;
@@ -183,33 +181,58 @@ float4 main(
   float _541;
   float _542;
   float _543;
+  float _59;
+  float _65;
+  float _66;
+  float _67;
+  float _68;
+  float _78;
+  float _99;
+  float _119;
+  bool _164;
+  bool _174;
+  bool _184;
+  float4 _202;
+  float _248;
+  float _249;
+  float _250;
+  float4 _287;
+  float _342;
+  float _343;
+  float _344;
+  float4 _384;
+  float4 _482;
+  _24 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((screenInverseSize.x * SV_Position.x), (screenInverseSize.y * SV_Position.y)));
+  _30 = rangeDecompress * _24.x;
+  _31 = rangeDecompress * _24.y;
+  _32 = rangeDecompress * _24.z;
+  _47 = mad(_32, (fOCIOTransformMatrix[2].x), mad(_31, (fOCIOTransformMatrix[1].x), (_30 * (fOCIOTransformMatrix[0].x))));
+  _50 = mad(_32, (fOCIOTransformMatrix[2].y), mad(_31, (fOCIOTransformMatrix[1].y), (_30 * (fOCIOTransformMatrix[0].y))));
+  _53 = mad(_32, (fOCIOTransformMatrix[2].z), mad(_31, (fOCIOTransformMatrix[1].z), (_30 * (fOCIOTransformMatrix[0].z))));
   if (!(cbControlRGCParam.EnableReferenceGamutCompress == 0)) {
-    float _59 = max(max(_47, _50), _53);
+    _59 = max(max(_47, _50), _53);
     if (!(_59 == 0.0f)) {
-      float _65 = abs(_59);
-      float _66 = (_59 - _47) / _65;
-      float _67 = (_59 - _50) / _65;
-      float _68 = (_59 - _53) / _65;
+      _65 = abs(_59);
+      _66 = (_59 - _47) / _65;
+      _67 = (_59 - _50) / _65;
+      _68 = (_59 - _53) / _65;
       do {
+        _90 = _66;
         if (!(!(_66 >= cbControlRGCParam.CyanThreshold))) {
-          float _78 = _66 - cbControlRGCParam.CyanThreshold;
+          _78 = _66 - cbControlRGCParam.CyanThreshold;
           _90 = ((_78 / exp2(log2(exp2(log2(cbControlRGCParam.InvCyanSTerm * _78) * cbControlRGCParam.RollOff) + 1.0f) * cbControlRGCParam.InvRollOff)) + cbControlRGCParam.CyanThreshold);
-        } else {
-          _90 = _66;
         }
         do {
+          _111 = _67;
           if (!(!(_67 >= cbControlRGCParam.MagentaThreshold))) {
-            float _99 = _67 - cbControlRGCParam.MagentaThreshold;
+            _99 = _67 - cbControlRGCParam.MagentaThreshold;
             _111 = ((_99 / exp2(log2(exp2(log2(cbControlRGCParam.InvMagentaSTerm * _99) * cbControlRGCParam.RollOff) + 1.0f) * cbControlRGCParam.InvRollOff)) + cbControlRGCParam.MagentaThreshold);
-          } else {
-            _111 = _67;
           }
           do {
+            _131 = _68;
             if (!(!(_68 >= cbControlRGCParam.YellowThreshold))) {
-              float _119 = _68 - cbControlRGCParam.YellowThreshold;
+              _119 = _68 - cbControlRGCParam.YellowThreshold;
               _131 = ((_119 / exp2(log2(exp2(log2(cbControlRGCParam.InvYellowSTerm * _119) * cbControlRGCParam.RollOff) + 1.0f) * cbControlRGCParam.InvRollOff)) + cbControlRGCParam.YellowThreshold);
-            } else {
-              _131 = _68;
             }
             _139 = (_59 - (_90 * _65));
             _140 = (_59 - (_111 * _65));
@@ -227,29 +250,48 @@ float4 main(
     _140 = _50;
     _141 = _53;
   }
-  bool _164 = !(_139 <= 0.0078125f);
-  if (!_164) {
+#if 1
+  ApplyColorCorrectTexturePass(
+      true,
+      _139, _140, _141,
+      fTextureBlendRate,
+      fTextureBlendRate2,
+      fTextureSize,
+      fOneMinusTextureInverseSize,
+      fHalfTextureInverseSize,
+      fColorMatrix,
+      tTextureMap0,
+      tTextureMap1,
+      tTextureMap2,
+      TrilinearClamp,
+      _541, _542, _543);
+  SV_Target.x = _541;
+  SV_Target.y = _542;
+  SV_Target.z = _543;
+#else
+  _164 = !(_139 <= 0.0078125f);
+  if (!(_164)) {
     _173 = ((_139 * 10.540237426757812f) + 0.072905533015728f);
   } else {
     _173 = ((log2(_139) + 9.720000267028809f) * 0.05707762390375137f);
   }
-  bool _174 = !(_140 <= 0.0078125f);
-  if (!_174) {
+  _174 = !(_140 <= 0.0078125f);
+  if (!(_174)) {
     _183 = ((_140 * 10.540237426757812f) + 0.072905533015728f);
   } else {
     _183 = ((log2(_140) + 9.720000267028809f) * 0.05707762390375137f);
   }
-  bool _184 = !(_141 <= 0.0078125f);
-  if (!_184) {
+  _184 = !(_141 <= 0.0078125f);
+  if (!(_184)) {
     _193 = ((_141 * 10.540237426757812f) + 0.072905533015728f);
   } else {
     _193 = ((log2(_141) + 9.720000267028809f) * 0.05707762390375137f);
   }
-  float4 _202 = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_173 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_183 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_193 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+  _202 = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_173 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_183 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_193 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
   if (_202.x < 0.155251145362854f) {
     _219 = ((_202.x + -0.072905533015728f) * 0.09487452358007431f);
   } else {
-    if ((bool)(_202.x >= 0.155251145362854f) && (bool)(_202.x < 1.4679962396621704f)) {
+    if ((_202.x >= 0.155251145362854f) && (_202.x < 1.4679962396621704f)) {
       _219 = exp2((_202.x * 17.520000457763672f) + -9.720000267028809f);
     } else {
       _219 = 65504.0f;
@@ -258,7 +300,7 @@ float4 main(
   if (_202.y < 0.155251145362854f) {
     _233 = ((_202.y + -0.072905533015728f) * 0.09487452358007431f);
   } else {
-    if ((bool)(_202.y >= 0.155251145362854f) && (bool)(_202.y < 1.4679962396621704f)) {
+    if ((_202.y >= 0.155251145362854f) && (_202.y < 1.4679962396621704f)) {
       _233 = exp2((_202.y * 17.520000457763672f) + -9.720000267028809f);
     } else {
       _233 = 65504.0f;
@@ -267,41 +309,41 @@ float4 main(
   if (_202.z < 0.155251145362854f) {
     _247 = ((_202.z + -0.072905533015728f) * 0.09487452358007431f);
   } else {
-    if ((bool)(_202.z >= 0.155251145362854f) && (bool)(_202.z < 1.4679962396621704f)) {
+    if ((_202.z >= 0.155251145362854f) && (_202.z < 1.4679962396621704f)) {
       _247 = exp2((_202.z * 17.520000457763672f) + -9.720000267028809f);
     } else {
       _247 = 65504.0f;
     }
   }
-  float _248 = max(_219, 0.0f);
-  float _249 = max(_233, 0.0f);
-  float _250 = max(_247, 0.0f);
+  _248 = max(_219, 0.0f);
+  _249 = max(_233, 0.0f);
+  _250 = max(_247, 0.0f);
   [branch]
   if (fTextureBlendRate > 0.0f) {
     do {
-      if (!_164) {
+      if (!(_164)) {
         _261 = ((_139 * 10.540237426757812f) + 0.072905533015728f);
       } else {
         _261 = ((log2(_139) + 9.720000267028809f) * 0.05707762390375137f);
       }
       do {
-        if (!_174) {
+        if (!(_174)) {
           _270 = ((_140 * 10.540237426757812f) + 0.072905533015728f);
         } else {
           _270 = ((log2(_140) + 9.720000267028809f) * 0.05707762390375137f);
         }
         do {
-          if (!_184) {
+          if (!(_184)) {
             _279 = ((_141 * 10.540237426757812f) + 0.072905533015728f);
           } else {
             _279 = ((log2(_141) + 9.720000267028809f) * 0.05707762390375137f);
           }
-          float4 _287 = tTextureMap1.SampleLevel(TrilinearClamp, float3(((_261 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_270 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_279 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+          _287 = tTextureMap1.SampleLevel(TrilinearClamp, float3(((_261 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_270 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_279 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
           do {
             if (_287.x < 0.155251145362854f) {
               _304 = ((_287.x + -0.072905533015728f) * 0.09487452358007431f);
             } else {
-              if ((bool)(_287.x >= 0.155251145362854f) && (bool)(_287.x < 1.4679962396621704f)) {
+              if ((_287.x >= 0.155251145362854f) && (_287.x < 1.4679962396621704f)) {
                 _304 = exp2((_287.x * 17.520000457763672f) + -9.720000267028809f);
               } else {
                 _304 = 65504.0f;
@@ -311,7 +353,7 @@ float4 main(
               if (_287.y < 0.155251145362854f) {
                 _318 = ((_287.y + -0.072905533015728f) * 0.09487452358007431f);
               } else {
-                if ((bool)(_287.y >= 0.155251145362854f) && (bool)(_287.y < 1.4679962396621704f)) {
+                if ((_287.y >= 0.155251145362854f) && (_287.y < 1.4679962396621704f)) {
                   _318 = exp2((_287.y * 17.520000457763672f) + -9.720000267028809f);
                 } else {
                   _318 = 65504.0f;
@@ -321,15 +363,15 @@ float4 main(
                 if (_287.z < 0.155251145362854f) {
                   _332 = ((_287.z + -0.072905533015728f) * 0.09487452358007431f);
                 } else {
-                  if ((bool)(_287.z >= 0.155251145362854f) && (bool)(_287.z < 1.4679962396621704f)) {
+                  if ((_287.z >= 0.155251145362854f) && (_287.z < 1.4679962396621704f)) {
                     _332 = exp2((_287.z * 17.520000457763672f) + -9.720000267028809f);
                   } else {
                     _332 = 65504.0f;
                   }
                 }
-                float _342 = ((max(_304, 0.0f) - _248) * fTextureBlendRate) + _248;
-                float _343 = ((max(_318, 0.0f) - _249) * fTextureBlendRate) + _249;
-                float _344 = ((max(_332, 0.0f) - _250) * fTextureBlendRate) + _250;
+                _342 = ((max(_304, 0.0f) - _248) * fTextureBlendRate) + _248;
+                _343 = ((max(_318, 0.0f) - _249) * fTextureBlendRate) + _249;
+                _344 = ((max(_332, 0.0f) - _250) * fTextureBlendRate) + _250;
                 if (fTextureBlendRate2 > 0.0f) {
                   do {
                     if (!(!(_342 <= 0.0078125f))) {
@@ -349,12 +391,12 @@ float4 main(
                         } else {
                           _376 = ((log2(_344) + 9.720000267028809f) * 0.05707762390375137f);
                         }
-                        float4 _384 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_356 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_366 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_376 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+                        _384 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_356 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_366 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_376 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
                         do {
                           if (_384.x < 0.155251145362854f) {
                             _401 = ((_384.x + -0.072905533015728f) * 0.09487452358007431f);
                           } else {
-                            if ((bool)(_384.x >= 0.155251145362854f) && (bool)(_384.x < 1.4679962396621704f)) {
+                            if ((_384.x >= 0.155251145362854f) && (_384.x < 1.4679962396621704f)) {
                               _401 = exp2((_384.x * 17.520000457763672f) + -9.720000267028809f);
                             } else {
                               _401 = 65504.0f;
@@ -364,7 +406,7 @@ float4 main(
                             if (_384.y < 0.155251145362854f) {
                               _415 = ((_384.y + -0.072905533015728f) * 0.09487452358007431f);
                             } else {
-                              if ((bool)(_384.y >= 0.155251145362854f) && (bool)(_384.y < 1.4679962396621704f)) {
+                              if ((_384.y >= 0.155251145362854f) && (_384.y < 1.4679962396621704f)) {
                                 _415 = exp2((_384.y * 17.520000457763672f) + -9.720000267028809f);
                               } else {
                                 _415 = 65504.0f;
@@ -374,7 +416,7 @@ float4 main(
                               if (_384.z < 0.155251145362854f) {
                                 _429 = ((_384.z + -0.072905533015728f) * 0.09487452358007431f);
                               } else {
-                                if ((bool)(_384.z >= 0.155251145362854f) && (bool)(_384.z < 1.4679962396621704f)) {
+                                if ((_384.z >= 0.155251145362854f) && (_384.z < 1.4679962396621704f)) {
                                   _429 = exp2((_384.z * 17.520000457763672f) + -9.720000267028809f);
                                 } else {
                                   _429 = 65504.0f;
@@ -420,12 +462,12 @@ float4 main(
             } else {
               _474 = ((log2(_250) + 9.720000267028809f) * 0.05707762390375137f);
             }
-            float4 _482 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_454 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_464 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_474 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+            _482 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_454 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_464 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_474 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
             do {
               if (_482.x < 0.155251145362854f) {
                 _499 = ((_482.x + -0.072905533015728f) * 0.09487452358007431f);
               } else {
-                if ((bool)(_482.x >= 0.155251145362854f) && (bool)(_482.x < 1.4679962396621704f)) {
+                if ((_482.x >= 0.155251145362854f) && (_482.x < 1.4679962396621704f)) {
                   _499 = exp2((_482.x * 17.520000457763672f) + -9.720000267028809f);
                 } else {
                   _499 = 65504.0f;
@@ -435,7 +477,7 @@ float4 main(
                 if (_482.y < 0.155251145362854f) {
                   _513 = ((_482.y + -0.072905533015728f) * 0.09487452358007431f);
                 } else {
-                  if ((bool)(_482.y >= 0.155251145362854f) && (bool)(_482.y < 1.4679962396621704f)) {
+                  if ((_482.y >= 0.155251145362854f) && (_482.y < 1.4679962396621704f)) {
                     _513 = exp2((_482.y * 17.520000457763672f) + -9.720000267028809f);
                   } else {
                     _513 = 65504.0f;
@@ -445,7 +487,7 @@ float4 main(
                   if (_482.z < 0.155251145362854f) {
                     _527 = ((_482.z + -0.072905533015728f) * 0.09487452358007431f);
                   } else {
-                    if ((bool)(_482.z >= 0.155251145362854f) && (bool)(_482.z < 1.4679962396621704f)) {
+                    if ((_482.z >= 0.155251145362854f) && (_482.z < 1.4679962396621704f)) {
                       _527 = exp2((_482.z * 17.520000457763672f) + -9.720000267028809f);
                     } else {
                       _527 = 65504.0f;
@@ -469,6 +511,7 @@ float4 main(
   SV_Target.x = (mad(_543, (fColorMatrix[2].x), mad(_542, (fColorMatrix[1].x), (_541 * (fColorMatrix[0].x)))) + (fColorMatrix[3].x));
   SV_Target.y = (mad(_543, (fColorMatrix[2].y), mad(_542, (fColorMatrix[1].y), (_541 * (fColorMatrix[0].y)))) + (fColorMatrix[3].y));
   SV_Target.z = (mad(_543, (fColorMatrix[2].z), mad(_542, (fColorMatrix[1].z), (_541 * (fColorMatrix[0].z)))) + (fColorMatrix[3].z));
+#endif
   SV_Target.w = 0.0f;
   return SV_Target;
 }

@@ -1,8 +1,6 @@
 #ifndef SRC_007FIRSTLIGHT_SHARED_H_
 #define SRC_007FIRSTLIGHT_SHARED_H_
 
-#define USE_EXPENSIVE_LUT_GAMUT_RESTORATION 0
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -10,7 +8,6 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float graphics_white_nits;
-  float tone_map_scaling;
 
   float tone_map_exposure;
   float tone_map_highlights;
@@ -22,7 +19,6 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_dechroma;
   float tone_map_flare;
-  float tone_map_gamma;
   float color_grade_lut_strength;
 
   float custom_bloom;
@@ -45,8 +41,6 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
 
-#define RENODX_TONE_MAP_SCALING shader_injection.tone_map_scaling
-
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS  shader_injection.tone_map_contrast_highlights
@@ -57,7 +51,6 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-#define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
 
 #define CUSTOM_BLOOM              shader_injection.custom_bloom

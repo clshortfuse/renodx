@@ -1,5 +1,19 @@
-#define TONEMAP_PARAM_REGISTER b1
-#include "./PostProcess.hlsli"
+#include "PostProcess.hlsli"
+
+struct RGCParam {
+  float CyanLimit;
+  float MagentaLimit;
+  float YellowLimit;
+  float CyanThreshold;
+  float MagentaThreshold;
+  float YellowThreshold;
+  float RollOff;
+  uint EnableReferenceGamutCompress;
+  float InvCyanSTerm;
+  float InvMagentaSTerm;
+  float InvYellowSTerm;
+  float InvRollOff;
+};
 
 Texture2D<float4> RE_POSTPROCESS_Color : register(t0);
 
@@ -39,33 +53,33 @@ cbuffer SceneInfo : register(b0) {
   uint sceneInfoAdditionalFlags : packoffset(c039.x);
 };
 
-// cbuffer TonemapParam : register(b1) {
-//   float contrast : packoffset(c000.x);
-//   float linearBegin : packoffset(c000.y);
-//   float linearLength : packoffset(c000.z);
-//   float toe : packoffset(c000.w);
-//   float maxNit : packoffset(c001.x);
-//   float linearStart : packoffset(c001.y);
-//   float displayMaxNitSubContrastFactor : packoffset(c001.z);
-//   float contrastFactor : packoffset(c001.w);
-//   float mulLinearStartContrastFactor : packoffset(c002.x);
-//   float invLinearBegin : packoffset(c002.y);
-//   float madLinearStartContrastFactor : packoffset(c002.z);
-//   float tonemapParam_isHDRMode : packoffset(c002.w);
-//   float useDynamicRangeConversion : packoffset(c003.x);
-//   float useHuePreserve : packoffset(c003.y);
-//   float exposureScale : packoffset(c003.z);
-//   float kneeStartNit : packoffset(c003.w);
-//   float knee : packoffset(c004.x);
-//   float curve_HDRip : packoffset(c004.y);
-//   float curve_k2 : packoffset(c004.z);
-//   float curve_k4 : packoffset(c004.w);
-//   row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
-//   row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
-//   float tonemapGraphScale : packoffset(c013.x);
-//   float offsetEVCurveStart : packoffset(c013.y);
-//   float offsetEVCurveRange : packoffset(c013.z);
-// };
+cbuffer TonemapParam : register(b1) {
+  float contrast : packoffset(c000.x);
+  float linearBegin : packoffset(c000.y);
+  float linearLength : packoffset(c000.z);
+  float toe : packoffset(c000.w);
+  float maxNit : packoffset(c001.x);
+  float linearStart : packoffset(c001.y);
+  float displayMaxNitSubContrastFactor : packoffset(c001.z);
+  float contrastFactor : packoffset(c001.w);
+  float mulLinearStartContrastFactor : packoffset(c002.x);
+  float invLinearBegin : packoffset(c002.y);
+  float madLinearStartContrastFactor : packoffset(c002.z);
+  float tonemapParam_isHDRMode : packoffset(c002.w);
+  float useDynamicRangeConversion : packoffset(c003.x);
+  float useHuePreserve : packoffset(c003.y);
+  float exposureScale : packoffset(c003.z);
+  float kneeStartNit : packoffset(c003.w);
+  float knee : packoffset(c004.x);
+  float curve_HDRip : packoffset(c004.y);
+  float curve_k2 : packoffset(c004.z);
+  float curve_k4 : packoffset(c004.w);
+  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
+  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
+  float tonemapGraphScale : packoffset(c013.x);
+  float offsetEVCurveStart : packoffset(c013.y);
+  float offsetEVCurveRange : packoffset(c013.z);
+};
 
 cbuffer LDRPostProcessParam : register(b2) {
   float fHazeFilterStart : packoffset(c000.x);
@@ -128,46 +142,29 @@ cbuffer LDRPostProcessParam : register(b2) {
   float cbRadialReserve2 : packoffset(c024.w);
 };
 
-// clang-format off
 cbuffer CBControl : register(b3) {
   float3 CBControl_reserve : packoffset(c000.x);
   uint cPassEnabled : packoffset(c000.w);
   row_major float4x4 fOCIOTransformMatrix : packoffset(c001.x);
-  struct RGCParam {
-    float CyanLimit;
-    float MagentaLimit;
-    float YellowLimit;
-    float CyanThreshold;
-    float MagentaThreshold;
-    float YellowThreshold;
-    float RollOff;
-    uint EnableReferenceGamutCompress;
-    float InvCyanSTerm;
-    float InvMagentaSTerm;
-    float InvYellowSTerm;
-    float InvRollOff;
-  } cbControlRGCParam: packoffset(c005.x);
+  RGCParam cbControlRGCParam : packoffset(c005.x);
 };
-// clang-format on
-
 
 SamplerState BilinearClamp : register(s5, space32);
 
 SamplerState TrilinearClamp : register(s9, space32);
 
 float4 main(
-    noperspective float4 SV_Position: SV_Position,
+    precise noperspective float4 SV_Position: SV_Position,
     linear float4 Kerare: Kerare,
-    linear float Exposure: Exposure)
-    : SV_Target {
+    linear float Exposure: Exposure) : SV_Target {
   float4 SV_Target;
-  float4 _25 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((screenInverseSize.x * SV_Position.x), (screenInverseSize.y * SV_Position.y)));
-  float _29 = _25.x * Exposure;
-  float _30 = _25.y * Exposure;
-  float _31 = _25.z * Exposure;
-  float _46 = mad(_31, (fOCIOTransformMatrix[2].x), mad(_30, (fOCIOTransformMatrix[1].x), (_29 * (fOCIOTransformMatrix[0].x))));
-  float _49 = mad(_31, (fOCIOTransformMatrix[2].y), mad(_30, (fOCIOTransformMatrix[1].y), (_29 * (fOCIOTransformMatrix[0].y))));
-  float _52 = mad(_31, (fOCIOTransformMatrix[2].z), mad(_30, (fOCIOTransformMatrix[1].z), (_29 * (fOCIOTransformMatrix[0].z))));
+  float4 _25;
+  float _29;
+  float _30;
+  float _31;
+  float _46;
+  float _49;
+  float _52;
   float _89;
   float _110;
   float _130;
@@ -207,33 +204,71 @@ float4 main(
   float _668;
   float _669;
   float _670;
+  float _58;
+  float _64;
+  float _65;
+  float _66;
+  float _67;
+  float _77;
+  float _98;
+  float _118;
+  bool _163;
+  bool _173;
+  bool _183;
+  float4 _201;
+  float _247;
+  float _248;
+  float _249;
+  float4 _286;
+  float _341;
+  float _342;
+  float _343;
+  float4 _383;
+  float4 _481;
+  float _555;
+  float _556;
+  float _557;
+  bool _560;
+  float _561;
+  float _562;
+  float _563;
+  float _571;
+  float _580;
+  float _589;
+  float _606;
+  float _607;
+  float _608;
+  _25 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((screenInverseSize.x * SV_Position.x), (screenInverseSize.y * SV_Position.y)));
+  _29 = _25.x * Exposure;
+  _30 = _25.y * Exposure;
+  _31 = _25.z * Exposure;
+  _46 = mad(_31, (fOCIOTransformMatrix[2].x), mad(_30, (fOCIOTransformMatrix[1].x), (_29 * (fOCIOTransformMatrix[0].x))));
+  _49 = mad(_31, (fOCIOTransformMatrix[2].y), mad(_30, (fOCIOTransformMatrix[1].y), (_29 * (fOCIOTransformMatrix[0].y))));
+  _52 = mad(_31, (fOCIOTransformMatrix[2].z), mad(_30, (fOCIOTransformMatrix[1].z), (_29 * (fOCIOTransformMatrix[0].z))));
   if (!(cbControlRGCParam.EnableReferenceGamutCompress == 0)) {
-    float _58 = max(max(_46, _49), _52);
+    _58 = max(max(_46, _49), _52);
     if (!(_58 == 0.0f)) {
-      float _64 = abs(_58);
-      float _65 = (_58 - _46) / _64;
-      float _66 = (_58 - _49) / _64;
-      float _67 = (_58 - _52) / _64;
+      _64 = abs(_58);
+      _65 = (_58 - _46) / _64;
+      _66 = (_58 - _49) / _64;
+      _67 = (_58 - _52) / _64;
       do {
+        _89 = _65;
         if (!(!(_65 >= cbControlRGCParam.CyanThreshold))) {
-          float _77 = _65 - cbControlRGCParam.CyanThreshold;
+          _77 = _65 - cbControlRGCParam.CyanThreshold;
           _89 = ((_77 / exp2(log2(exp2(log2(cbControlRGCParam.InvCyanSTerm * _77) * cbControlRGCParam.RollOff) + 1.0f) * cbControlRGCParam.InvRollOff)) + cbControlRGCParam.CyanThreshold);
-        } else {
-          _89 = _65;
         }
         do {
+          _110 = _66;
           if (!(!(_66 >= cbControlRGCParam.MagentaThreshold))) {
-            float _98 = _66 - cbControlRGCParam.MagentaThreshold;
+            _98 = _66 - cbControlRGCParam.MagentaThreshold;
             _110 = ((_98 / exp2(log2(exp2(log2(cbControlRGCParam.InvMagentaSTerm * _98) * cbControlRGCParam.RollOff) + 1.0f) * cbControlRGCParam.InvRollOff)) + cbControlRGCParam.MagentaThreshold);
-          } else {
-            _110 = _66;
           }
           do {
+            _130 = _67;
             if (!(!(_67 >= cbControlRGCParam.YellowThreshold))) {
-              float _118 = _67 - cbControlRGCParam.YellowThreshold;
+              _118 = _67 - cbControlRGCParam.YellowThreshold;
               _130 = ((_118 / exp2(log2(exp2(log2(cbControlRGCParam.InvYellowSTerm * _118) * cbControlRGCParam.RollOff) + 1.0f) * cbControlRGCParam.InvRollOff)) + cbControlRGCParam.YellowThreshold);
-            } else {
-              _130 = _67;
             }
             _138 = (_58 - (_89 * _64));
             _139 = (_58 - (_110 * _64));
@@ -251,29 +286,48 @@ float4 main(
     _139 = _49;
     _140 = _52;
   }
-  bool _163 = !(_138 <= 0.0078125f);
-  if (!_163) {
+#if 1
+  ApplyColorCorrectTexturePass(
+      true,
+      _138, _139, _140,
+      fTextureBlendRate,
+      fTextureBlendRate2,
+      fTextureSize,
+      fOneMinusTextureInverseSize,
+      fHalfTextureInverseSize,
+      fColorMatrix,
+      tTextureMap0,
+      tTextureMap1,
+      tTextureMap2,
+      TrilinearClamp,
+      _540, _541, _542);
+  _555 = min(_540, 65000.0f);
+  _556 = min(_541, 65000.0f);
+  _557 = min(_542, 65000.0f);
+#else
+  _163 = !(_138 <= 0.0078125f);
+  if (!(_163)) {
     _172 = ((_138 * 10.540237426757812f) + 0.072905533015728f);
   } else {
     _172 = ((log2(_138) + 9.720000267028809f) * 0.05707762390375137f);
   }
-  bool _173 = !(_139 <= 0.0078125f);
-  if (!_173) {
+  _173 = !(_139 <= 0.0078125f);
+  if (!(_173)) {
     _182 = ((_139 * 10.540237426757812f) + 0.072905533015728f);
   } else {
     _182 = ((log2(_139) + 9.720000267028809f) * 0.05707762390375137f);
   }
-  bool _183 = !(_140 <= 0.0078125f);
-  if (!_183) {
+  _183 = !(_140 <= 0.0078125f);
+  if (!(_183)) {
     _192 = ((_140 * 10.540237426757812f) + 0.072905533015728f);
   } else {
     _192 = ((log2(_140) + 9.720000267028809f) * 0.05707762390375137f);
   }
-  float4 _201 = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_172 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_182 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_192 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+  _201 = tTextureMap0.SampleLevel(TrilinearClamp, float3(((_172 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_182 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_192 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
   if (_201.x < 0.155251145362854f) {
     _218 = ((_201.x + -0.072905533015728f) * 0.09487452358007431f);
   } else {
-    if ((bool)(_201.x >= 0.155251145362854f) && (bool)(_201.x < 1.4679962396621704f)) {
+    if ((_201.x >= 0.155251145362854f) && (_201.x < 1.4679962396621704f)) {
       _218 = exp2((_201.x * 17.520000457763672f) + -9.720000267028809f);
     } else {
       _218 = 65504.0f;
@@ -282,7 +336,7 @@ float4 main(
   if (_201.y < 0.155251145362854f) {
     _232 = ((_201.y + -0.072905533015728f) * 0.09487452358007431f);
   } else {
-    if ((bool)(_201.y >= 0.155251145362854f) && (bool)(_201.y < 1.4679962396621704f)) {
+    if ((_201.y >= 0.155251145362854f) && (_201.y < 1.4679962396621704f)) {
       _232 = exp2((_201.y * 17.520000457763672f) + -9.720000267028809f);
     } else {
       _232 = 65504.0f;
@@ -291,41 +345,41 @@ float4 main(
   if (_201.z < 0.155251145362854f) {
     _246 = ((_201.z + -0.072905533015728f) * 0.09487452358007431f);
   } else {
-    if ((bool)(_201.z >= 0.155251145362854f) && (bool)(_201.z < 1.4679962396621704f)) {
+    if ((_201.z >= 0.155251145362854f) && (_201.z < 1.4679962396621704f)) {
       _246 = exp2((_201.z * 17.520000457763672f) + -9.720000267028809f);
     } else {
       _246 = 65504.0f;
     }
   }
-  float _247 = max(_218, 0.0f);
-  float _248 = max(_232, 0.0f);
-  float _249 = max(_246, 0.0f);
+  _247 = max(_218, 0.0f);
+  _248 = max(_232, 0.0f);
+  _249 = max(_246, 0.0f);
   [branch]
   if (fTextureBlendRate > 0.0f) {
     do {
-      if (!_163) {
+      if (!(_163)) {
         _260 = ((_138 * 10.540237426757812f) + 0.072905533015728f);
       } else {
         _260 = ((log2(_138) + 9.720000267028809f) * 0.05707762390375137f);
       }
       do {
-        if (!_173) {
+        if (!(_173)) {
           _269 = ((_139 * 10.540237426757812f) + 0.072905533015728f);
         } else {
           _269 = ((log2(_139) + 9.720000267028809f) * 0.05707762390375137f);
         }
         do {
-          if (!_183) {
+          if (!(_183)) {
             _278 = ((_140 * 10.540237426757812f) + 0.072905533015728f);
           } else {
             _278 = ((log2(_140) + 9.720000267028809f) * 0.05707762390375137f);
           }
-          float4 _286 = tTextureMap1.SampleLevel(TrilinearClamp, float3(((_260 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_269 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_278 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+          _286 = tTextureMap1.SampleLevel(TrilinearClamp, float3(((_260 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_269 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_278 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
           do {
             if (_286.x < 0.155251145362854f) {
               _303 = ((_286.x + -0.072905533015728f) * 0.09487452358007431f);
             } else {
-              if ((bool)(_286.x >= 0.155251145362854f) && (bool)(_286.x < 1.4679962396621704f)) {
+              if ((_286.x >= 0.155251145362854f) && (_286.x < 1.4679962396621704f)) {
                 _303 = exp2((_286.x * 17.520000457763672f) + -9.720000267028809f);
               } else {
                 _303 = 65504.0f;
@@ -335,7 +389,7 @@ float4 main(
               if (_286.y < 0.155251145362854f) {
                 _317 = ((_286.y + -0.072905533015728f) * 0.09487452358007431f);
               } else {
-                if ((bool)(_286.y >= 0.155251145362854f) && (bool)(_286.y < 1.4679962396621704f)) {
+                if ((_286.y >= 0.155251145362854f) && (_286.y < 1.4679962396621704f)) {
                   _317 = exp2((_286.y * 17.520000457763672f) + -9.720000267028809f);
                 } else {
                   _317 = 65504.0f;
@@ -345,15 +399,15 @@ float4 main(
                 if (_286.z < 0.155251145362854f) {
                   _331 = ((_286.z + -0.072905533015728f) * 0.09487452358007431f);
                 } else {
-                  if ((bool)(_286.z >= 0.155251145362854f) && (bool)(_286.z < 1.4679962396621704f)) {
+                  if ((_286.z >= 0.155251145362854f) && (_286.z < 1.4679962396621704f)) {
                     _331 = exp2((_286.z * 17.520000457763672f) + -9.720000267028809f);
                   } else {
                     _331 = 65504.0f;
                   }
                 }
-                float _341 = ((max(_303, 0.0f) - _247) * fTextureBlendRate) + _247;
-                float _342 = ((max(_317, 0.0f) - _248) * fTextureBlendRate) + _248;
-                float _343 = ((max(_331, 0.0f) - _249) * fTextureBlendRate) + _249;
+                _341 = ((max(_303, 0.0f) - _247) * fTextureBlendRate) + _247;
+                _342 = ((max(_317, 0.0f) - _248) * fTextureBlendRate) + _248;
+                _343 = ((max(_331, 0.0f) - _249) * fTextureBlendRate) + _249;
                 if (fTextureBlendRate2 > 0.0f) {
                   do {
                     if (!(!(_341 <= 0.0078125f))) {
@@ -373,12 +427,12 @@ float4 main(
                         } else {
                           _375 = ((log2(_343) + 9.720000267028809f) * 0.05707762390375137f);
                         }
-                        float4 _383 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_355 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_365 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_375 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+                        _383 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_355 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_365 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_375 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
                         do {
                           if (_383.x < 0.155251145362854f) {
                             _400 = ((_383.x + -0.072905533015728f) * 0.09487452358007431f);
                           } else {
-                            if ((bool)(_383.x >= 0.155251145362854f) && (bool)(_383.x < 1.4679962396621704f)) {
+                            if ((_383.x >= 0.155251145362854f) && (_383.x < 1.4679962396621704f)) {
                               _400 = exp2((_383.x * 17.520000457763672f) + -9.720000267028809f);
                             } else {
                               _400 = 65504.0f;
@@ -388,7 +442,7 @@ float4 main(
                             if (_383.y < 0.155251145362854f) {
                               _414 = ((_383.y + -0.072905533015728f) * 0.09487452358007431f);
                             } else {
-                              if ((bool)(_383.y >= 0.155251145362854f) && (bool)(_383.y < 1.4679962396621704f)) {
+                              if ((_383.y >= 0.155251145362854f) && (_383.y < 1.4679962396621704f)) {
                                 _414 = exp2((_383.y * 17.520000457763672f) + -9.720000267028809f);
                               } else {
                                 _414 = 65504.0f;
@@ -398,7 +452,7 @@ float4 main(
                               if (_383.z < 0.155251145362854f) {
                                 _428 = ((_383.z + -0.072905533015728f) * 0.09487452358007431f);
                               } else {
-                                if ((bool)(_383.z >= 0.155251145362854f) && (bool)(_383.z < 1.4679962396621704f)) {
+                                if ((_383.z >= 0.155251145362854f) && (_383.z < 1.4679962396621704f)) {
                                   _428 = exp2((_383.z * 17.520000457763672f) + -9.720000267028809f);
                                 } else {
                                   _428 = 65504.0f;
@@ -444,12 +498,12 @@ float4 main(
             } else {
               _473 = ((log2(_249) + 9.720000267028809f) * 0.05707762390375137f);
             }
-            float4 _481 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_453 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_463 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_473 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
+            _481 = tTextureMap2.SampleLevel(TrilinearClamp, float3(((_453 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_463 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize), ((_473 * fOneMinusTextureInverseSize) + fHalfTextureInverseSize)), 0.0f);
             do {
               if (_481.x < 0.155251145362854f) {
                 _498 = ((_481.x + -0.072905533015728f) * 0.09487452358007431f);
               } else {
-                if ((bool)(_481.x >= 0.155251145362854f) && (bool)(_481.x < 1.4679962396621704f)) {
+                if ((_481.x >= 0.155251145362854f) && (_481.x < 1.4679962396621704f)) {
                   _498 = exp2((_481.x * 17.520000457763672f) + -9.720000267028809f);
                 } else {
                   _498 = 65504.0f;
@@ -459,7 +513,7 @@ float4 main(
                 if (_481.y < 0.155251145362854f) {
                   _512 = ((_481.y + -0.072905533015728f) * 0.09487452358007431f);
                 } else {
-                  if ((bool)(_481.y >= 0.155251145362854f) && (bool)(_481.y < 1.4679962396621704f)) {
+                  if ((_481.y >= 0.155251145362854f) && (_481.y < 1.4679962396621704f)) {
                     _512 = exp2((_481.y * 17.520000457763672f) + -9.720000267028809f);
                   } else {
                     _512 = 65504.0f;
@@ -469,7 +523,7 @@ float4 main(
                   if (_481.z < 0.155251145362854f) {
                     _526 = ((_481.z + -0.072905533015728f) * 0.09487452358007431f);
                   } else {
-                    if ((bool)(_481.z >= 0.155251145362854f) && (bool)(_481.z < 1.4679962396621704f)) {
+                    if ((_481.z >= 0.155251145362854f) && (_481.z < 1.4679962396621704f)) {
                       _526 = exp2((_481.z * 17.520000457763672f) + -9.720000267028809f);
                     } else {
                       _526 = 65504.0f;
@@ -490,38 +544,44 @@ float4 main(
       _542 = _249;
     }
   }
-  float _555 = min((mad(_542, (fColorMatrix[2].x), mad(_541, (fColorMatrix[1].x), (_540 * (fColorMatrix[0].x)))) + (fColorMatrix[3].x)), 65000.0f);
-  float _556 = min((mad(_542, (fColorMatrix[2].y), mad(_541, (fColorMatrix[1].y), (_540 * (fColorMatrix[0].y)))) + (fColorMatrix[3].y)), 65000.0f);
-  float _557 = min((mad(_542, (fColorMatrix[2].z), mad(_541, (fColorMatrix[1].z), (_540 * (fColorMatrix[0].z)))) + (fColorMatrix[3].z)), 65000.0f);
-  bool _560 = isfinite(max(max(_555, _556), _557));
-  float _561 = select(_560, _555, 1.0f);
-  float _562 = select(_560, _556, 1.0f);
-  float _563 = select(_560, _557, 1.0f);
+  _555 = min((mad(_542, (fColorMatrix[2].x), mad(_541, (fColorMatrix[1].x), (_540 * (fColorMatrix[0].x)))) + (fColorMatrix[3].x)), 65000.0f);
+  _556 = min((mad(_542, (fColorMatrix[2].y), mad(_541, (fColorMatrix[1].y), (_540 * (fColorMatrix[0].y)))) + (fColorMatrix[3].y)), 65000.0f);
+  _557 = min((mad(_542, (fColorMatrix[2].z), mad(_541, (fColorMatrix[1].z), (_540 * (fColorMatrix[0].z)))) + (fColorMatrix[3].z)), 65000.0f);
+#endif
+  _560 = isfinite(max(max(_555, _556), _557));
+  _561 = select(_560, _555, 1.0f);
+  _562 = select(_560, _556, 1.0f);
+  _563 = select(_560, _557, 1.0f);
+#if 1
+  ApplyCapcomExponentialToneMap(
+      _561, _562, _563,
+      _668, _669, _670,
+      contrast, linearBegin, toe, maxNit, linearStart,
+      displayMaxNitSubContrastFactor, contrastFactor, mulLinearStartContrastFactor,
+      invLinearBegin, madLinearStartContrastFactor, tonemapParam_isHDRMode);
+#else
   if (tonemapParam_isHDRMode == 0.0f) {
-    float _571 = invLinearBegin * _561;
+    _571 = invLinearBegin * _561;
     do {
+      _579 = 1.0f;
       if (!(_561 >= linearBegin)) {
         _579 = ((_571 * _571) * (3.0f - (_571 * 2.0f)));
-      } else {
-        _579 = 1.0f;
       }
-      float _580 = invLinearBegin * _562;
+      _580 = invLinearBegin * _562;
       do {
+        _588 = 1.0f;
         if (!(_562 >= linearBegin)) {
           _588 = ((_580 * _580) * (3.0f - (_580 * 2.0f)));
-        } else {
-          _588 = 1.0f;
         }
-        float _589 = invLinearBegin * _563;
+        _589 = invLinearBegin * _563;
         do {
+          _597 = 1.0f;
           if (!(_563 >= linearBegin)) {
             _597 = ((_589 * _589) * (3.0f - (_589 * 2.0f)));
-          } else {
-            _597 = 1.0f;
           }
-          float _606 = select((_561 < linearStart), 0.0f, 1.0f);
-          float _607 = select((_562 < linearStart), 0.0f, 1.0f);
-          float _608 = select((_563 < linearStart), 0.0f, 1.0f);
+          _606 = select((_561 < linearStart), 0.0f, 1.0f);
+          _607 = select((_562 < linearStart), 0.0f, 1.0f);
+          _608 = select((_563 < linearStart), 0.0f, 1.0f);
           _668 = (((((1.0f - _579) * linearBegin) * (pow(_571, toe))) + ((_579 - _606) * ((contrast * _561) + madLinearStartContrastFactor))) + ((maxNit - (exp2((contrastFactor * _561) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _606));
           _669 = (((((1.0f - _588) * linearBegin) * (pow(_580, toe))) + ((_588 - _607) * ((contrast * _562) + madLinearStartContrastFactor))) + ((maxNit - (exp2((contrastFactor * _562) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _607));
           _670 = (((((1.0f - _597) * linearBegin) * (pow(_589, toe))) + ((_597 - _608) * ((contrast * _563) + madLinearStartContrastFactor))) + ((maxNit - (exp2((contrastFactor * _563) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _608));
@@ -533,10 +593,10 @@ float4 main(
     _669 = _562;
     _670 = _563;
   }
+#endif
   SV_Target.x = _668;
   SV_Target.y = _669;
   SV_Target.z = _670;
   SV_Target.w = 0.0f;
   return SV_Target;
 }
-

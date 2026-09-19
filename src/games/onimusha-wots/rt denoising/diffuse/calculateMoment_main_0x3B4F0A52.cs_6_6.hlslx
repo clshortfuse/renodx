@@ -1,0 +1,185 @@
+#include "../denoising.hlsli"
+
+Texture2D<float4> colorSRV : register(t0);
+
+Texture2D<float4> weightSRV : register(t1);
+
+Texture2D<float2> historyCountSRV : register(t2);
+
+Texture2D<float2> surfaceMotionSRV : register(t3);
+
+Texture2D<float2> momentSRV : register(t4);
+
+RWTexture2D<float2> momentUAV : register(u0);
+
+cbuffer RayTracingDenoiserConstantBufferInfo : register(b0) {
+  uint WaveletStep : packoffset(c000.x);
+  float AODistance : packoffset(c000.y);
+  uint UserStencilMask : packoffset(c000.z);
+  float compressEV : packoffset(c000.w);
+  uint diff_RT_WIDTH : packoffset(c001.x);
+  uint diff_RT_HEIGHT : packoffset(c001.y);
+  float diff_INV_RT_WIDTH : packoffset(c001.z);
+  float diff_INV_RT_HEIGHT : packoffset(c001.w);
+  uint spec_RT_WIDTH : packoffset(c002.x);
+  uint spec_RT_HEIGHT : packoffset(c002.y);
+  float spec_INV_RT_WIDTH : packoffset(c002.z);
+  float spec_INV_RT_HEIGHT : packoffset(c002.w);
+  float diffuseMultipler : packoffset(c003.x);
+  float specularMultipler : packoffset(c003.y);
+  float modelScaler : packoffset(c003.z);
+  float depthRejectionThresold : packoffset(c003.w);
+  float specularRoughnessThreshold : packoffset(c004.x);
+  uint disocclusionStep : packoffset(c004.y);
+  float maxDiffuseHistory : packoffset(c004.z);
+  float maxSpecularHistory : packoffset(c004.w);
+  float4 Rotator0 : packoffset(c005.x);
+  float4 Rotator1 : packoffset(c006.x);
+  float4 Rotator2 : packoffset(c007.x);
+  float4 Rotator3 : packoffset(c008.x);
+  row_major float4x4 prevViewProjInvMat : packoffset(c009.x);
+  uint diffuseMaxIterationCount : packoffset(c013.x);
+  uint specularMaxIterationCount : packoffset(c013.y);
+  uint ps5HeatmapMode : packoffset(c013.z);
+  float heatmapMaxIntersectionCount : packoffset(c013.w);
+  float2 diffResolutionRatio : packoffset(c014.x);
+  float GIHistoryThreshold : packoffset(c014.z);
+  float GIFilterCenterWeight : packoffset(c014.w);
+  float VFXDiffuseBoost : packoffset(c015.x);
+  float VFXSpecularBoost : packoffset(c015.y);
+  uint VFXSpecularMipBias : packoffset(c015.z);
+  float VFXDiffuseResolutionRatio : packoffset(c015.w);
+  float VFXSpecularResolutionRatio : packoffset(c016.x);
+  float VFXInvalidateTemporalRatio : packoffset(c016.y);
+  float VFXPrevSpecularResolutionRatio : packoffset(c016.z);
+  float VFXTemporalCompositeRate : packoffset(c016.w);
+  uint medianFilterStepSize : packoffset(c017.x);
+  float specularSecondaryBounceRoughnessThreshold : packoffset(c017.y);
+  float2 diffInvResolutionRatio : packoffset(c017.z);
+  float2 specResolutionRatio : packoffset(c018.x);
+  float2 specInvResolutionRatio : packoffset(c018.z);
+  float specularTraceRoughnessThreshold : packoffset(c019.x);
+  uint diffuseDisocclusionFrameRange : packoffset(c019.y);
+  float diffuseDisocclusionFilteringStrength : packoffset(c019.z);
+  float reserved0 : packoffset(c019.w);
+  float iblLeakingAmountDiff : packoffset(c020.x);
+  float iblLeakingAmountSpec : packoffset(c020.y);
+  float iblLeakingDistanceDiff : packoffset(c020.z);
+  float iblLeakingDistanceSpec : packoffset(c020.w);
+  float2 diffUVAdjuster : packoffset(c021.x);
+  float2 specUVAdjuster : packoffset(c021.z);
+};
+
+SamplerState PointClamp : register(s1, space32);
+
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input {
+  uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+void comp_main() {
+  uint4 _40 = asuint(float4(asfloat(uint2(diff_RT_WIDTH, diff_RT_HEIGHT)), diff_INV_RT_WIDTH, diff_INV_RT_HEIGHT));
+  if ((int(gl_GlobalInvocationID.y) < int(_40.y)) && ((int(gl_GlobalInvocationID.y | gl_GlobalInvocationID.x) > int(4294967295u)) && (int(gl_GlobalInvocationID.x) < int(_40.x)))) {
+    float _51 = float(gl_GlobalInvocationID.x);
+    float _56;
+    float _58;
+    float _60;
+    float _54 = 0.0f;
+    float _57 = 0.0f;
+    float _59 = 0.0f;
+    uint _61 = 4294967295u;
+    uint _63;
+    uint _64;
+    float _70;
+    float _74;
+    uint _75;
+    bool _81;
+    bool _82;
+    for (;;) {
+      _63 = gl_GlobalInvocationID.x + 4294967295u;
+      _64 = _61 + gl_GlobalInvocationID.y;
+      uint4 _67 = asuint(float4(asfloat(uint2(diff_RT_WIDTH, diff_RT_HEIGHT)), diff_INV_RT_WIDTH, diff_INV_RT_HEIGHT));
+      _70 = float(_67.x) * 0.5f;
+      _74 = float(_67.y) * 0.5f;
+      _75 = uint(int(_70));
+      _81 = int(_64) < int(uint(int(_74)));
+      _82 = _81 && ((int(_64 | _63) > int(4294967295u)) && (int(_63) < int(_75)));
+      float _93;
+      float _94;
+      float _95;
+      if (_82) {
+        float4 _84 = colorSRV.Load(int3(uint2(_63, _64), 0u));
+        float _87 = _84.x;
+        _93 = _87 + _54;
+        _94 = (_87 * _87) + _57;
+        _95 = _59 + 1.0f;
+      } else {
+        _93 = _54;
+        _94 = _57;
+        _95 = _59;
+      }
+      float _109;
+      float _110;
+      float _111;
+      if (_81 && ((int(_64 | gl_GlobalInvocationID.x) > int(4294967295u)) && (int(gl_GlobalInvocationID.x) < int(_75)))) {
+        float4 _102 = colorSRV.Load(int3(uint2(gl_GlobalInvocationID.x, _64), 0u));
+        float _104 = _102.x;
+        _109 = _104 + _93;
+        _110 = (_104 * _104) + _94;
+        _111 = _95 + 1.0f;
+      } else {
+        _109 = _93;
+        _110 = _94;
+        _111 = _95;
+      }
+      uint _112 = gl_GlobalInvocationID.x + 1u;
+      float frontier_phi_9_pred;
+      float frontier_phi_9_pred_1;
+      float frontier_phi_9_pred_2;
+      if (_81 && ((int(_64 | _112) > int(4294967295u)) && (int(_112) < int(_75)))) {
+        float4 _119 = colorSRV.Load(int3(uint2(_112, _64), 0u));
+        float _121 = _119.x;
+        frontier_phi_9_pred = _121 + _109;
+        frontier_phi_9_pred_1 = (_121 * _121) + _110;
+        frontier_phi_9_pred_2 = _111 + 1.0f;
+      } else {
+        frontier_phi_9_pred = _109;
+        frontier_phi_9_pred_1 = _110;
+        frontier_phi_9_pred_2 = _111;
+      }
+      _56 = frontier_phi_9_pred;
+      _58 = frontier_phi_9_pred_1;
+      _60 = frontier_phi_9_pred_2;
+      uint _62 = _61 + 1u;
+      if (_62 == 2u) {
+        break;
+      } else {
+        _54 = _56;
+        _57 = _58;
+        _59 = _60;
+        _61 = _62;
+        continue;
+      }
+    }
+    float _128 = float(gl_GlobalInvocationID.y);
+    uint _134 = uint(_51 * 2.0f);
+    uint _135 = uint(_128 * 2.0f);
+    float2 _137 = surfaceMotionSRV.Load(int3(uint2(_134, _135), 0u));
+    float _157 = float4(diffUVAdjuster, specUVAdjuster).x * ((floor((_70 * _137.x) + _51) + 0.5f) / _70);
+    float _158 = float4(diffUVAdjuster, specUVAdjuster).y * ((floor((_74 * _137.y) + _128) + 0.5f) / _74);
+    float4 _183 = weightSRV.Load(int3(uint2(_134, _135), 0u));
+    float _185 = _183.x;
+    float _189 = dot(float4(momentSRV.GatherRed(PointClamp, float2(_157, _158)).wzxy), float4(_185, _183.yzw));
+    float _192 = dot(float4(momentSRV.GatherGreen(PointClamp, float2(_157, _158)).wzxy), float4(_185, _183.yzw));
+    float _195 = (_56 / _60) - _189;
+    float _202 = min(1.0f / min(historyCountSRV.Load(int3(uint2(_134, _135), 0u)).x, 4.0f), saturate(1.0f - (0.000977517105638980865478515625f / abs(_195))));
+    float _206 = (_202 * _195) + _189;
+    momentUAV[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4(_206, (_202 * ((_58 / (_60 + (-1.0f))) - _192)) + _192, _206, _206).xy;
+  }
+}
+
+[numthreads(16, 16, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+  comp_main();
+}

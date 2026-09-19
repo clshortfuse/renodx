@@ -1,0 +1,369 @@
+#include "../denoising.hlsli"
+
+Texture2D<float> g_depth_buffer : register(t0);
+
+Texture2D<float4> g_normal_roughness : register(t1);
+
+Texture2D<float3> g_average_radiance : register(t2);
+
+Texture2D<float4> g_in_radiance : register(t3);
+
+Texture2D<float> g_in_variance : register(t4);
+
+StructuredBuffer<uint> g_denoiser_tile_list : register(t5);
+
+Texture2D<float> ReflectionAlpha : register(t6);
+
+RWTexture2D<float4> g_out_radiance : register(u0);
+
+RWTexture2D<float> g_out_variance : register(u1);
+
+RWTexture2D<float> RWReflectionAlpha : register(u2);
+
+cbuffer SceneInfo : register(b0) {
+  row_major float4x4 viewProjMat : packoffset(c000.x);
+  row_major float3x4 transposeViewMat : packoffset(c004.x);
+  row_major float3x4 transposeViewInvMat : packoffset(c007.x);
+  float4 projElement[2] : packoffset(c010.x);
+  float4 projInvElements[2] : packoffset(c012.x);
+  row_major float4x4 viewProjInvMat : packoffset(c014.x);
+  row_major float4x4 prevViewProjMat : packoffset(c018.x);
+  float3 ZToLinear : packoffset(c022.x);
+  float subdivisionLevel : packoffset(c022.w);
+  float2 screenSize : packoffset(c023.x);
+  float2 screenInverseSize : packoffset(c023.z);
+  float2 cullingHelper : packoffset(c024.x);
+  float cameraNearPlane : packoffset(c024.z);
+  float cameraFarPlane : packoffset(c024.w);
+  float4 viewFrustum[8] : packoffset(c025.x);
+  float4 clipplane : packoffset(c033.x);
+  float2 vrsVelocityThreshold : packoffset(c034.x);
+  uint GPUVisibleMask : packoffset(c034.z);
+  uint resolutionRatioPacked : packoffset(c034.w);
+  float3 worldOffset : packoffset(c035.x);
+  uint sceneInfoMisc : packoffset(c035.w);
+  uint4 rayTracingParams : packoffset(c036.x);
+  float4 sceneExtendedData : packoffset(c037.x);
+  float2 projectionSpaceJitterOffset : packoffset(c038.x);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  float SceneInfo_Reserve2 : packoffset(c039.x);
+};
+
+cbuffer FFX_SSSR_Constants : register(b1) {
+  uint2 g_buffer_dimensions : packoffset(c000.x);
+  float2 g_inv_buffer_dimensions : packoffset(c000.z);
+  float g_temporal_stability_factor : packoffset(c001.x);
+  float g_depth_buffer_thickness : packoffset(c001.y);
+  float g_roughness_threshold : packoffset(c001.z);
+  float g_temporal_variance_threshold : packoffset(c001.w);
+  uint g_frame_index : packoffset(c002.x);
+  uint g_max_traversal_intersections : packoffset(c002.y);
+  uint g_min_traversal_occupancy : packoffset(c002.z);
+  uint g_most_detailed_mip : packoffset(c002.w);
+  uint g_samples_per_quad : packoffset(c003.x);
+  uint g_temporal_variance_guided_tracing_enabled : packoffset(c003.y);
+  uint g_vignetting_enabled : packoffset(c003.z);
+  float g_max_ray_length : packoffset(c003.w);
+  float g_secondary_ray_offset : packoffset(c004.x);
+  float g_fade_border_roughness : packoffset(c004.y);
+  uint g_reserve_0 : packoffset(c004.z);
+  uint g_reserve_1 : packoffset(c004.w);
+};
+
+SamplerState BilinearClamp : register(s5, space32);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+static const int _global_0[4] = { 0, 8, 0, 8 };
+static const int _global_1[4] = { 0, 0, 8, 8 };
+groupshared uint _global_2[256];
+groupshared uint _global_3[256];
+groupshared uint _global_4[256];
+groupshared uint _global_5[256];
+groupshared float _global_6[256];
+static const int _global_7[30] = { 0, 1, -2, 1, 2, -3, -3, 0, 1, 2, -1, -2, 3, 0, -3, 3, 0, -3, -1, -1, 2, 1, -2, -2, 1, 0, 0, 2, 3, -1 };
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  int _22;
+  int _33;
+  int _38;
+  int _41;
+  int _42;
+  float4 _46;
+  int _52;
+  int _53;
+  int _54;
+  float _86;
+  float _87;
+  half _146;
+  half _147;
+  half _148;
+  half _149;
+  half _150;
+  half _151;
+  half _152;
+  float _153;
+  half _154;
+  half _310;
+  half _311;
+  half _312;
+  half _313;
+  half _314;
+  half _315;
+  int _316;
+  half _419;
+  half _420;
+  half _421;
+  half _422;
+  half _423;
+  uint _55;
+  uint _56;
+  float4 _58;
+  float _70;
+  float _71;
+  float _73;
+  float _74;
+  float _75;
+  float _78;
+  float _89;
+  float _90;
+  float _91;
+  float _92;
+  float4 _118;
+  uint _155;
+  uint _156;
+  int _196;
+  int _200;
+  int _202;
+  int _205;
+  int _206;
+  int _210;
+  int _214;
+  half _219;
+  half _220;
+  half _225;
+  half _226;
+  int _230;
+  int _234;
+  half _246;
+  float _250;
+  float3 _269;
+  half _273;
+  half _274;
+  half _275;
+  half _285;
+  half _286;
+  half _287;
+  half _295;
+  half _298;
+  uint _325;
+  uint _326;
+  int _330;
+  int _334;
+  half _339;
+  half _340;
+  half _345;
+  int _350;
+  int _354;
+  half _382;
+  half _383;
+  half _384;
+  half _396;
+  half _397;
+  half _402;
+  half _403;
+  half _404;
+  half _405;
+  half _408;
+  int _409;
+  float _426;
+  _22 = g_denoiser_tile_list[(int)(SV_GroupID.x)];
+  _33 = (((uint)(SV_GroupIndex) >> 2) & 6) | ((int)(SV_GroupIndex) & 1);
+  _38 = (((uint)(SV_GroupIndex) >> 1) & 3) | (((uint)(SV_GroupIndex) >> 3) & 4);
+  _41 = ((((int)(((uint)(_22 & 32767)) + SV_GroupThreadID.x)) / 8) << 3) | _33;
+  _42 = ((((int)(((uint)(((uint)(_22) >> 15) & 32767)) + SV_GroupThreadID.y)) / 8) << 3) | _38;
+  _46 = g_normal_roughness.Load(int3(_41, _42, 0));
+  _52 = 0;
+  _53 = 0;
+  _54 = 0;
+  bool _loop_break_0 = false;
+  bool _loop_exit_0 = false;
+  while (true) {
+    _55 = (_41 + (uint)(-4)) + _53;
+    _56 = (_42 + (uint)(-4)) + _52;
+    _58 = g_normal_roughness.Load(int3(_55, _56, 0));
+    if ((_58.z * _58.z) < (g_roughness_threshold * g_roughness_threshold)) {
+      _70 = (_58.x * 2.0f) + -1.0f;
+      _71 = (_58.y * 2.0f) + -1.0f;
+      _73 = 1.0f - abs(_70);
+      _74 = abs(_71);
+      _75 = _73 - _74;
+      do {
+        _86 = _70;
+        _87 = _71;
+        if (_75 < 0.0f) {
+          _78 = 1.0f - _74;
+          _86 = select((_70 >= 0.0f), _78, (-0.0f - _78));
+          _87 = select((_71 >= 0.0f), _73, (-0.0f - _73));
+        }
+        _89 = rsqrt(dot(float3(_86, _87, _75), float3(_86, _87, _75)));
+        _90 = _89 * _86;
+        _91 = _89 * _87;
+        _92 = _89 * _75;
+        _118 = g_in_radiance.Load(int3(_55, _56, 0));
+        _146 = (half)(half(_118.z));
+        _147 = (half)(half(_118.y));
+        _148 = (half)(half(_118.x));
+        _149 = (half)(half((g_in_variance.Load(int3(_55, _56, 0))).x));
+        _150 = (half)(half(mad(_92, (transposeViewMat[2].z), mad(_91, (transposeViewMat[1].z), ((transposeViewMat[0].z) * _90)))));
+        _151 = (half)(half(mad(_92, (transposeViewMat[2].y), mad(_91, (transposeViewMat[1].y), ((transposeViewMat[0].y) * _90)))));
+        _152 = (half)(half(mad(_92, (transposeViewMat[2].x), mad(_91, (transposeViewMat[1].x), ((transposeViewMat[0].x) * _90)))));
+        _153 = (ZToLinear.z / (ZToLinear.x - (ZToLinear.y * ((g_depth_buffer.Load(int3(((int)(_55 << 1)), ((int)(_56 << 1)), 0))).x))));
+        _154 = (half)(half((ReflectionAlpha.Load(int3(_55, _56, 0))).x));
+      } while (false);
+      if (_loop_break_0) {
+        _loop_break_0 = false;
+        continue;
+      }
+    } else {
+      _146 = 0.0h;
+      _147 = 0.0h;
+      _148 = 0.0h;
+      _149 = 1.0h;
+      _150 = 0.0h;
+      _151 = 0.0h;
+      _152 = 0.0h;
+      _153 = 0.0f;
+      _154 = 0.0h;
+    }
+    _155 = _53 + _33;
+    _156 = _52 + _38;
+    _global_2[(uint)(((int)(_155 + (_156 * 16))))] = (((int)((int)(f32tof16(float(_147))) << 16)) | (int)(f32tof16(float(_148))));
+    _global_3[(uint)(((int)(_155 + (_156 * 16))))] = (((int)((int)(f32tof16(float(_154))) << 16)) | (int)(f32tof16(float(_146))));
+    _global_4[(uint)(((int)(_155 + (_156 * 16))))] = (((int)((int)(f32tof16(float(_151))) << 16)) | (int)(f32tof16(float(_152))));
+    _global_5[(uint)(((int)(_155 + (_156 * 16))))] = (((int)((int)(f32tof16(float(_149))) << 16)) | (int)(f32tof16(float(_150))));
+    _global_6[(uint)(((int)(_155 + (_156 * 16))))] = _153;
+    _196 = _54 + 1;
+    if (!(_196 == 4)) {
+      _200 = _global_0[(uint)(_196)];
+      _202 = _global_1[(uint)(_196)];
+      _52 = _202;
+      _53 = _200;
+      _54 = _196;
+      continue;
+    } else {
+      GroupMemoryBarrierWithGroupSync();
+      _205 = _33 + 4;
+      _206 = _38 + 4;
+      _210 = _global_2[(uint)(((int)(_205 + (_206 * 16))))];
+      _214 = _global_3[(uint)(((int)(_205 + (_206 * 16))))];
+      _219 = half(f16tof32(((uint)(_210 & 65535))));
+      _220 = half(f16tof32(((uint)((uint)(_210) >> 16))));
+      _225 = half(f16tof32(((uint)(_214 & 65535))));
+      _226 = half(f16tof32(((uint)((uint)(_214) >> 16))));
+      _230 = _global_4[(uint)(((int)(_205 + (_206 * 16))))];
+      _234 = _global_5[(uint)(((int)(_205 + (_206 * 16))))];
+      _246 = half(f16tof32(((uint)((uint)(_234) >> 16))));
+      _250 = _global_6[(uint)(((int)(_205 + (_206 * 16))))];
+      _269 = g_average_radiance.SampleLevel(BilinearClamp, float2(((float((int)(_41)) + 0.5f) / ((float)((uint)(uint)(select(((g_buffer_dimensions.x & -8) == g_buffer_dimensions.x), g_buffer_dimensions.x, ((int)((uint)(g_buffer_dimensions.x) + 8u))))))), ((float((int)(_42)) + 0.5f) / ((float)((uint)(uint)(select(((g_buffer_dimensions.y & -8) == g_buffer_dimensions.y), g_buffer_dimensions.y, ((int)((uint)(g_buffer_dimensions.y) + 8u)))))))), 0.0f);
+      _273 = half(_269.x);
+      _274 = half(_269.y);
+      _275 = half(_269.z);
+      if (_246 > 0.0h) {
+        if (float(half(_46.z * _46.z)) < (g_roughness_threshold * g_roughness_threshold)) {
+          _285 = _273 - _219;
+          _286 = _274 - _220;
+          _287 = _275 - _225;
+          _295 = -0.86572266h - ((half)(_246 * 0.14416504h));
+          _298 = max((half)(exp2((half)((half)(sqrt((half)(((half)(((half)(_285 * _285)) + ((half)(_286 * _286)))) + ((half)(_287 * _287))))) * _295))), 0.010002136h);
+          _310 = _298;
+          _311 = ((half)(_298 * _219));
+          _312 = ((half)(_298 * _220));
+          _313 = ((half)(_298 * _225));
+          _314 = ((half)(_298 * _226));
+          _315 = ((half)(((half)(_298 * _298)) * _246));
+          _316 = 0;
+          bool _loop_break_1 = false;
+          while (true) {
+            _325 = ((uint)(_global_7[(uint)(((int)(0u + (_316 * 2))))])) + _205;
+            _326 = ((uint)(_global_7[(uint)(((int)(1u + (_316 * 2))))])) + _206;
+            _330 = _global_2[(uint)(((int)(_325 + (_326 * 16))))];
+            _334 = _global_3[(uint)(((int)(_325 + (_326 * 16))))];
+            _339 = half(f16tof32(((uint)(_330 & 65535))));
+            _340 = half(f16tof32(((uint)((uint)(_330) >> 16))));
+            _345 = half(f16tof32(((uint)(_334 & 65535))));
+            _350 = _global_4[(uint)(((int)(_325 + (_326 * 16))))];
+            _354 = _global_5[(uint)(((int)(_325 + (_326 * 16))))];
+            _382 = _273 - _339;
+            _383 = _274 - _340;
+            _384 = _275 - _345;
+            _396 = ((half)(((half)((half)(exp2((half)((half)(log2((half)(max((half)(dot(half3((half)(half(f16tof32(((uint)(_230 & 65535))))), (half)(half(f16tof32(((uint)((uint)(_230) >> 16))))), (half)(half(f16tof32(((uint)(_234 & 65535)))))), half3((half)(half(f16tof32(((uint)(_350 & 65535))))), (half)(half(f16tof32(((uint)((uint)(_350) >> 16))))), (half)(half(f16tof32(((uint)(_354 & 65535)))))))), 0.0h)))) * 512.0h))) * (half)(max(0.099975586h, ((half)(1.0h - (half)(exp2((half)(_246 * -6.34375h))))))))) * (half)(half(exp2((_250 * -5.770780086517334f) * abs(_250 - (_global_6[(uint)(((int)(_325 + (_326 * 16))))])))))) * (half)(max((half)(exp2((half)((half)(sqrt((half)(((half)(((half)(_383 * _383)) + ((half)(_382 * _382)))) + ((half)(_384 * _384))))) * _295))), 0.010002136h)));
+            _397 = _396 + _310;
+            _402 = ((half)(_396 * _339)) + _311;
+            _403 = ((half)(_396 * _340)) + _312;
+            _404 = ((half)(_396 * _345)) + _313;
+            _405 = ((half)(_396 * (half)(half(f16tof32(((uint)((uint)(_334) >> 16))))))) + _314;
+            _408 = ((half)(((half)(_396 * _396)) * (half)(half(f16tof32(((uint)((uint)(_354) >> 16))))))) + _315;
+            _409 = _316 + 1;
+            do {
+              if (!(_409 == 15)) {
+                _310 = _397;
+                _311 = _402;
+                _312 = _403;
+                _313 = _404;
+                _314 = _405;
+                _315 = _408;
+                _316 = _409;
+                _loop_break_1 = true;
+                break;
+              }
+              _419 = ((half)(_402 / _397));
+              _420 = ((half)(_403 / _397));
+              _421 = ((half)(_404 / _397));
+              _422 = ((half)(_408 / ((half)(_397 * _397))));
+              _423 = ((half)(_405 / _397));
+            } while (false);
+            if (_loop_break_1 && !_loop_break_0) {
+              _loop_break_1 = false;
+              continue;
+            }
+            break;
+          }
+          if (_loop_break_0) {
+            _loop_break_0 = false;
+            continue;
+          }
+        } else {
+          _419 = _273;
+          _420 = _274;
+          _421 = _275;
+          _422 = _246;
+          _423 = _226;
+        }
+      } else {
+        _419 = _273;
+        _420 = _274;
+        _421 = _275;
+        _422 = _246;
+        _423 = _226;
+      }
+      _426 = float(_421);
+      g_out_radiance[int2(_41, _42)] = float4(float(_419), float(_420), _426, _426);
+      g_out_variance[int2(_41, _42)] = float(_422);
+      RWReflectionAlpha[int2(_41, _42)] = float(_423);
+    }
+    break;
+  }
+}

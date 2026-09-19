@@ -1,0 +1,438 @@
+#include "../denoising.hlsli"
+
+static const uint _38[4] = { 0u, 8u, 0u, 8u };
+static const uint _41[4] = { 0u, 0u, 8u, 8u };
+
+cbuffer FFX_SSSR_Constants : register(b0, space0) {
+  uint2 g_buffer_dimensions : packoffset(c000.x);
+  float2 g_inv_buffer_dimensions : packoffset(c000.z);
+  float g_temporal_stability_factor : packoffset(c001.x);
+  float g_depth_buffer_thickness : packoffset(c001.y);
+  float g_roughness_threshold : packoffset(c001.z);
+  float g_temporal_variance_threshold : packoffset(c001.w);
+  uint g_frame_index : packoffset(c002.x);
+  uint g_max_traversal_intersections : packoffset(c002.y);
+  uint g_min_traversal_occupancy : packoffset(c002.z);
+  uint g_most_detailed_mip : packoffset(c002.w);
+  uint g_samples_per_quad : packoffset(c003.x);
+  uint g_temporal_variance_guided_tracing_enabled : packoffset(c003.y);
+  uint g_vignetting_enabled : packoffset(c003.z);
+  float g_max_ray_length : packoffset(c003.w);
+  float g_secondary_ray_offset : packoffset(c004.x);
+  float g_fade_border_roughness : packoffset(c004.y);
+  uint g_reserve_0 : packoffset(c004.z);
+  uint g_reserve_1 : packoffset(c004.w);
+};
+Texture2D<float4> g_normal_roughness : register(t0);
+Texture2D<float3> g_average_radiance : register(t1);
+Texture2D<float4> g_in_radiance : register(t2);
+Texture2D<float4> g_in_reprojected_radiance : register(t3);
+Texture2D<float> g_in_variance : register(t4);
+Texture2D<float> g_in_sample_count : register(t5);
+StructuredBuffer<uint> g_denoiser_tile_list : register(t6);
+Texture2D<float> ReprojectedAlpha : register(t7);
+Texture2D<float> ReflectionAlpha : register(t8);
+RWTexture2D<float4> g_out_radiance : register(u0);
+RWTexture2D<float> g_out_variance : register(u1);
+RWTexture2D<float> RWReflectionAlpha : register(u2);
+SamplerState BilinearClamp : register(s5, space32);
+
+static uint3 gl_WorkGroupID;
+static uint3 gl_LocalInvocationID;
+static uint gl_LocalInvocationIndex;
+struct SPIRV_Cross_Input {
+  uint3 gl_WorkGroupID : SV_GroupID;
+  uint3 gl_LocalInvocationID : SV_GroupThreadID;
+  uint gl_LocalInvocationIndex : SV_GroupIndex;
+};
+
+groupshared uint _46[256];
+groupshared uint _47[256];
+
+uint spvPackHalf2x16(float2 value) {
+  uint2 Packed = f32tof16(value);
+  return Packed.x | (Packed.y << 16);
+}
+
+float2 spvUnpackHalf2x16(uint value) {
+  return f16tof32(uint2(value & 0xffff, value >> 16));
+}
+
+void comp_main() {
+  uint4 _64 = g_denoiser_tile_list.Load(gl_WorkGroupID.x);
+  uint _65 = _64.x;
+  uint _80 = ((gl_LocalInvocationIndex >> 2u) & 6u) | (gl_LocalInvocationIndex & 1u);
+  uint _86 = ((gl_LocalInvocationIndex >> 1u) & 3u) | ((gl_LocalInvocationIndex >> 3u) & 4u);
+  uint _89 = (uint(int((_65 & 32767u) + gl_LocalInvocationID.x) / int(8u)) << 3u) | _80;
+  uint _90 = (uint(int(((_65 >> 15u) & 32767u) + gl_LocalInvocationID.y) / int(8u)) << 3u) | _86;
+  uint4 _96 = uint4(g_buffer_dimensions, asuint(g_inv_buffer_dimensions));
+  uint _97 = _96.x;
+  uint _98 = _89 + 4294967292u;
+  uint _100 = _90 + 4294967292u;
+  uint _101;
+  uint _103;
+  uint _105;
+  _101 = 0u;
+  _103 = 0u;
+  _105 = 0u;
+  uint _106;
+  for (;;) {
+    uint _107 = _98 + _103;
+    uint _108 = _100 + _101;
+    float4 _110 = g_in_radiance.Load(int3(uint2(_107, _108), 0u));
+    float _113 = _110.x;
+    float _114 = _110.y;
+    float _115 = _110.z;
+    float4 _121 = ReflectionAlpha.Load(int3(uint2(_107, _108), 0u));
+    float _123 = _121.x;
+    uint _125 = _103 + _80;
+    uint _126 = _101 + _86;
+    _46[_125 + (_126 * 16u)] = (spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_114, _114))).x, 0.0f)) << 16u) | spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_113, _113))).x, 0.0f));
+    _47[_125 + (_126 * 16u)] = (spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_123, _123))).x, 0.0f)) << 16u) | spvPackHalf2x16(float2(spvUnpackHalf2x16(spvPackHalf2x16(float2(_115, _115))).x, 0.0f));
+    _106 = _105 + 1u;
+    if (_106 == 4u) {
+      break;
+    } else {
+      _101 = _41[_106];
+      _103 = _38[_106];
+      _105 = _106;
+      continue;
+    }
+  }
+  uint _157 = _96.y;
+  GroupMemoryBarrierWithGroupSync();
+  uint _159 = _80 + 4u;
+  uint _160 = _86 + 4u;
+  uint _162 = _159 + (_160 * 16u);
+  float2 _172 = spvUnpackHalf2x16(_46[_162] & 65535u);
+  float _173 = _172.x;
+  float2 _174 = spvUnpackHalf2x16(_46[_162] >> 16u);
+  float _175 = _174.x;
+  float2 _179 = spvUnpackHalf2x16(_47[_159 + (_160 * 16u)] & 65535u);
+  float _180 = _179.x;
+  float4 _183 = g_normal_roughness.Load(int3(uint2(_89, _90), 0u));
+  float _185 = _183.z;
+  float _186 = _185 * _185;
+  half _192 = half(g_in_variance.Load(int3(uint2(_89, _90), 0u)).x);
+  half _239;
+  half _242;
+  half _244;
+  half _246;
+  half _248;
+  if (spvUnpackHalf2x16(spvPackHalf2x16(float2(_186, _186))).x < (g_roughness_threshold * g_roughness_threshold)) {
+    float4 _203 = g_in_sample_count.Load(int3(uint2(_89, _90), 0u));
+    float _205 = _203.x;
+    float3 _228 = g_average_radiance.SampleLevel(BilinearClamp, float2((float(int(_89)) + 0.5f) / float(((_97 & 4294967288u) == _97) ? _97 : (_97 + 8u)), (float(int(_90)) + 0.5f) / float(((_157 & 4294967288u) == _157) ? _157 : (_157 + 8u))), 0.0f);
+    float _230 = _228.y;
+    float _231 = _228.z;
+    float4 _234 = g_in_reprojected_radiance.Load(int3(uint2(_89, _90), 0u));
+    float _236 = _234.y;
+    float _237 = _234.z;
+    half _265;
+    half _270;
+    half _272;
+    half _274;
+    half _276;
+    float _278;
+    float _280;
+    float _282;
+    half _283;
+    uint _284;
+    half _286;
+    half _287;
+    half _288;
+    half _289;
+    float _290;
+    float _291;
+    float _292;
+    half _264 = half(0.0);
+    uint _266 = 4294967295u;
+    half _269 = half(0.0);
+    half _271 = half(0.0);
+    half _273 = half(0.0);
+    half _275 = half(0.0);
+    float _277 = 0.0f;
+    float _279 = 0.0f;
+    float _281 = 0.0f;
+    for (;;) {
+      _283 = _264;
+      _284 = 4294967295u;
+      _286 = _269;
+      _287 = _271;
+      _288 = _273;
+      _289 = _275;
+      _290 = _277;
+      _291 = _279;
+      _292 = _281;
+      half _334;
+      float _306;
+      float _308;
+      half _309;
+      half _310;
+      float _314;
+      half _317;
+      half _318;
+      bool _323;
+      for (;;) {
+        uint _293 = _284 + _159;
+        uint _294 = _266 + _160;
+        uint _296 = _293 + (_294 * 16u);
+        uint _300 = _293 + (_294 * 16u);
+        _306 = spvUnpackHalf2x16(_46[_296] & 65535u).x;
+        _308 = spvUnpackHalf2x16(_46[_296] >> 16u).x;
+        _309 = half(_306);
+        _310 = half(_308);
+        _314 = spvUnpackHalf2x16(_47[_300] & 65535u).x;
+        _317 = half(_314);
+        _318 = half(spvUnpackHalf2x16(_47[_300] >> 16u).x);
+        _323 = ((_309 != half(0.0)) || (_310 != half(0.0))) || (_317 != half(0.0));
+        half frontier_phi_9_pred;
+        if (_323) {
+          half _324 = half(int(_284));
+          half _329 = half(int(_266));
+          frontier_phi_9_pred = exp2((_329 * _329) * half(-1.08203125)) * exp2((_324 * _324) * half(-1.08203125));
+        } else {
+          frontier_phi_9_pred = half(0.0);
+        }
+        _334 = frontier_phi_9_pred;
+        _265 = _334 + _283;
+        _270 = (_334 * _309) + _286;
+        _272 = (_334 * _310) + _287;
+        _274 = (_334 * _317) + _288;
+        _276 = (_334 * _318) + _289;
+        float _339 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_306, _306))).x;
+        float _340 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_308, _308))).x;
+        float _341 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_314, _314))).x;
+        float _345 = float(_334);
+        _278 = ((_339 * _339) * _345) + _290;
+        _280 = ((_340 * _340) * _345) + _291;
+        _282 = ((_341 * _341) * _345) + _292;
+        uint _285 = _284 + 1u;
+        if (_285 == 2u) {
+          break;
+        } else {
+          _283 = _265;
+          _284 = _285;
+          _286 = _270;
+          _287 = _272;
+          _288 = _274;
+          _289 = _276;
+          _290 = _278;
+          _291 = _280;
+          _292 = _282;
+          continue;
+        }
+      }
+      uint _268 = _266 + 1u;
+      if (_268 == 2u) {
+        break;
+      } else {
+        _264 = _265;
+        _266 = _268;
+        _269 = _270;
+        _271 = _272;
+        _273 = _274;
+        _275 = _276;
+        _277 = _278;
+        _279 = _280;
+        _281 = _282;
+        continue;
+      }
+    }
+    half _351 = half(_205);
+    float _352 = _228.x;
+    float _355 = _234.x;
+    half _367;
+    half _368;
+    half _369;
+    half _370;
+    float _371;
+    float _372;
+    float _373;
+    if (_265 > half(0.0)) {
+      float _363 = float(_265);
+      _367 = _270 / _265;
+      _368 = _272 / _265;
+      _369 = _274 / _265;
+      _370 = _276 / _265;
+      _371 = _278 / _363;
+      _372 = _280 / _363;
+      _373 = _282 / _363;
+    } else {
+      _367 = _270;
+      _368 = _272;
+      _369 = _274;
+      _370 = _276;
+      _371 = _278;
+      _372 = _280;
+      _373 = _282;
+    }
+    float _374 = float(_367);
+    float _375 = float(_368);
+    float _376 = float(_369);
+    float _389 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_352, _352))).x;
+    float _390 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_230, _230))).x;
+    float _391 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_231, _231))).x;
+    float _392 = _374 - _389;
+    float _393 = _375 - _390;
+    float _394 = _376 - _391;
+    float _400 = sqrt(((_393 * _393) + (_392 * _392)) + (_394 * _394));
+    float _404 = g_temporal_stability_factor * 1.39999997615814208984375f;
+    float _422 = float(((half(_352) - _367) * half(0.199951171875)) + _367);
+    float _423 = float(((half(_230) - _368) * half(0.199951171875)) + _368);
+    float _424 = float(((half(_231) - _369) * half(0.199951171875)) + _369);
+    float _429 = float(half((_400 + sqrt(abs(_371 - (_374 * _374)))) * _404) + half(0.00100040435791015625));
+    float _430 = float(half((_400 + sqrt(abs(_372 - (_375 * _375)))) * _404) + half(0.00100040435791015625));
+    float _431 = float(half((_400 + sqrt(abs(_373 - (_376 * _376)))) * _404) + half(0.00100040435791015625));
+    float _435 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_355, _355))).x - _422;
+    float _436 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_236, _236))).x - _423;
+    float _437 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_237, _237))).x - _424;
+    float _445 = max(max(abs(_435 / _429), abs(_436 / _430)), abs(_437 / _431));
+    half _459;
+    half _460;
+    half _461;
+    if (half(_445) > half(1.0)) {
+      float _449 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_445, _445))).x;
+      _459 = half((_435 / _449) + _422);
+      _460 = half((_436 / _449) + _423);
+      _461 = half((_437 / _449) + _424);
+    } else {
+      _459 = half(_355);
+      _460 = half(_236);
+      _461 = half(_237);
+    }
+    half _464 = half(1.0) - (half(1.0) / max(_351, half(1.0)));
+    float _469 = 1.0f / max(spvUnpackHalf2x16(spvPackHalf2x16(float2(_205, _205))).x + 1.0f, 1.0f);
+    float _470 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_173, _173))).x;
+    float _471 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_175, _175))).x;
+    float _472 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_180, _180))).x;
+    float _479 = (_469 * (_389 - _470)) + _470;
+    float _480 = (_469 * (_390 - _471)) + _471;
+    float _481 = (_469 * (_391 - _472)) + _472;
+    float _488 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_479, _479))).x - _389;
+    float _489 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_480, _480))).x - _390;
+    float _490 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_481, _481))).x - _391;
+    float _498 = max(max(abs(_488 / _429), abs(_489 / _430)), abs(_490 / _431));
+    half _511;
+    half _512;
+    half _513;
+    if (half(_498) > half(1.0)) {
+      float _501 = spvUnpackHalf2x16(spvPackHalf2x16(float2(_498, _498))).x;
+      _511 = half((_488 / _501) + _389);
+      _512 = half((_489 / _501) + _390);
+      _513 = half((_490 / _501) + _391);
+    } else {
+      _511 = half(_479);
+      _512 = half(_480);
+      _513 = half(_481);
+    }
+    half _241 = ((_459 - _511) * _464) + _511;
+    half _243 = ((_460 - _512) * _464) + _512;
+    half _245 = ((_461 - _513) * _464) + _513;
+    half _247 = saturate(((half(ReprojectedAlpha.Load(int3(uint2(_89, _90), 0u)).x) - _370) * (half(1.0) - (half(1.0) / max(_351 + half(-2.0), half(1.0))))) + _370);
+    float _533 = float(_241);
+    float _534 = float(_243);
+    float _535 = float(_245);
+    half _545 = half(max(dot(float3(_533, _534, _535), float3(0.2989999949932098388671875f, 0.58700001239776611328125f, 0.114000000059604644775390625f)), 0.001000000047497451305389404296875f));
+    half _553 = half(max(dot(float3(float(_459), float(_460), float(_461)), float3(0.2989999949932098388671875f, 0.58700001239776611328125f, 0.114000000059604644775390625f)), 0.001000000047497451305389404296875f));
+    half _559 = abs(_545 - _553) / max(max(_545, _553), half(0.5));
+    half _560 = _559 * _559;
+    half _249 = ((_192 - _560) * _464) + _560;
+    half frontier_phi_5_17_ladder;
+    half frontier_phi_5_17_ladder_1;
+    half frontier_phi_5_17_ladder_2;
+    half frontier_phi_5_17_ladder_3;
+    half frontier_phi_5_17_ladder_4;
+    if ((isinf(_533) || isinf(_534)) || isinf(_535)) {
+      frontier_phi_5_17_ladder = half(0.0);
+      frontier_phi_5_17_ladder_1 = half(0.0);
+      frontier_phi_5_17_ladder_2 = _247;
+      frontier_phi_5_17_ladder_3 = half(0.0);
+      frontier_phi_5_17_ladder_4 = half(0.0);
+    } else {
+      half frontier_phi_5_17_ladder_19_ladder;
+      half frontier_phi_5_17_ladder_19_ladder_1;
+      half frontier_phi_5_17_ladder_19_ladder_2;
+      half frontier_phi_5_17_ladder_19_ladder_3;
+      half frontier_phi_5_17_ladder_19_ladder_4;
+      if ((isnan(_533) || isnan(_534)) || isnan(_535)) {
+        frontier_phi_5_17_ladder_19_ladder = half(0.0);
+        frontier_phi_5_17_ladder_19_ladder_1 = half(0.0);
+        frontier_phi_5_17_ladder_19_ladder_2 = _247;
+        frontier_phi_5_17_ladder_19_ladder_3 = half(0.0);
+        frontier_phi_5_17_ladder_19_ladder_4 = half(0.0);
+      } else {
+        float _573 = float(_249);
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_1;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_2;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_3;
+        half frontier_phi_5_17_ladder_19_ladder_20_ladder_4;
+        if (isinf(_573)) {
+          frontier_phi_5_17_ladder_19_ladder_20_ladder = half(0.0);
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_1 = half(0.0);
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_2 = _247;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_3 = half(0.0);
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_4 = half(0.0);
+        } else {
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3;
+          half frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_4;
+          if (isnan(_573)) {
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder = half(0.0);
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1 = half(0.0);
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2 = _247;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3 = half(0.0);
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_4 = half(0.0);
+          } else {
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder = _241;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1 = _249;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2 = _247;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3 = _245;
+            frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_4 = _243;
+          }
+          frontier_phi_5_17_ladder_19_ladder_20_ladder = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_1 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_1;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_2 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_2;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_3 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_3;
+          frontier_phi_5_17_ladder_19_ladder_20_ladder_4 = frontier_phi_5_17_ladder_19_ladder_20_ladder_21_ladder_4;
+        }
+        frontier_phi_5_17_ladder_19_ladder = frontier_phi_5_17_ladder_19_ladder_20_ladder;
+        frontier_phi_5_17_ladder_19_ladder_1 = frontier_phi_5_17_ladder_19_ladder_20_ladder_1;
+        frontier_phi_5_17_ladder_19_ladder_2 = frontier_phi_5_17_ladder_19_ladder_20_ladder_2;
+        frontier_phi_5_17_ladder_19_ladder_3 = frontier_phi_5_17_ladder_19_ladder_20_ladder_3;
+        frontier_phi_5_17_ladder_19_ladder_4 = frontier_phi_5_17_ladder_19_ladder_20_ladder_4;
+      }
+      frontier_phi_5_17_ladder = frontier_phi_5_17_ladder_19_ladder;
+      frontier_phi_5_17_ladder_1 = frontier_phi_5_17_ladder_19_ladder_1;
+      frontier_phi_5_17_ladder_2 = frontier_phi_5_17_ladder_19_ladder_2;
+      frontier_phi_5_17_ladder_3 = frontier_phi_5_17_ladder_19_ladder_3;
+      frontier_phi_5_17_ladder_4 = frontier_phi_5_17_ladder_19_ladder_4;
+    }
+    _239 = frontier_phi_5_17_ladder;
+    _242 = frontier_phi_5_17_ladder_4;
+    _244 = frontier_phi_5_17_ladder_3;
+    _246 = frontier_phi_5_17_ladder_2;
+    _248 = frontier_phi_5_17_ladder_1;
+  } else {
+    _239 = half(_173);
+    _242 = half(_175);
+    _244 = half(_180);
+    _246 = half(0.0);
+    _248 = _192;
+  }
+  float _252 = float(_244);
+  g_out_radiance[uint2(_89, _90)] = float4(float(_239), float(_242), _252, _252);
+  g_out_variance[uint2(_89, _90)] = float(_248);
+  RWReflectionAlpha[uint2(_89, _90)] = float(_246);
+}
+
+[numthreads(8, 8, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_WorkGroupID = stage_input.gl_WorkGroupID;
+  gl_LocalInvocationID = stage_input.gl_LocalInvocationID;
+  gl_LocalInvocationIndex = stage_input.gl_LocalInvocationIndex;
+  comp_main();
+}
