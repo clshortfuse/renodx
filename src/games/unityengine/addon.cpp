@@ -1031,6 +1031,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberLinearOnDraw(0xB2904AA2),
     UberLinearOnDraw(0xBD82D2DB),
     UberLinearOnDraw(0x40DE2C8B),
+    UberLinearOnDraw(0x44C46F4B),
     UberLinearOnDraw(0xA0247B8C),
     UberLinearOnDraw(0x3C788F94),
     UberLinearOnDraw(0xD31C4BBF),
@@ -1593,6 +1594,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     //
     CustomShaderEntryCallback(0x0BF02D38, &CountClamped),               // Noise and Grain
     CustomShaderEntryCallback(0xAECBCB31, &CountClamped),               // Noise and Grain
+    CustomShaderEntryCallback(0xBBE32223, &CountClamped),               // Noise and Grain
     CustomShaderEntryCallback(0x9954D6B3, &Clamped),               // Noise and Grain
     CustomShaderEntryCallback(0xFFC39101, &CountClamped),               // Noise and Grain
     CustomShaderEntryCallback(0x9591A1F5, &Count),               // Noise Shader RGB
