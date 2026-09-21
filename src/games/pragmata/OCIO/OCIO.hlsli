@@ -94,7 +94,9 @@ float3 GenerateOutput(float3 untonemapped_ap1, float2 uv, uint output_mode) {
         1.f,
         gamut_compression_mode,
         compression,
-        0.f,  // Mean-A2 highlight source weight; below-anchor weight remains 1.
+        1.f,   // Mean-A2 shadow source weight
+        0.5f,  // Mean-A2 midgray source weight
+        0.f,   // Mean-A2 highlight source weight
         renodx::tonemap::psychov::PSYCHO30_SOURCE_BOUNDARY_AP1,
         1.f);
     tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
