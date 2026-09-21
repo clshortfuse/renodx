@@ -80,7 +80,9 @@ float3 GenerateOutput(float3 untonemapped_ap1, float2 uv, uint output_mode) {
         1.f,
         gamut_compression_mode,
         compression,
-        0.f,
+        1.f,   // Mean-A2 shadow source weight.
+        0.5f,  // Mean-A2 midgray source weight.
+        0.f,   // Mean-A2 highlight source weight.
         renodx::tonemap::psychov::PSYCHO30_SOURCE_BOUNDARY_AP1,
         1.f);
 

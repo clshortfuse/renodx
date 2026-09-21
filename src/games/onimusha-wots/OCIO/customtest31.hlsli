@@ -5,6 +5,7 @@
 
 /*
  * Copyright (C) 2026 Carlos Lopez
+ * Modifications Copyright (C) 2026 Musa Haji (GitHub: mqhaji)
  * SPDX-License-Identifier: MIT
  */
 
@@ -849,21 +850,25 @@ float3 psycho31_SourceCoordinateCage(
 static const int CUSTOM_PSYCHO31_TARGET_GAMUT_BT709 = 0;
 static const int CUSTOM_PSYCHO31_TARGET_GAMUT_BT2020 = 1;
 static const int CUSTOM_PSYCHO31_TARGET_GAMUT_DISPLAY_P3 = 3;
+static const int CUSTOM_PSYCHO31_TARGET_GAMUT_SAMSUNG_G80SD = 4;
 
-static const int CUSTOM_PSYCHO31_GAMUT_MAPPING_JOINT_L4 = 0;
-static const int CUSTOM_PSYCHO31_GAMUT_MAPPING_FIXED_YF_L4 = 1;
-static const int CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4 = 2;
-// L4 demand where the source-cage mix starts (1 = L4 boundary). Lower values
+// L8 demand where the source-cage mix starts (1 = L8 boundary). Lower values
 // can desaturate near-boundary colors sooner; higher values delay that change.
 static const float CUSTOM_PSYCHO31_GAMUT_KNEE_START = 0.8f;
-// L4 demand where the source-cage mix becomes full. Lower values compress
+// L8 demand where the source-cage mix becomes full. Lower values compress
 // extreme colors sooner; higher values preserve the generic mapping longer.
 static const float CUSTOM_PSYCHO31_GAMUT_KNEE_END = 2.f;
 // Sharpness of soft min(demand, 1). Lower values round farther inside the
 // target and desaturate colors near its edge; higher values hug a harder edge.
-static const float CUSTOM_PSYCHO31_SMOOTH_LIMIT_SHARPNESS = 36.f;
-// Sharpness of the smooth source-plane max. Higher values sample farther out
-// and can make very saturated boundary colors more desaturated after remapping.
+// At demand 1, 16 retains ~0.9375001 versus ~0.9722222 at 36; at 0.5 it retains
+// ~99.93% of demand. Prior L4 study covered source NONE, not the full AP1 cage;
+// these retained values are not a new L8 calibration.
+static const float CUSTOM_PSYCHO31_SMOOTH_LIMIT_SHARPNESS = 16.f;
+// G80SD-only compromise: softer corners with minimal hue change in the AP1-cage
+// prior L4 CPU study. Not a new L8 calibration or universal monotonicity fix.
+static const float CUSTOM_PSYCHO31_SAMSUNG_G80SD_SMOOTH_LIMIT_SHARPNESS = 16.f;
+// Sharpness of the log-sum-exp source-plane max (an upper bound on max).
+// Higher values lower that bound toward max, increasing reciprocal boundary reach.
 static const float CUSTOM_PSYCHO31_SOURCE_MAX_SHARPNESS = 4.f;
 // Radius of smooth max(demand, 0). Higher values soften source-face hue
 // transitions more broadly but can alter near-boundary color; lower is tighter.
@@ -883,6 +888,27 @@ static const float3 CUSTOM_PSYCHO31_DISPLAY_P3_T_RGB = mul(
     CUSTOM_PSYCHO31_LMS_TO_DISPLAY_P3_MAT,
     PSYCHO30_T_LMS);
 
+// Installed G80SD 400.icm: inverse chad applied to rXYZ/gXYZ/bXYZ, then
+// primary directions normalized to D65 (0.3127, 0.3290), not the D50 PCS.
+// Profile-declared approximation, NOT measured native HDR primaries/volume.
+// R xy=(0.6835854216240203, 0.3076209746421227)
+// G xy=(0.22753662968019875, 0.7304721198677490)
+// B xy=(0.14648450807131316, 0.047847561300550775)
+// This is the profile RGB cube, not its intersection with BT.2020 transport.
+static const float3x3 CUSTOM_PSYCHO31_XYZ_TO_SAMSUNG_G80SD_MAT = float3x3(
+    2.1280603016685813f, -0.6428274932521861f, -0.348741867294993f,
+    -0.754909626206005f, 1.6764583674622886f, 0.03769309857528523f,
+    0.014526131708188504f, -0.05973322963173858f, 0.9603960679980227f);
+static const float3x3 CUSTOM_PSYCHO31_LMS_TO_SAMSUNG_G80SD_MAT = mul(
+    CUSTOM_PSYCHO31_XYZ_TO_SAMSUNG_G80SD_MAT,
+    renodx::color::STOCKMAN_CVRL_LMS_TO_XYZ_2DEG_FIT);
+static const float3 CUSTOM_PSYCHO31_SAMSUNG_G80SD_D_RGB = mul(
+    CUSTOM_PSYCHO31_LMS_TO_SAMSUNG_G80SD_MAT,
+    PSYCHO30_D_LMS);
+static const float3 CUSTOM_PSYCHO31_SAMSUNG_G80SD_T_RGB = mul(
+    CUSTOM_PSYCHO31_LMS_TO_SAMSUNG_G80SD_MAT,
+    PSYCHO30_T_LMS);
+
 float3 custom_psycho31_CInfinityTransition(float3 position) {
   position = saturate(position);
   return rcp(1.f + exp2((1.f - 2.f * position) / (position * (1.f - position))));
@@ -894,8 +920,9 @@ float custom_psycho31_CInfinityTransition(float position) {
   return rcp(1.f + exp2((1.f - 2.f * position) / (position * (1.f - position))));
 }
 
-float custom_psycho31_SmoothUnitLimit(float value) {
-  const float sharpness = CUSTOM_PSYCHO31_SMOOTH_LIMIT_SHARPNESS;
+float custom_psycho31_SmoothUnitLimit(
+    float value,
+    float sharpness = CUSTOM_PSYCHO31_SMOOTH_LIMIT_SHARPNESS) {
   const float zero_offset = 1.f
                             - log2(1.f + exp2(sharpness)) / sharpness;
   float limited = 1.f
@@ -1127,34 +1154,49 @@ float3 custom_psycho31_ApplyAnchoredCInfinityShoulder(
       color - distance_from_anchor);
 }
 
-// Lab shoulder-weighted policy: physical WHITE-weighted pre-tonal source
-// level gates over one stop above the input anchor. Physical shoulder loss
-// gates over 0..50%, before peak normalization (magnitude-only for signed LMS).
-// Only the weight is fixed below the anchor, not the final mapped color.
+// Lab three-weight policy: physical WHITE-weighted source level after purity/gamma,
+// before tonal grading. Shadow -> midgray over level 0.5..1; midgray -> highlight
+// over 1..2, also gated by physical shoulder loss over 0..50% before peak normalization.
+// Signed LMS uses magnitudes. Below-anchor WEIGHT is peak independent, not final hue.
 float custom_psycho31_ShoulderMeanA2Weight(
     float3 source_q,
     float3 graded_lms,
     float3 response_lms,
+    float mean_a2_shadow_source_weight,
+    float mean_a2_midgray_source_weight,
     float mean_a2_highlight_source_weight) {
-  // Developer-uniform target is trusted to be <= 1; negatives still clamp below.
+  // Developer-uniform weights have a 0..1 contract; retain lower clamps, trust <= 1.
+  mean_a2_shadow_source_weight = max(mean_a2_shadow_source_weight, 0.f);
+  mean_a2_midgray_source_weight = max(mean_a2_midgray_source_weight, 0.f);
+  mean_a2_highlight_source_weight = max(mean_a2_highlight_source_weight, 0.f);
   [branch]
-  if (mean_a2_highlight_source_weight == 1.f) return 1.f;
+  if (mean_a2_shadow_source_weight == mean_a2_midgray_source_weight
+      && mean_a2_midgray_source_weight == mean_a2_highlight_source_weight) return mean_a2_midgray_source_weight;
   float source_level = renodx::color::yf::from::LMS(PSYCHO30_D65_WHITE_LMS * source_q)
                        / PSYCHO30_D65_WHITE_YF;
-  if (source_level <= 1.f) return 1.f;
+  if (source_level <= 1.f) {
+    [branch]
+    if (mean_a2_shadow_source_weight == mean_a2_midgray_source_weight) return mean_a2_shadow_source_weight;
+    if (source_level <= 0.5f) return mean_a2_shadow_source_weight;  // Includes black; never log2(0).
+    if (source_level == 1.f) return mean_a2_midgray_source_weight;
+    return lerp(mean_a2_shadow_source_weight, mean_a2_midgray_source_weight,
+                custom_psycho31_CInfinityTransition(1.f + log2(source_level)));
+  }
+  [branch]
+  if (mean_a2_midgray_source_weight == mean_a2_highlight_source_weight) return mean_a2_midgray_source_weight;
   float graded_yf = renodx::color::yf::from::LMS(graded_lms);
   float response_yf = renodx::color::yf::from::LMS(response_lms);
   if (!(graded_yf > 0.f) || isnan(graded_yf) || isinf(graded_yf)
-      || isnan(response_yf) || isinf(response_yf)) return 1.f;
+      || isnan(response_yf) || isinf(response_yf)) return mean_a2_midgray_source_weight;
   float shoulder_loss = saturate(1.f - response_yf / graded_yf);
-  if (shoulder_loss <= 0.f) return 1.f;
-  // Skip only constant plateaus; both C-infinity transition interiors are unchanged.
+  if (shoulder_loss <= 0.f) return mean_a2_midgray_source_weight;
+  // One-stop gates have flat joins at level 1; skip logs only on constant plateaus.
   float blend = (source_level >= 2.f ? 1.f : custom_psycho31_CInfinityTransition(log2(source_level)))
                 * custom_psycho31_CInfinityTransition(shoulder_loss / 0.5f);
-  return lerp(1.f, max(mean_a2_highlight_source_weight, 0.f), blend);
+  return lerp(mean_a2_midgray_source_weight, mean_a2_highlight_source_weight, blend);
 }
 
-// Receives the effective weight, not the highlight target: 0 is response hue,
+// Receives the effective weight, not a tonal-region target: 0 is response hue,
 // 1 is the original source/response midpoint. A2 reconstruction is unchanged.
 float3 custom_psycho31_MeanA2Response(
     float3 source_q,
@@ -1201,19 +1243,6 @@ float3 custom_psycho31_MeanA2Response(
       authored_dt.y);
 }
 
-void custom_psycho31_LMSToTargetMatrix(
-    int target_gamut_mode,
-    out float3x3 lms_to_target) {
-  [branch]
-  if (target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_BT709) {
-    lms_to_target = PSYCHO29_LMS_TO_BT709_MAT;
-  } else if (target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_DISPLAY_P3) {
-    lms_to_target = CUSTOM_PSYCHO31_LMS_TO_DISPLAY_P3_MAT;
-  } else {
-    lms_to_target = PSYCHO29_LMS_TO_BT2020_MAT;
-  }
-}
-
 float3 custom_psycho31_TargetRGBFromLMS(
     float3 lms,
     int target_gamut_mode) {
@@ -1222,6 +1251,8 @@ float3 custom_psycho31_TargetRGBFromLMS(
     return mul(PSYCHO30_LMS_TO_BT709_MAT, lms);
   } else if (target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_DISPLAY_P3) {
     return mul(CUSTOM_PSYCHO31_LMS_TO_DISPLAY_P3_MAT, lms);
+  } else if (target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_SAMSUNG_G80SD) {
+    return mul(CUSTOM_PSYCHO31_LMS_TO_SAMSUNG_G80SD_MAT, lms);
   } else {
     return mul(PSYCHO30_LMS_TO_BT2020_MAT, lms);
   }
@@ -1271,12 +1302,11 @@ float custom_psycho31_ScaledA2TargetSupport(
   return max(support, 0.f);
 }
 
-float3 custom_psycho31_FixedYfL4TargetEndpoint(
+// Dimensionless radial demand against the target's fixed-Yf L8 boundary.
+float custom_psycho31_NormalizedL8TargetDemand(
     float3 coord,
     float response_yf_ceiling,
-    int target_gamut_mode,
-    out float normalized_demand) {
-  normalized_demand = 0.f;
+    int target_gamut_mode) {
   float mapped_a = clamp(
       psycho31_YfFromTest30Coord(coord),
       0.f,
@@ -1287,7 +1317,7 @@ float3 custom_psycho31_FixedYfL4TargetEndpoint(
   if (mapped_a <= 0.f
       || mapped_a >= 1.f
       || radial_length <= PSYCHO30_EPSILON) {
-    return psycho31_Test30CoordFromDTA(0.f, 0.f, mapped_a);
+    return 0.f;
   }
 
   float inverse_radial_length = rcp(radial_length);
@@ -1301,6 +1331,9 @@ float3 custom_psycho31_FixedYfL4TargetEndpoint(
   } else if (target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_DISPLAY_P3) {
     radial_rgb = normalized_d * CUSTOM_PSYCHO31_DISPLAY_P3_D_RGB
                  + normalized_t * CUSTOM_PSYCHO31_DISPLAY_P3_T_RGB;
+  } else if (target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_SAMSUNG_G80SD) {
+    radial_rgb = normalized_d * CUSTOM_PSYCHO31_SAMSUNG_G80SD_D_RGB
+                 + normalized_t * CUSTOM_PSYCHO31_SAMSUNG_G80SD_T_RGB;
   } else {
     radial_rgb = normalized_d * PSYCHO30_BT2020_D_RGB
                  + normalized_t * PSYCHO30_BT2020_T_RGB;
@@ -1311,35 +1344,27 @@ float3 custom_psycho31_FixedYfL4TargetEndpoint(
       renodx::math::Max(upper_demand),
       renodx::math::Max(lower_demand));
   if (demand_scale <= PSYCHO30_EPSILON) {
-    return psycho31_Test30CoordFromDTA(0.f, 0.f, mapped_a);
+    return 0.f;
   }
-  float3 normalized_upper = upper_demand / demand_scale;
-  float3 normalized_lower = lower_demand / demand_scale;
-  float fourth_power_sum = dot(
-                               normalized_upper * normalized_upper,
-                               normalized_upper * normalized_upper)
-                           + dot(
-                               normalized_lower * normalized_lower,
-                               normalized_lower * normalized_lower);
-  float support = rcp(demand_scale * sqrt(sqrt(fourth_power_sum)));
-  normalized_demand = radial_length / support;
-  float mapped_radius = min(radial_length, support);
-  return psycho31_Test30CoordFromDTA(
-      normalized_d * mapped_radius,
-      normalized_t * mapped_radius,
-      mapped_a);
+  // Upper and lower demands are disjoint per channel; combine before powering.
+  float3 normalized_demand_rgb = (upper_demand + lower_demand) / demand_scale;
+  // L8 demand with the existing soft limiter.
+  normalized_demand_rgb *= normalized_demand_rgb;
+  normalized_demand_rgb *= normalized_demand_rgb;
+  float eighth_power_sum = dot(normalized_demand_rgb, normalized_demand_rgb);
+  float support = rcp(demand_scale * sqrt(sqrt(sqrt(eighth_power_sum))));
+  return radial_length / support;
 }
 
-float3 custom_psycho31_SmoothFixedYfL4TargetEndpoint(
+float3 custom_psycho31_SmoothFixedYfL8TargetEndpoint(
     float3 coord,
     float response_yf_ceiling,
     int target_gamut_mode,
     out float normalized_demand) {
-  custom_psycho31_FixedYfL4TargetEndpoint(
+  normalized_demand = custom_psycho31_NormalizedL8TargetDemand(
       coord,
       response_yf_ceiling,
-      target_gamut_mode,
-      normalized_demand);
+      target_gamut_mode);
   float mapped_a = clamp(
       psycho31_YfFromTest30Coord(coord),
       0.f,
@@ -1349,7 +1374,10 @@ float3 custom_psycho31_SmoothFixedYfL4TargetEndpoint(
   }
 
   float mapped_demand = custom_psycho31_SmoothUnitLimit(
-      normalized_demand);
+      normalized_demand,
+      target_gamut_mode == CUSTOM_PSYCHO31_TARGET_GAMUT_SAMSUNG_G80SD
+          ? CUSTOM_PSYCHO31_SAMSUNG_G80SD_SMOOTH_LIMIT_SHARPNESS
+          : CUSTOM_PSYCHO31_SMOOTH_LIMIT_SHARPNESS);
   float radial_scale = mapped_demand / normalized_demand;
   return psycho31_Test30CoordFromDTA(
       coord.x * radial_scale,
@@ -1357,200 +1385,21 @@ float3 custom_psycho31_SmoothFixedYfL4TargetEndpoint(
       mapped_a);
 }
 
-float3 custom_psycho31_YfCeilingSolve(
-    float3 desired_coord,
-    float response_yf,
-    int target_gamut_mode,
-    out uint valid) {
-  if (target_gamut_mode != CUSTOM_PSYCHO31_TARGET_GAMUT_DISPLAY_P3) {
-    valid = 1u;
-    return psycho30_YfCeilingSolve(
-        desired_coord,
-        response_yf,
-        target_gamut_mode);
-  }
-
-  valid = !any(isnan(desired_coord))
-                  && !any(isinf(desired_coord))
-                  && !isnan(response_yf)
-                  && !isinf(response_yf)
-              ? 1u
-              : 0u;
-  if (valid == 0u) return 0.f;
-
-  float max_a = saturate(response_yf);
-  float radial_a_numerator =
-      3.f * PSYCHO30_D65_ALPHA_DELTA * desired_coord.x - desired_coord.z;
-  float desired_a = (2.f * desired_coord.y + radial_a_numerator) / 6.f;
-  float3 radial_rgb = desired_coord.x * CUSTOM_PSYCHO31_DISPLAY_P3_D_RGB
-                      + desired_coord.z * CUSTOM_PSYCHO31_DISPLAY_P3_T_RGB;
-  float3 desired_target_rgb = desired_a + radial_rgb;
-  if (desired_a >= 0.f
-      && desired_a <= max_a
-      && all(desired_target_rgb >= -PSYCHO30_EPSILON)
-      && all(desired_target_rgb <= 1.f + PSYCHO30_EPSILON)) {
-    return desired_coord;
-  }
-
-  float radial_metric = psycho30_ScaledA2Radius6(desired_coord.xz);
-  if (radial_metric <= 6.f * PSYCHO30_EPSILON2) {
-    return float3(
-        0.f,
-        clamp(desired_coord.y, 0.f, 3.f * max_a),
-        0.f);
-  }
-
-  float positive_pressure = renodx::math::Max(radial_rgb);
-  float negative_pressure = -renodx::math::Min(radial_rgb);
-  float total_pressure = positive_pressure + negative_pressure;
-  bool is_triangle = max_a * total_pressure <= negative_pressure;
-  float max_a_radial_scale;
-  float upper_a;
-  float upper_radial_scale;
-  [branch]
-  if (is_triangle) {
-    max_a_radial_scale = max_a / negative_pressure;
-    upper_a = max_a;
-    upper_radial_scale = max_a_radial_scale;
-  } else {
-    max_a_radial_scale = (1.f - max_a) / positive_pressure;
-    upper_radial_scale = 1.f / total_pressure;
-    upper_a = negative_pressure * upper_radial_scale;
-  }
-
-  float2 vertex0 = 0.f;
-  float2 vertex1 = float2(3.f * max_a, 0.f);
-  float2 vertex2 = float2(
-      3.f * max_a - 0.5f * radial_a_numerator * max_a_radial_scale,
-      max_a_radial_scale);
-  float2 vertex3 = float2(
-      3.f * upper_a - 0.5f * radial_a_numerator * upper_radial_scale,
-      upper_radial_scale);
-  float2 best_c_scale = float2(
-      clamp(desired_coord.y, vertex0.x, vertex1.x),
-      0.f);
-  float2 best_delta = best_c_scale - float2(desired_coord.y, 1.f);
-  float best_cost = 2.f * best_delta.x * best_delta.x
-                    + radial_metric * best_delta.y * best_delta.y;
-
-  float2 edge_candidate = psycho30_ClosestPointOnScaleSegment(
-      desired_coord.y,
-      radial_metric,
-      vertex1,
-      vertex2);
-  float2 edge_delta = edge_candidate - float2(desired_coord.y, 1.f);
-  float edge_cost = 2.f * edge_delta.x * edge_delta.x
-                    + radial_metric * edge_delta.y * edge_delta.y;
-  if (edge_cost < best_cost) {
-    best_c_scale = edge_candidate;
-    best_cost = edge_cost;
-  }
-  if (!is_triangle) {
-    edge_candidate = psycho30_ClosestPointOnScaleSegment(
-        desired_coord.y,
-        radial_metric,
-        vertex2,
-        vertex3);
-    edge_delta = edge_candidate - float2(desired_coord.y, 1.f);
-    edge_cost = 2.f * edge_delta.x * edge_delta.x
-                + radial_metric * edge_delta.y * edge_delta.y;
-    if (edge_cost < best_cost) {
-      best_c_scale = edge_candidate;
-      best_cost = edge_cost;
-    }
-  }
-  edge_candidate = psycho30_ClosestPointOnScaleSegment(
-      desired_coord.y,
-      radial_metric,
-      vertex0,
-      vertex3);
-  edge_delta = edge_candidate - float2(desired_coord.y, 1.f);
-  edge_cost = 2.f * edge_delta.x * edge_delta.x
-              + radial_metric * edge_delta.y * edge_delta.y;
-  if (edge_cost < best_cost) best_c_scale = edge_candidate;
-
-  float3 solved_coord = float3(
-      desired_coord.x * best_c_scale.y,
-      best_c_scale.x,
-      desired_coord.z * best_c_scale.y);
-  valid = !any(isnan(solved_coord)) && !any(isinf(solved_coord)) ? 1u : 0u;
-  return valid != 0u ? solved_coord : 0.f;
-}
-
-float3 custom_psycho31_JointL4TargetEndpoint(
-    float3 coord,
-    float response_yf_ceiling,
-    int target_gamut_mode,
-    float target_rgb_peak,
-    out uint valid) {
-  float3x3 lms_to_target;
-  custom_psycho31_LMSToTargetMatrix(
-      target_gamut_mode,
-      lms_to_target);
-  float3 target_peak_lms = PSYCHO30_D65_WHITE_LMS * target_rgb_peak;
-  float3 desired_ortho = psycho29_OrthonormalConeCoordFromLMS(
-      psycho31_LMSFromTest30Coord(coord, target_rgb_peak),
-      target_peak_lms);
-  float3 solved_ortho = psycho29_LqYfCeilingSolve(
-      desired_ortho,
-      response_yf_ceiling,
-      target_peak_lms,
-      lms_to_target,
-      target_rgb_peak,
-      4.f,
-      0.01f,
-      0.f,
-      1.f,
-      valid);
-  if (valid == 0u) return 0.f;
-
-  float3 normalized_lms = psycho29_LMSFromOrthonormalConeCoord(
-                              solved_ortho,
-                              target_peak_lms)
-                          / (PSYCHO30_D65_WHITE_LMS * target_rgb_peak);
-  float3 solved_coord = float3(
-      normalized_lms.x - normalized_lms.y,
-      normalized_lms.x + normalized_lms.y + normalized_lms.z,
-      2.f * normalized_lms.z - normalized_lms.x - normalized_lms.y);
-  valid = !any(isnan(solved_coord)) && !any(isinf(solved_coord)) ? 1u : 0u;
-  return valid != 0u ? solved_coord : 0.f;
-}
-
 float3 custom_psycho31_TargetEndpoint(
     float3 coord,
     float response_yf_ceiling,
     int target_gamut_mode,
-    float target_rgb_peak,
-    int gamut_mapping_method,
     out uint valid) {
-  [branch]
-  if (gamut_mapping_method
-      == CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4) {
-    float unused_normalized_demand;
-    float3 solved_coord = custom_psycho31_SmoothFixedYfL4TargetEndpoint(
-        coord,
-        response_yf_ceiling,
-        target_gamut_mode,
-        unused_normalized_demand);
-    valid = !any(isnan(solved_coord)) && !any(isinf(solved_coord)) ? 1u : 0u;
-    return valid != 0u ? solved_coord : 0.f;
-  } else if (gamut_mapping_method
-             == CUSTOM_PSYCHO31_GAMUT_MAPPING_FIXED_YF_L4) {
-    float unused_normalized_demand;
-    float3 solved_coord = custom_psycho31_FixedYfL4TargetEndpoint(
-        coord,
-        response_yf_ceiling,
-        target_gamut_mode,
-        unused_normalized_demand);
-    valid = !any(isnan(solved_coord)) && !any(isinf(solved_coord)) ? 1u : 0u;
-    return valid != 0u ? solved_coord : 0.f;
-  }
-  return custom_psycho31_JointL4TargetEndpoint(
+  float unused_normalized_demand;
+  float3 solved_coord = custom_psycho31_SmoothFixedYfL8TargetEndpoint(
       coord,
       response_yf_ceiling,
       target_gamut_mode,
-      target_rgb_peak,
-      valid);
+      unused_normalized_demand);
+  valid = 0u;
+  if (any(isnan(solved_coord))) return 0.f;
+  valid = !any(isinf(solved_coord)) ? 1u : 0u;
+  return valid != 0u ? solved_coord : 0.f;
 }
 
 float3 custom_psychograde_test31(
@@ -1672,6 +1521,8 @@ void custom_psycho31_ResponseState(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
+    float mean_a2_shadow_source_weight,
+    float mean_a2_midgray_source_weight,
     float mean_a2_highlight_source_weight,
     out float3 source_q,
     out float3 response_u,
@@ -1701,7 +1552,8 @@ void custom_psycho31_ResponseState(
   source_q = tonal_input_lms / anchor_in_lms;
   response_u = response_lms / target_peak_lms;
   effective_mean_a2_weight = custom_psycho31_ShoulderMeanA2Weight(
-      source_q, graded_lms, response_lms, mean_a2_highlight_source_weight);
+      source_q, graded_lms, response_lms,
+      mean_a2_shadow_source_weight, mean_a2_midgray_source_weight, mean_a2_highlight_source_weight);
 }
 
 float3 custom_psycho31_ResponseCoord(
@@ -1720,6 +1572,8 @@ float3 custom_psycho31_ResponseCoord(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
+    float mean_a2_shadow_source_weight,
+    float mean_a2_midgray_source_weight,
     float mean_a2_highlight_source_weight,
     out float3 source_q,
     out float response_yf,
@@ -1742,14 +1596,16 @@ float3 custom_psycho31_ResponseCoord(
       dechroma,
       sdr_eotf_emulation,
       compression,
-      mean_a2_highlight_source_weight,  // Highlight target; state computes the effective weight.
+      mean_a2_shadow_source_weight,
+      mean_a2_midgray_source_weight,
+      mean_a2_highlight_source_weight,  // State computes the effective weight from all three targets.
       source_q,
       response_u,
       effective_mean_a2_weight);
   return custom_psycho31_MeanA2Response(
       source_q,
       response_u,
-      effective_mean_a2_weight,  // Never pass the highlight target directly.
+      effective_mean_a2_weight,  // Never pass a tonal-region target directly.
       response_yf,
       valid);
 }
@@ -1866,6 +1722,8 @@ float3 custom_psycho31_LinearA2Fallback(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
+    float mean_a2_shadow_source_weight,
+    float mean_a2_midgray_source_weight,
     float mean_a2_highlight_source_weight,
     int target_gamut_mode,
     float target_rgb_peak,
@@ -1896,6 +1754,8 @@ float3 custom_psycho31_LinearA2Fallback(
       tonal_input_magnitude / anchor_in_lms,
       graded_magnitude,
       response_magnitude,
+      mean_a2_shadow_source_weight,
+      mean_a2_midgray_source_weight,
       mean_a2_highlight_source_weight);
   float3 tonal_input_lms = renodx::math::CopySign(
       tonal_input_magnitude,
@@ -2009,10 +1869,10 @@ float3 custom_psycho31_SourceCoordinateCage(
     float dechroma,
     float sdr_eotf_emulation,
     float compression,
+    float mean_a2_shadow_source_weight,
+    float mean_a2_midgray_source_weight,
     float mean_a2_highlight_source_weight,
-    int gamut_mapping_method,
     int target_gamut_mode,
-    float target_rgb_peak,
     out uint valid) {
   valid = 0u;
   float3 source_yf_coefficients = mul(
@@ -2028,19 +1888,14 @@ float3 custom_psycho31_SourceCoordinateCage(
   float3 raw_lower_demand = -source_residual / neutral_source_rgb;
   float exact_demand_scale = renodx::math::Max(raw_lower_demand);
   if (exact_demand_scale <= PSYCHO30_EPSILON) return 0.f;
-  float demand_scale = exact_demand_scale;
-  [branch]
-  if (gamut_mapping_method
-      == CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4) {
-    const float smooth_epsilon =
-        CUSTOM_PSYCHO31_SOURCE_POSITIVE_EPSILON;
-    float3 smooth_lower_demand = 0.5f
-                                 * (raw_lower_demand
-                                    + sqrt(
-                                        raw_lower_demand * raw_lower_demand
-                                        + smooth_epsilon * smooth_epsilon));
-    demand_scale = custom_psycho31_SmoothMax3(smooth_lower_demand);
-  }
+  const float smooth_epsilon =
+      CUSTOM_PSYCHO31_SOURCE_POSITIVE_EPSILON;
+  float3 smooth_lower_demand = 0.5f
+                               * (raw_lower_demand
+                                  + sqrt(
+                                      raw_lower_demand * raw_lower_demand
+                                      + smooth_epsilon * smooth_epsilon));
+  float demand_scale = custom_psycho31_SmoothMax3(smooth_lower_demand);
 
   float boundary_fraction = rcp(demand_scale);
   if (boundary_fraction <= PSYCHO30_EPSILON
@@ -2069,6 +1924,8 @@ float3 custom_psycho31_SourceCoordinateCage(
       dechroma,
       sdr_eotf_emulation,
       compression,
+      mean_a2_shadow_source_weight,
+      mean_a2_midgray_source_weight,
       mean_a2_highlight_source_weight,
       neutral_source_q,
       neutral_response_u,
@@ -2106,6 +1963,8 @@ float3 custom_psycho31_SourceCoordinateCage(
       dechroma,
       sdr_eotf_emulation,
       compression,
+      mean_a2_shadow_source_weight,
+      mean_a2_midgray_source_weight,
       mean_a2_highlight_source_weight,
       boundary_source_q,
       boundary_response_yf,
@@ -2122,8 +1981,6 @@ float3 custom_psycho31_SourceCoordinateCage(
       source_boundary_coord,
       boundary_response_yf,
       target_gamut_mode,
-      target_rgb_peak,
-      gamut_mapping_method,
       target_endpoint_valid);
   if (target_endpoint_valid == 0u) return 0.f;
 
@@ -2141,11 +1998,7 @@ float3 custom_psycho31_SourceCoordinateCage(
        + desired_coord.z * source_boundary_coord.z / 6.f
        + (desired_a - neutral_response_yf) * source_chord_a)
       / source_chord_length2;
-  float response_progress = gamut_mapping_method
-                                    == CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4
-                                ? custom_psycho31_CInfinityClamp01(
-                                      projected_progress)
-                                : saturate(projected_progress);
+  float response_progress = custom_psycho31_CInfinityClamp01(projected_progress);
   float3 mapped_coord = psycho31_Test30CoordFromDTA(
       response_progress * target_endpoint_coord.x,
       response_progress * target_endpoint_coord.z,
@@ -2174,16 +2027,13 @@ float3 custom_psychotm_test31(
     float3 current_background_state_bt709 = 0.18f,
     float sdr_eotf_emulation = 0.f,
     float gamut_compression = 1.f,
-    int gamut_compression_mode = 1,                                             // Target gamut: 0 BT.709, 1 BT.2020, 3 Display P3.
-    float compression = 1.5f,                                                   // C-infinity shoulder strength; 0 selects auto compression.
-    float mean_a2_highlight_source_weight = 0.f,                                // Highlight hue: 0 response, 1 source/response midpoint; weight 1 below anchor.
-    int source_boundary = PSYCHO30_SOURCE_BOUNDARY_NONE,                        // Source cage: 0 none, 1 BT.709, 2 BT.2020, 3 AP1; not input encoding.
-    float source_awareness = 1.f,                                               // Blend target-only (0) to source cage (1); inert with source boundary NONE.
-    int gamut_mapping_method = CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4,  // Endpoint: 0 joint L4, 1 fixed-Yf L4, 2 knee.
-    float yf_support_q = PSYCHO29_INFINITY_SUPPORT_Q,                           // Generic non-knee solver Lq exponent: min 2, 2048 = infinity.
-    float yf_dynamic_face_gap = 0.01f,                                          // Generic solver: per-hue strongest required q targets face ratio 1 - gap.
-    float yf_dynamic_mix = 0.f,                                                 // Generic solver: 0 fixed q, 1 adaptive per-hue q.
-    float yf_generalized_mix = 1.f                                              // Generic solver: 0 Neutwo2 support, 1 Lq; intermediate values lerp q from 2.
+    int gamut_compression_mode = 1,                       // Target: 0 BT.709, 1 BT.2020, 3 Display P3, 4 Samsung G80SD.
+    float compression = 1.5f,                             // C-infinity shoulder strength; 0 selects auto compression.
+    float mean_a2_shadow_source_weight = 1.f,             // Weights 0..1: 0 response hue, 1 equal source/response midpoint.
+    float mean_a2_midgray_source_weight = 0.5f,           // Shadow -> midgray over the stop below the pre-tonal input anchor.
+    float mean_a2_highlight_source_weight = 0.f,          // Midgray -> highlight above anchor, gated by shoulder loss.
+    int source_boundary = PSYCHO30_SOURCE_BOUNDARY_NONE,  // Source cage: 0 none, 1 BT.709, 2 BT.2020, 3 AP1; not input encoding.
+    float source_awareness = 1.f                          // Blend target-only (0) to source cage (1); inert with source boundary NONE.
 ) {
   float3 exposed_input = bt709_linear_input * exposure;
   float3 input_lms;
@@ -2280,6 +2130,8 @@ float3 custom_psychotm_test31(
         dechroma,
         sdr_eotf_emulation,
         response_compression,
+        mean_a2_shadow_source_weight,
+        mean_a2_midgray_source_weight,
         mean_a2_highlight_source_weight,
         source_q,
         response_yf,
@@ -2305,6 +2157,8 @@ float3 custom_psychotm_test31(
         dechroma,
         sdr_eotf_emulation,
         response_compression,
+        mean_a2_shadow_source_weight,
+        mean_a2_midgray_source_weight,
         mean_a2_highlight_source_weight,
         gamut_compression_mode,
         target_rgb_peak,
@@ -2324,24 +2178,17 @@ float3 custom_psychotm_test31(
   float3 desired_lms = psycho31_LMSFromTest30Coord(
       desired_test30_coord,
       target_rgb_peak);
-  bool use_knee_mapping = gamut_mapping_method
-                          == CUSTOM_PSYCHO31_GAMUT_MAPPING_KNEE_FIXED_YF_L4;
   float normalized_demand = 0.f;
-  float3 knee_mapped_test30_coord = 0.f;
-  [branch]
-  if (use_knee_mapping) {
-    knee_mapped_test30_coord =
-        custom_psycho31_SmoothFixedYfL4TargetEndpoint(
-            desired_test30_coord,
-            response_yf,
-            gamut_compression_mode,
-            normalized_demand);
-  }
+  float3 knee_mapped_test30_coord = custom_psycho31_SmoothFixedYfL8TargetEndpoint(
+      desired_test30_coord,
+      response_yf,
+      gamut_compression_mode,
+      normalized_demand);
   float source_weight = source_boundary != PSYCHO30_SOURCE_BOUNDARY_NONE
                             ? saturate(source_awareness)
                             : 0.f;
   [branch]
-  if (source_weight != 0.f && use_knee_mapping) {
+  if (source_weight != 0.f) {
     float knee_position =
         (normalized_demand - CUSTOM_PSYCHO31_GAMUT_KNEE_START)
         / (CUSTOM_PSYCHO31_GAMUT_KNEE_END
@@ -2372,10 +2219,10 @@ float3 custom_psychotm_test31(
         dechroma,
         sdr_eotf_emulation,
         response_compression,
+        mean_a2_shadow_source_weight,
+        mean_a2_midgray_source_weight,
         mean_a2_highlight_source_weight,
-        gamut_mapping_method,
         gamut_compression_mode,
-        target_rgb_peak,
         cage_valid);
     [branch]
     if (cage_valid != 0u) {
@@ -2386,20 +2233,7 @@ float3 custom_psychotm_test31(
           desired_test30_coord,
           response_yf,
           gamut_compression_mode,
-          target_rgb_peak,
-          gamut_mapping_method,
           direct_target_valid);
-      [branch]
-      if (direct_target_valid == 0u
-          && gamut_mapping_method
-                 == CUSTOM_PSYCHO31_GAMUT_MAPPING_JOINT_L4) {
-        float unused_desired_target_demand;
-        source_aware_test30_coord = custom_psycho31_FixedYfL4TargetEndpoint(
-            desired_test30_coord,
-            response_yf,
-            gamut_compression_mode,
-            unused_desired_target_demand);
-      }
     }
   }
 
@@ -2410,53 +2244,13 @@ float3 custom_psychotm_test31(
         source_aware_test30_coord,
         target_rgb_peak);
   } else {
-    uint solve_valid;
-    [branch]
-    if (use_knee_mapping) {
-      solve_valid = !any(isnan(knee_mapped_test30_coord))
-                            && !any(isinf(knee_mapped_test30_coord))
-                        ? 1u
-                        : 0u;
-      mapped_lms = psycho31_LMSFromTest30Coord(
-          knee_mapped_test30_coord,
-          target_rgb_peak);
-    } else if (yf_support_q >= PSYCHO29_INFINITY_SUPPORT_Q
-               && yf_dynamic_mix == 0.f
-               && yf_generalized_mix == 1.f) {
-      // Test30's polygon solve is the analytic L-infinity solution in the
-      // equivalent orthonormal metric; avoid Test29's 33+20 sample search.
-      float3 solved_test30_coord = custom_psycho31_YfCeilingSolve(
-          desired_test30_coord,
-          response_yf,
-          gamut_compression_mode,
-          solve_valid);
-      mapped_lms = psycho31_LMSFromTest30Coord(
-          solved_test30_coord,
-          target_rgb_peak);
-    } else {
-      float3x3 lms_to_target;
-      custom_psycho31_LMSToTargetMatrix(
-          gamut_compression_mode,
-          lms_to_target);
-      float3 target_peak_lms = PSYCHO30_D65_WHITE_LMS * target_rgb_peak;
-      float3 desired_coord = psycho29_OrthonormalConeCoordFromLMS(
-          desired_lms,
-          target_peak_lms);
-      float3 solved_coord = psycho29_LqYfCeilingSolve(
-          desired_coord,
-          response_yf,
-          target_peak_lms,
-          lms_to_target,
-          target_rgb_peak,
-          yf_support_q,
-          yf_dynamic_face_gap,
-          yf_dynamic_mix,
-          yf_generalized_mix,
-          solve_valid);
-      mapped_lms = psycho29_LMSFromOrthonormalConeCoord(
-          solved_coord,
-          target_peak_lms);
-    }
+    uint solve_valid = !any(isnan(knee_mapped_test30_coord))
+                               && !any(isinf(knee_mapped_test30_coord))
+                           ? 1u
+                           : 0u;
+    mapped_lms = psycho31_LMSFromTest30Coord(
+        knee_mapped_test30_coord,
+        target_rgb_peak);
     if (solve_valid == 0u) return float3(0.f, 0.f, 0.f);
     [branch]
     if (source_weight != 0.f) {
