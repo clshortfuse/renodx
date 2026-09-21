@@ -1,7 +1,7 @@
 #ifndef PSYCHOV_CUSTOMTEST31_HLSLI_
 #define PSYCHOV_CUSTOMTEST31_HLSLI_
 
-#include "../common.hlsli"
+#include "../../common.hlsli"
 
 /*
  * Copyright (C) 2026 Carlos Lopez
