@@ -1,7 +1,7 @@
 #ifndef PSYCHOV_CUSTOMTEST31_HLSLI_
 #define PSYCHOV_CUSTOMTEST31_HLSLI_
 
-#include "../../common.hlsli"
+#include "../common.hlsli"
 
 /*
  * Copyright (C) 2026 Carlos Lopez
@@ -1418,7 +1418,7 @@ float3 custom_psychograde_test31(
     float dechroma = 0.f,
     float3 current_adaptive_state_bt709 = 0.18f,
     float3 current_background_state_bt709 = 0.18f,
-    int source_boundary = PSYCHO30_SOURCE_BOUNDARY_BT709) {
+    int source_boundary = PSYCHO30_SOURCE_BOUNDARY_NONE) {
   float3 exposed_input = bt709_linear_input * exposure;
   float3 input_lms;
   [branch]
