@@ -1,5 +1,5 @@
 #include "../common.hlsli"
-#include "./psychov/customtest30.hlsli"
+#include "./psychov/customtest31.hlsli"
 
 static const float MID_GRAY_IN = 0.119121851127f;
 static const float MID_GRAY_OUT = 0.163979921774f;
@@ -215,7 +215,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
         ApplyAnchoredCInfinityShoulder(abs(untonemapped), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, MID_GRAY_OUT, 1.5f),
         untonemapped);
   } else {  // Custom
-    tonemapped = renodx::tonemap::psychov::psychotm_custom_test30(
+    tonemapped = renodx::tonemap::psychov::custom_psychotm_test31(
         untonemapped,
         RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS,
         1.f,
@@ -230,10 +230,15 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
         RENODX_TONE_MAP_DECHROMA,
         MID_GRAY_IN,
         MID_GRAY_OUT,
+        0.f,  // SDR EOTF emulation.
         1.f,
-        renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_DISPLAY_P3,
+        renodx::tonemap::psychov::CUSTOM_PSYCHO31_TARGET_GAMUT_BT2020,
         1.5f,
-        0.7f);
+        1.f,   // Mean-A2 shadow source weight.
+        0.5f,  // Mean-A2 midgray source weight.
+        0.f,   // Mean-A2 highlight source weight.
+        renodx::tonemap::psychov::PSYCHO30_SOURCE_BOUNDARY_BT709,
+        1.f);
   }
 
   return renodx::color::gamma::EncodeSafe(tonemapped, 2.2f);
