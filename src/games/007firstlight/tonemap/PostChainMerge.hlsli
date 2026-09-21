@@ -42,7 +42,7 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
     float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     const float SHOULDERLESS_BLEND = 0.7f;
 
-    untonemapped = renodx::tonemap::psychov::psychograde_custom_test30(
+    untonemapped = renodx::tonemap::psychov::custom_psychograde_test31(
         untonemapped, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
         RENODX_TONE_MAP_CONTRAST, 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
         RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA, 0.18f, 0.18f);
