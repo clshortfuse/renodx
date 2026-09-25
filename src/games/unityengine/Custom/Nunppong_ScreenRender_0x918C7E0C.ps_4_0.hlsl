@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -79,9 +79,9 @@ void main(
     r0.xyz = r1.xyz / r1.www;
   }
   r0.xyz = r0.xyz * r0.www;
-  if (injectedData.countOld == injectedData.countNew) {
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
-    r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   o0.xyzw = r0.xyzw;
   return;

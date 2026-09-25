@@ -17,7 +17,7 @@ void main(
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
   r0.w = max(0.f, r0.w);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(float3(0,0,0), r0.xyz);
   }
   o0.xyzw = min(float4(1000000,1000000,1000000,1000000), r0.xyzw);

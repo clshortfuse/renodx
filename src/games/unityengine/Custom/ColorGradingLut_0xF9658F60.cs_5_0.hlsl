@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 RWTexture3D<float4> u0 : register(u0);
 cbuffer cb0 : register(b0){
@@ -13,6 +13,7 @@ cbuffer cb0 : register(b0){
   r0.xyz = (uint3)vThreadID.xyz;
   r0.xyz = r0.xyz * cb0[0].xxx + cb0[0].yyy;
   r0.xyz = lutShaper(r0.xyz, true);
+  float3 preCG = r0.xyz;
   r1.x = dot(float3(0.390404999,0.549941003,0.00892631989), r0.xyz);
   r1.y = dot(float3(0.070841603,0.963172019,0.00135775004), r0.xyz);
   r1.z = dot(float3(0.0231081992,0.128021002,0.936245024), r0.xyz);
@@ -20,9 +21,11 @@ cbuffer cb0 : register(b0){
   r1.x = dot(float3(2.85846996,-1.62879002,-0.0248910002), r0.xyz);
   r1.y = dot(float3(-0.210181996,1.15820003,0.000324280991), r0.xyz);
   r1.z = dot(float3(-0.0418119989,-0.118169002,1.06867003), r0.xyz);
+  r1.xyz = lerp(preCG, r1.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   r0.x = dot(float3(0.439700991,0.382977992,0.177334994), r1.xyz);
   r0.y = dot(float3(0.0897922963,0.813422978,0.0967615992), r1.xyz);
   r0.z = dot(float3(0.0175439995,0.111543998,0.870703995), r1.xyz);
+  preCG = r0.xyz;
   r0.xyz = acesccEncode(r0.xyz);
   r0.xyz = r0.xyz * cb0[12].zzz + cb0[12].www;
   r1.xyz = acescc::Decode(r0.xyz);
@@ -91,8 +94,8 @@ cbuffer cb0 : register(b0){
   r1.y = dot(float3(0.695452213,0.140678704,0.163869068), r0.xyz);
   r1.z = dot(float3(0.0447945632,0.859671116,0.0955343172), r0.xyz);
   r1.w = dot(float3(-0.00552588282,0.00402521016,1.00150073), r0.xyz);
-  r1.xyz = mul(ACES_to_SRGB_MAT, r1.yzw);
-  r1.xyz = applyUserTonemapACES(r1.xyz, 2);
+  r1.yzw = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+  r1.xyz = Ap1AcesTonemap(r1.yzw, 2);
   r1.w = 0;
   u0[vThreadID] = r1;
   return;

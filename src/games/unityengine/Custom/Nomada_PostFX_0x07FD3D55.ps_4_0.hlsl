@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -55,11 +55,11 @@ void main(
   r1.yzw = -r2.xyz * r1.yzw + float3(1,1,1);
   r1.yzw = cb0[5].www * r1.yzw;
   r0.xyz = r0.xyz * r1.xxx + r1.yzw;
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.fxFilmGrainType == 0.f) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f) {
   r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   r1.xyz = cb1[0].xxy * cb0[3].zzz;
   r1.xyz = floor(r1.xyz);
@@ -90,7 +90,7 @@ void main(
   r1.w = 0;
   r0.xyzw = r1.xyzw * r0.wwww;
   o0.xyzw = exp2(r0.xyzw);*/
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

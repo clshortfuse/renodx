@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -30,7 +30,7 @@ void main(
   r0.yz = v1.xy * float2(2,2) + float2(-1,-1);
   r0.w = dot(r0.yz, r0.yz);
   r0.yz = r0.yz * r0.ww;
-  r0.yz = cb0[35].ww * r0.yz * injectedData.fxCA;
+  r0.yz = cb0[35].ww * r0.yz * CUSTOM_CHROMATIC_ABERRATION;
   r1.xy = cb0[31].zw * -r0.yz;
   r1.xy = float2(0.5,0.5) * r1.xy;
   r0.w = dot(r1.xy, r1.xy);
@@ -67,7 +67,7 @@ void main(
   r0.xyz = r0.yzw * r0.xxx;
   r0.yzx = lutShaper(r0.xyz, false, 2);
   r1.w = saturate(r1.w);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.yzw = cb0[36].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r1.xy = float2(0.5,0.5) * cb0[36].xy;
@@ -84,6 +84,9 @@ void main(
     r0.xyz = renodx::lut::SampleTetrahedral(t4, r0.yzx, cb0[36].z + 1u);
   }
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r1.xy = v1.xy * cb0[30].xy + cb0[30].zw;
   r2.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
   r0.w = r2.w * 2 + -1;
@@ -94,7 +97,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
   r1.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r1.xyz = PostToneMapScale(r1.xyz, true);
   } else {
     r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);

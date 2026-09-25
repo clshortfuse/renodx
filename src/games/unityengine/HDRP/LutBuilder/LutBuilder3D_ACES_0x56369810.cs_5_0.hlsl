@@ -1,36 +1,23 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
-// ---- Created with 3Dmigoto v1.4.1 on Mon Jan 12 22:10:10 2026
 Texture2D<float4> t8 : register(t8);
-
 Texture2D<float4> t7 : register(t7);
-
 Texture2D<float4> t6 : register(t6);
-
 Texture2D<float4> t5 : register(t5);
-
 Texture2D<float4> t4 : register(t4);
-
 Texture2D<float4> t3 : register(t3);
-
 Texture2D<float4> t2 : register(t2);
-
 Texture2D<float4> t1 : register(t1);
-
 Texture3D<float4> t0 : register(t0);
-
 SamplerState s0_s : register(s0);
 RWTexture3D<float4> u0 : register(u0);
-
 cbuffer cb1 : register(b1) {
   float4 cb1[28];
 }
-
 cbuffer cb0 : register(b0) {
   float4 cb0[2];
 }
 
-// 3Dmigoto declarations
 #define cmp -
 
 [numthreads(4, 4, 4)]
@@ -50,17 +37,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float4 fDest;
 
   r0.xyz = (uint3)vThreadID.xyz;
-  float3 ungraded;
+  float3 preCG;
   r0.w = cmp(0 < cb1[17].x);
   if (r0.w != 0) {
-    // r1.xyz = r0.xyz * cb1[0].yyy + float3(-0.386036009,-0.386036009,-0.386036009);
     r1.xyz = r0.xyz * cb1[0].yyy;
     r1.xyz = lutShaper(r1.xyz, true);
-    ungraded = r1.xyz;
-    // r1.xyz = float3(13.6054821,13.6054821,13.6054821) * r1.xyz;
-    // r1.xyz = exp2(r1.xyz);
-    // r1.xyz = float3(-0.0479959995,-0.0479959995,-0.0479959995) + r1.xyz;
-    // r1.xyz = float3(0.179999992,0.179999992,0.179999992) * r1.xyz;
+    preCG = r1.xyz;
     r2.x = dot(float3(0.390404999, 0.549941003, 0.00892631989), r1.xyz);
     r2.y = dot(float3(0.070841603, 0.963172019, 0.00135775004), r1.xyz);
     r2.z = dot(float3(0.0231081992, 0.128021002, 0.936245024), r1.xyz);
@@ -68,40 +50,16 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.x = dot(float3(2.85846996, -1.62879002, -0.0248910002), r1.xyz);
     r2.y = dot(float3(-0.210181996, 1.15820003, 0.000324280991), r1.xyz);
     r2.z = dot(float3(-0.0418119989, -0.118169002, 1.06867003), r1.xyz);
+    r2.xyz = lerp(preCG, r2.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
     r1.x = dot(float3(0.439700991, 0.382977992, 0.177334994), r2.xyz);
     r1.y = dot(float3(0.0897922963, 0.813422978, 0.0967615992), r2.xyz);
     r1.z = dot(float3(0.0175439995, 0.111543998, 0.870703995), r2.xyz);
+    preCG = r1.xyz;
     r1.xyz = acesccEncode(r1.xyz);
-
-    // r1.xyz = max(float3(0,0,0), r1.xyz);
-    // r1.xyz = min(float3(65504,65504,65504), r1.xyz);
-    // r2.xyz = cmp(r1.xyz < float3(3.05175708e-05,3.05175708e-05,3.05175708e-05));
-    // r3.xyz = r1.xyz * float3(0.5,0.5,0.5) + float3(1.525878e-05,1.525878e-05,1.525878e-05);
-    // r3.xyz = log2(r3.xyz);
-    // r3.xyz = float3(9.72000027,9.72000027,9.72000027) + r3.xyz;
-    // r3.xyz = float3(0.0570776239,0.0570776239,0.0570776239) * r3.xyz;
-    // r1.xyz = log2(r1.xyz);
-    // r1.xyz = float3(9.72000027,9.72000027,9.72000027) + r1.xyz;
-    // r1.xyz = float3(0.0570776239,0.0570776239,0.0570776239) * r1.xyz;
-    // r1.xyz = r2.xyz ? r3.xyz : r1.xyz;
-
     r1.xyz = float3(-0.413588405, -0.413588405, -0.413588405) + r1.xyz;
     r1.xyz = r1.xyz * cb1[7].zzz + float3(0.413588405, 0.413588405, 0.413588405);
-    r4.rgb = acescc::Decode(r1.rgb);
-    // r2.xyz = r1.xyz * float3(17.5200005,17.5200005,17.5200005) + float3(-9.72000027,-9.72000027,-9.72000027);
-    // r2.xyz = exp2(r2.xyz);
-    // r3.xyz = float3(-1.52587891e-05,-1.52587891e-05,-1.52587891e-05) + r2.xyz;
-    // r3.xyz = r3.xyz + r3.xyz;
-    // r4.xyzw = cmp(r1.xxyy < float4(-0.301369876,1.46799636,-0.301369876,1.46799636));
-    // r1.xy = r4.yw ? r2.xy : float2(65504,65504);
-    // r4.xy = r4.xz ? r3.xy : r1.xy;
-    // r1.xy = cmp(r1.zz < float2(-0.301369876,1.46799636));
-    // r0.w = r1.y ? r2.z : 65504;
-    // r4.z = r1.x ? r3.z : r0.w;
-    // r1.x = dot(float3(1.45143926,-0.236510754,-0.214928567), r4.xyz);
-    // r1.y = dot(float3(-0.0765537769,1.17622972,-0.0996759236), r4.xyz);
-    // r1.z = dot(float3(0.00831614807,-0.00603244966,0.997716308), r4.xyz);
-    r1.rgb = mul(ACES_to_ACEScg_MAT, r4.rgb);
+    r4.xyz = acescc::Decode(r1.xyz);
+    r1.xyz = mul(ACES_to_ACEScg_MAT, r4.xyz);
     r1.xyz = cb1[3].xyz * r1.xyz;
     r1.xyz = max(float3(0, 0, 0), r1.xyz);
     r1.xyz = log2(r1.xyz);
@@ -170,17 +128,6 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.xyz = r2.xyz * r0.www + r1.xyz;
     float3 preLGG = r1.xyz;
     r1.xyz = r1.xyz * cb1[10].xyz + cb1[8].xyz;
-    r2.xyz = cmp(float3(0,0,0) < r1.xyz);
-    r3.xyz = cmp(r1.xyz < float3(0,0,0));
-    r2.xyz = (int3)-r2.xyz + (int3)r3.xyz;
-    r2.xyz = (int3)r2.xyz;
-    // r1.xyz = log2(abs(r1.xyz));
-    // r1.xyz = cb1[9].xyz * r1.xyz;
-    // r1.xyz = exp2(r1.xyz);
-    // r3.xyz = r2.xyz * r1.xyz;
-    // r0.w = cmp(r3.y >= r3.z);
-    // r0.w = r0.w ? 1.000000 : 0;
-
     r3.xyz = sign(r1.xyz) * pow(abs(r1.xyz), cb1[9].xyz);
     r3.xyz = liftGammaGainScaling(r3.xyz, preLGG, cb1[8].xyz, cb1[9].xyz, cb1[10].xyz);
     r0.w = step(r3.z, r3.y);
@@ -266,31 +213,20 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.xyz = r1.xyz * r0.www;
     r1.xyz = max(float3(0, 0, 0), r1.xyz);
   } else {
-    // r0.xyz = r0.xyz * cb1[0].yyy + float3(-0.386036009,-0.386036009,-0.386036009);
-    // r0.xyz = float3(13.6054821,13.6054821,13.6054821) * r0.xyz;
-    // r0.xyz = exp2(r0.xyz);
-    // r0.xyz = float3(-0.0479959995,-0.0479959995,-0.0479959995) + r0.xyz;
-    // r1.xyz = float3(0.179999992,0.179999992,0.179999992) * r0.xyz;
     r0.xyz = r0.xyz * cb1[0].yyy;
-    r1.rgb = lutShaper(r0.rgb, true);
+    r1.xyz = lutShaper(r0.xyz, true);
   }
   r0.xyz = max(float3(0, 0, 0), r1.xyz);
-
-  // (Ritsu): I added this to match other lutbuilders
-  if (true) {
-    r0.rgb = renodx::color::bt709::from::AP1(r0.rgb);
-    r0.xyz = lerp(ungraded, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-    r0.rgb = renodx::color::ap1::from::BT709(r0.rgb);
-  }
-
-  if (injectedData.toneMapType == 0.f) {
+  float3 ap0_untonemapped;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.w = (uint)cb0[0].x;
     if (r0.w == 0) {
       // AP1_2_AP0_MAT
       r1.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
       r1.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
       r1.w = dot(float3(-0.00552588282, 0.00402521016, 1.00150073), r0.xyz);
-
+      r1.yzw = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+      ap0_untonemapped = r1.yzw;
       r1.x = min(r1.y, r1.z);
       r1.x = min(r1.x, r1.w);
       r2.x = max(r1.y, r1.z);
@@ -743,6 +679,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
         r3.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r1.xyz);
         r3.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r1.xyz);
         r3.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r1.xyz);
+        r3.yzw = lerp(preCG, r3.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+        ap0_untonemapped = r3.yzw;
         r1.x = min(r3.y, r3.z);
         r1.x = min(r1.x, r3.w);
         r1.y = max(r3.y, r3.z);
@@ -896,6 +834,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
       } else {
         r0.w = cmp((int)r0.w == 2);
         if (r0.w != 0) {
+          ap0_untonemapped.x = dot(float3(0.695452213, 0.140678704, 0.163869068), r1.xyz);
+          ap0_untonemapped.y = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r1.xyz);
+          ap0_untonemapped.z = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r1.xyz);
           // AP1_2_XYZ_MAT
           r1.x = dot(float3(0.662454188, 0.134004205, 0.156187683), r0.xyz);
           r1.y = dot(float3(0.272228718, 0.674081743, 0.0536895171), r0.xyz);
@@ -939,9 +880,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
       }
     }
   } else {
-    r2.rgb = r0.rgb;
+    r2.x = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
+    r2.y = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
+    r2.z = dot(float3(-0.00552588282, 0.00402521016, 1.00150073), r0.xyz);
+    ap0_untonemapped = r2.xyz;
   }
-  r2.xyz = applyUserTonemapACES(r2.xyz, 3);
+  r2.xyz = Ap1AcesTonemap(ap0_untonemapped, r2.xyz);
   r2.w = 1;
   u0[vThreadID] = r2;
   return;

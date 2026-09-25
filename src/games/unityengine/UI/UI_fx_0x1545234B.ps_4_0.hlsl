@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -23,11 +23,11 @@ void main(
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r0.xyzw = cb0[3].xyzw * r0.xyzw;
   o0.xyzw = v1.xyzw * r0.xyzw;
-  if(injectedData.rolloffUI == 1.f){
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+  if(CUSTOM_ROLLOFF_UI == 1.f){
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
     o0.xyz = rolloff(o0.xyz, 0.85f, true);
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(o0.xyz) : o0.xyz;
-  } else if(injectedData.rolloffUI == 2.f){
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(o0.xyz) : o0.xyz;
+  } else if(CUSTOM_ROLLOFF_UI == 2.f){
     o0.xyz = saturate(o0.xyz);
   }
   o0.w = saturate(o0.w);

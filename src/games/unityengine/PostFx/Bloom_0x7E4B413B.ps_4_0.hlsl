@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -22,10 +22,10 @@ void main(
   r1.xy = r0.zw * cb0[3].xy + cb0[3].zw;
   r2.xyzw = t0.Sample(s1_s, r1.xy).xyzw;
   r1.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r1.xyz = InvertToneMapScale(r1.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r1.xyz = rolloffSdr(r1.xyz);
   }
   r1.xyz = r1.xyz * r2.xxx;
@@ -36,10 +36,10 @@ void main(
   r2.xyzw = r2.xyzw * cb0[3].xyxy + cb0[3].zwzw;
   r3.xyzw = t0.Sample(s1_s, r2.xy).xyzw;
   r4.xyzw = t1.Sample(s0_s, r2.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r4.xyz = InvertToneMapScale(r4.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r4.xyz = rolloffSdr(r4.xyz);
   }
   r3.xyz = r4.xyz * r3.xxx;
@@ -47,10 +47,10 @@ void main(
   r4.xyz = r3.xyz + r1.xyz;
   r5.xyzw = t0.Sample(s1_s, r0.xy).xyzw;
   r6.xyzw = t1.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r6.xyz = InvertToneMapScale(r6.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r6.xyz = rolloffSdr(r6.xyz);
   }
   r5.xyz = r6.xyz * r5.xxx;
@@ -64,10 +64,10 @@ void main(
   r1.xyz = r3.xyz + -r1.xyz;
   r3.xyzw = t0.Sample(s1_s, r2.zw).xyzw;
   r2.xyzw = t1.Sample(s0_s, r2.zw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r2.xyz = InvertToneMapScale(r2.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r2.xyz = rolloffSdr(r2.xyz);
   }
   r2.xyz = r2.xyz * r3.xxx;
@@ -75,10 +75,10 @@ void main(
   r3.xyz = r2.xyz + r1.xyz;
   r4.xyzw = t0.Sample(s1_s, r0.zw).xyzw;
   r0.xyzw = t1.Sample(s0_s, r0.zw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r0.xyz = InvertToneMapScale(r0.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r0.xyz = rolloffSdr(r0.xyz);
   }
   r0.xyz = r0.xyz * r4.xxx;

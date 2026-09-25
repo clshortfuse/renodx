@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<uint> t5 : register(t5);
 Texture2D<float4> t4 : register(t4);
@@ -298,7 +298,7 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   r5.xy = max(int2(0,0), (int2)r4.xy);
   r5.zw = float2(0,0);
   r5.xyz = t2.Load(r5.xyz).xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r6.xyz = min(float3(1,1,1), r6.xyz);
   r8.xyz = min(float3(1,1,1), r8.xyz);
   r7.xyz = min(float3(1,1,1), r7.xyz);
@@ -315,7 +315,7 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   r20.xyz = min(float3(1,1,1), r20.xyz);
   r19.xyz = min(float3(1,1,1), r19.xyz);
   r5.xyz = min(float3(1,1,1), r5.xyz);
-  } else if(injectedData.toneMapType == 1.f){
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r6.xyz /= 50.f;
     r8.xyz /= 50.f;
     r7.xyz /= 50.f;
@@ -333,22 +333,22 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
     r19.xyz /= 50.f;
     r5.xyz /= 50.f;
   } else {
-    r6.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r8.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r7.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r10.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r9.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r12.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r11.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r14.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r13.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r16.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r15.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r18.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r17.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r20.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r19.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r5.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+    r6.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r8.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r7.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r10.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r9.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r12.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r11.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r14.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r13.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r16.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r15.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r18.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r17.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r20.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r19.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r5.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
   }
   r4.xy = (int2)r4.zw;
   r1.xy = r4.xy + r1.xy;
@@ -533,21 +533,21 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   r0.x = r2.x * r0.x;
   r1.xyw = max(r5.xyz, r1.xyw);
   r1.xyw = min(r1.xyw, r4.xyz);
-  if(injectedData.toneMapType == 1.f){
+  if(RENODX_TONE_MAP_TYPE == 1.f){
     r1.xyw *= 50.f;
-  } else if(injectedData.toneMapType >= 2.f){
-    r1.xyw *= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+  } else if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r1.xyw *= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
   }
   if (r1.z > 0) {
     r0.zw = cb0[2].xy * cb0[0].zw + r0.zw;
     r4.xy = -cb0[0].zw * float2(0.5,0.5) + r0.zw;
     r4.xyz = t2.SampleLevel(s0_s, r4.xy, 0).xyz;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r4.xyz = saturate(r4.xyz);
     }
     r0.zw = cb0[0].zw * float2(0.5,0.5) + r0.zw;
     r5.xyz = t2.SampleLevel(s0_s, r0.zw, 0).xyz;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r5.xyz = saturate(r5.xyz);
     }
     r6.xyz = r5.xyz + r4.xyz;
@@ -570,7 +570,7 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   r1.xyz = -r2.yzw + r1.xyw;
   r0.x = r0.x / r0.z;
   r3.xyz = r1.xyz * r0.xxx + r2.yzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r3.xyz = saturate(r3.xyz);
   }
   r0.x = 5000 * r0.y;
@@ -582,7 +582,7 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   u0[vThreadID] = r0.x;
   u1[vThreadID] = r3;
   r3.w = 0;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r3.xyz = PostToneMapScale(r3.xyz);
   }
   r3.xyz = renodx::color::srgb::EncodeSafe(r3.xyz);

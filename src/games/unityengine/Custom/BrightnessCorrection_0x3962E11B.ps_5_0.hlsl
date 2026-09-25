@@ -22,7 +22,7 @@ void main(
   r0.zw = float2(0,0);
   r0.xyz = t0.Load(r0.xyzw).xyz;
   r0.xyz = cb0[0].xxx * r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = log2(r0.xyz);
   r0.xyz = cb0[0].yyy * r0.xyz;
   r0.xyz = exp2(r0.xyz);

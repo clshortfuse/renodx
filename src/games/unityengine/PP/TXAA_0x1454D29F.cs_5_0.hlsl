@@ -175,7 +175,7 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   r0.w = dot(float3(0.212672904,0.715152204,0.0721750036), r3.xyz);
   r0.w = 1 + r0.w;
   r3.xyz = r3.xyz / r0.www;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r5.xyz = max(float3(0,0,0), r5.xyz);
   r7.xyz = max(float3(0,0,0), r7.xyz);
   r8.xyz = max(float3(0,0,0), r8.xyz);
@@ -255,7 +255,7 @@ void main(uint2 vThreadID: SV_DispatchThreadID) {
   r0.w = dot(float3(0.212672904,0.715152204,0.0721750036), r0.xyz);
   r0.w = 1 + -r0.w;
   r0.xyz = r0.xyz / r0.www;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(float3(0,0,0), r0.xyz);
   } else {
     r0.xyz = renodx::color::bt709::clamp::AP1(r0.xyz);

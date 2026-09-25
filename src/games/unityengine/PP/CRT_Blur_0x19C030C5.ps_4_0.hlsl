@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -19,18 +19,18 @@ void main(
   r0.yw = float2(0,0);
   r0.xy = v1.xy + r0.xy;
   r1.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r2.xyzw = cb0[3].xyxy * float4(1,-1,-1,1) + v1.xyxy;
   r3.xyzw = t0.Sample(s0_s, r2.xy).xyzw;
   r2.xyzw = t0.Sample(s0_s, r2.zw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r3.xyz = InvertToneMapScale(r3.xyz, injectedData.gammaSpace != 0.f);
-    r3.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r3.xyz) : r3.xyz;
-    r2.xyz = InvertToneMapScale(r2.xyz, injectedData.gammaSpace != 0.f);
-    r2.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r2.xyz) : r2.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r3.xyz = InvertToneMapScale(r3.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r3.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r3.xyz) : r3.xyz;
+    r2.xyz = InvertToneMapScale(r2.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r2.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r2.xyz) : r2.xyz;
   }
   r4.xyw = -cb0[3].xyy;
   r0.xy = v1.xy + r4.xy;
@@ -38,11 +38,11 @@ void main(
   r4.z = 0;
   r0.xy = v1.xy + r4.zw;
   r4.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r5.xyz = InvertToneMapScale(r5.xyz, injectedData.gammaSpace != 0.f);
-    r5.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r5.xyz) : r5.xyz;
-    r4.xyz = InvertToneMapScale(r4.xyz, injectedData.gammaSpace != 0.f);
-    r4.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r4.xyz) : r4.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r5.xyz = InvertToneMapScale(r5.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r5.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r5.xyz) : r5.xyz;
+    r4.xyz = InvertToneMapScale(r4.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r4.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r4.xyz) : r4.xyz;
   }
   r6.xyz = cb0[4].xxy * cb0[4].xyy;
   r4.xyz = r6.yyy * r4.xyz;
@@ -50,17 +50,17 @@ void main(
   r3.xyz = r3.xyz * r6.xxx + r4.xyz;
   r1.xyz = r1.xyz * r6.yyy + r3.xyz;
   r3.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r3.xyz = InvertToneMapScale(r3.xyz, injectedData.gammaSpace != 0.f);
-    r3.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r3.xyz) : r3.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r3.xyz = InvertToneMapScale(r3.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r3.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r3.xyz) : r3.xyz;
   }
   r1.xyz = r3.xyz * r6.zzz + r1.xyz;
   r0.z = cb0[3].x;
   r0.xy = v1.xy + r0.zw;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r0.xyz = InvertToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r0.xyz = InvertToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
   r0.xyz = r0.xyz * r6.yyy + r1.xyz;
   r0.xyz = r2.xyz * r6.xxx + r0.xyz;
@@ -68,16 +68,16 @@ void main(
   r1.y = cb0[3].y;
   r1.xy = v1.xy + r1.xy;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.xyz = r1.xyz * r6.yyy + r0.xyz;
   r1.xy = cb0[3].xy + v1.xy;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.xyz = r1.xyz * r6.xxx + r0.xyz;
   o0.xyz = r0.xyz / cb0[5].xxx;

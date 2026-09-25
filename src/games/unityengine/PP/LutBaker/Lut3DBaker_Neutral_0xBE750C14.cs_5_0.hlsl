@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 // https://github.com/Unity-Technologies/Graphics/blob/e42df452b62857a60944aed34f02efa1bda50018/com.unity.postprocessing/PostProcessing/Shaders/Builtins/Lut3DBaker.compute
 // KGenLUT3D_NeutralTonemap
@@ -22,7 +22,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     // (start) LogGrade
     // Contrast(r0.rgb, ACEScc_MIDGRAY, cb0[3].b)
     float3 preCG;
-    if (injectedData.colorGradeInternalLUTShaper == 0.f) {
+    float compression_scale;
+    if (CUSTOM_INTERNAL_LUT_SHAPER == 0.f) {
       preCG = arriDecode(r0.xyz);
       r0.xyz = r0.xyz + float3(-0.4135884,-0.4135884,-0.4135884);
       r0.xyz = r0.xyz * cb0[3].zzz + float3(0.4135884,0.4135884,0.4135884);
@@ -30,10 +31,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     } else {
       r0.xyz = lutShaper(r0.xyz, true);
       preCG = r0.xyz;
-      r0.xyz = renodx::color::arri::logc::c1000::Encode(r0.xyz, true);
+      GamutCompression(r0.xyz, compression_scale);
+      r0.xyz = renodx::color::arri::logc::c1000::Encode(r0.xyz, false);
       r0.xyz = r0.xyz + float3(-0.4135884,-0.4135884,-0.4135884);
       r0.xyz = r0.xyz * cb0[3].zzz + float3(0.4135884,0.4135884,0.4135884);
-      r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, true);
+      r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, false);
+      GamutDecompression(r0.xyz, compression_scale);
     }
     // (start) LinearGrade
     // WhiteBalance(r0.rgb, cb0[1].rgb)
@@ -57,10 +60,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.rgb = pow(abs(r0.rgb), cb0[8].xyz);
     r0.xyz = r1.xyz * r0.xyz;
     r0.xyz = liftGammaGainScaling(r0.xyz, preLGG, cb0[7].xyz, cb0[8].xyz, cb0[9].xyz);
-    bool isWCG = r0.x < 0.0 || r0.y < 0.0 || r0.z < 0.0;
-    if(injectedData.toneMapType != 0.f){
-      r0.xyz = isWCG ? renodx::color::bt2020::from::BT709(r0.xyz) : r0.xyz;
-    }
+    GamutCompression(r0.xyz, compression_scale);
     // Do NOT feed negative values to RgbToHsv or they'll wrap around
     r0.xyz = max(float3(0,0,0), r0.xyz);
     // RgbToHsv
@@ -122,11 +122,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.y = dot(r1.yzw, float3(0.2126729,0.7151522,0.0721750));
     r0.yzw = r1.xxx * r0.yzw + -r1.yyy;
     r0.xyz = r0.xxx * r0.yzw + r1.yyy;
-    if(injectedData.toneMapType != 0.f){
-      r0.xyz = isWCG ? renodx::color::bt709::from::BT2020(r0.xyz) : r0.xyz;
-    }
-    r0.xyz = lerp(preCG, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-    r0.xyz = applyUserTonemapNeutral(r0.xyz);
+    GamutDecompression(r0.xyz, compression_scale);
+    r0.xyz = lerp(preCG, r0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
+    r0.xyz = NeutralTonemap(r0.xyz);
     r0.w = 1;
     u0[vThreadID] = r0;
   }

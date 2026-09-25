@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2DArray<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -35,13 +35,13 @@ void main(
   r1.x = cb0[0].y * -r1.x + 1;
   r1.yz = v1.xy * cb0[3].xy + cb0[3].zw;
   r3.xy = cb0[2].xy * r1.yz;
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r2.xy = r1.yz * cb0[1].xy + cb0[1].zw;
   r1.y = t1.Sample(s0_s, r2.xy).w;
   r1.y = -0.5 + r1.y;
   r1.y = r1.y + r1.y;
   r2.xyzw = r1.yyyy * r0.xyzw;
-  r2.xyzw = cb0[0].xxxx * r2.xyzw * injectedData.fxFilmGrain;
+  r2.xyzw = cb0[0].xxxx * r2.xyzw * CUSTOM_FILM_GRAIN;
   r0.xyzw = r2.xyzw * r1.xxxx + r0.xyzw;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
@@ -56,7 +56,7 @@ void main(
   r1.x = 1 + -r1.x;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

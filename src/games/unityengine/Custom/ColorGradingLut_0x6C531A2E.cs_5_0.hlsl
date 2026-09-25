@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 RWTexture3D<float4> u0 : register(u0);
 cbuffer cb0 : register(b0){
@@ -20,9 +20,12 @@ cbuffer cb0 : register(b0){
   r1.x = dot(float3(2.85846996,-1.62879002,-0.0248910002), r0.xyz);
   r1.y = dot(float3(-0.210181996,1.15820003,0.000324280991), r0.xyz);
   r1.z = dot(float3(-0.0418119989,-0.118169002,1.06867003), r0.xyz);
+  float compression_scale;
+  GamutCompression(r1.xyz, compression_scale);
   r0.xyz = renodx::color::arri::logc::c1000::Encode(r1.xyz, false);
   r0.xyz = r0.xyz * cb0[12].zzz + cb0[12].www;
   r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, false);
+  GamutDecompression(r0.xyz, compression_scale);
   r1.x = dot(cb0[2].xyz, r0.xyz);
   r1.y = dot(cb0[3].xyz, r0.xyz);
   r1.z = dot(cb0[4].xyz, r0.xyz);
@@ -47,6 +50,7 @@ cbuffer cb0 : register(b0){
   r0.xyz = r0.xyz * cb0[11].xyz + cb0[9].xyz;
   r2.xyw = sign(r0.xyz) * pow(abs(r0.xyz), cb0[10].xyz);
   r2.xyw = liftGammaGainScaling(r2.xyw, preLGG, cb0[9].xyz, cb0[10].xyz, cb0[11].xyz);
+  GamutCompression(r2.xyw, compression_scale);
   r3.xy = r2.yx;
   r0.xy = r2.xy + -r3.xy;
   r1.x = step(r2.y, r3.y);
@@ -80,6 +84,7 @@ cbuffer cb0 : register(b0){
   r1.x = dot(r1.xyz, float3(0.212672904,0.715152204,0.0721750036));
   r0.xyz = r0.xxx * r0.yzw + -r1.xxx;
   r0.xyz = r0.xyz * cb0[12].yyy + r1.xxx;
+  GamutDecompression(r0.xyz, compression_scale);
   r0.w = 0;
   u0[vThreadID] = r0;
   return;

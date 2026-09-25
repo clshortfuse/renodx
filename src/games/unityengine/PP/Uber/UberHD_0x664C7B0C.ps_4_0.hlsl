@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture3D<float4> t4 : register(t4);
@@ -59,11 +59,11 @@ void main(
   r1.xy = cb0[26].xx * r1.xy;
   r1.xyzw = t2.Sample(s2_s, r1.xy).xyzw;
   r1.xyzw = r2.xyzw + r1.xyzw;
-  r1.xyzw = cb0[45].yyyy * r1.xyzw * injectedData.fxBloom;
+  r1.xyzw = cb0[45].yyyy * r1.xyzw * CUSTOM_BLOOM;
   r2.xy = v1.xy * cb0[44].xy + cb0[44].zw;
   r2.xyzw = t3.Sample(s3_s, r2.xy).xyzw;
   r3.xyzw = float4(0.0625,0.0625,0.0625,0.0625) * r1.xyzw;
-  r2.xyz = cb0[45].zzz * r2.xyz * injectedData.fxLens;
+  r2.xyz = cb0[45].zzz * r2.xyz * CUSTOM_LENS;
   r2.w = 0;
   r1.xyzw = float4(0.0625,0.0625,0.0625,1) * r1.xyzw;
   r4.xyz = cb0[46].xyz * r1.xyz;
@@ -72,7 +72,7 @@ void main(
   r0.xyzw = r2.xyzw * r3.xyzw + r0.xyzw;
   if (cb0[51].y < 0.5) {
     r1.xy = -cb0[49].xy + v1.xy;
-    r1.yz = cb0[50].xx * abs(r1.yx) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[50].xx * abs(r1.yx) * min(1.f, CUSTOM_VIGNETTE);
     r1.w = cb0[22].x / cb0[22].y;
     r1.w = -1 + r1.w;
     r1.w = cb0[50].w * r1.w + 1;
@@ -85,7 +85,7 @@ void main(
     r1.x = 1 + -r1.x;
     r1.x = max(0, r1.x);
     r1.x = log2(r1.x);
-    r1.x = cb0[50].y * r1.x * max(1.f, injectedData.fxVignette);
+    r1.x = cb0[50].y * r1.x * max(1.f, CUSTOM_VIGNETTE);
     r1.x = exp2(r1.x);
     r1.yzw = float3(1,1,1) + -cb0[48].xyz;
     r1.xyz = r1.xxx * r1.yzw + cb0[48].xyz;
@@ -102,7 +102,7 @@ void main(
   }
   r0.xyzw = cb0[47].zzzz * r0.xyzw;
   r1.xyz = lutShaper(r0.xyz);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r1.xyz = cb0[47].yyy * r1.xyz;
   r1.w = 0.5 * cb0[47].x;
   r1.xyz = r1.xyz * cb0[47].xxx + r1.www;
@@ -233,6 +233,9 @@ void main(
   r3.xyz = r2.xyz + -r1.xyz;
   r1.xyz = r1.www * r3.xyz + r1.xyz;
   r1.xyz = r2.www ? r2.xyz : r1.xyz;
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
+  }
   r0.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
   r1.xyzw = float4(0.0973,0.103,0.1099,0.1031) * v0.xyyx;
   r1.xyzw = frac(r1.xyzw);
@@ -242,14 +245,13 @@ void main(
   r2.xyzw = r1.wwyx + r1.yxxz;
   r1.xyzw = r2.xyzw * r1.xyzw;
   r1.xyzw = frac(r1.xyzw);
-  r0.xyzw = r1.xyzw * (1.0 / 255.0) * injectedData.fxNoise + r0.xyzw;
+  r0.xyzw = r1.xyzw * (1.0 / 255.0) * CUSTOM_NOISE + r0.xyzw;
   r1.yzw = renodx::color::srgb::DecodeSafe(r0.xyz);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = asint(cb0[41].w) == 1 ? PostToneMapScale(r1.yzw) : PostToneMapScale(r1.yzw, true);
   } else {
     r0.xyz = asint(cb0[41].w) == 1 ? r1.yzw : r0.xyz;
   }
-  o0.xyz = r0.xyz;
-  o0.w = r0.w;
+  o0.xyzw = r0.xyzw;
   return;
 }

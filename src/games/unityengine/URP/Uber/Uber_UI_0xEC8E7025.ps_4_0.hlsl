@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -20,13 +20,13 @@ void main(
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[29].x).xyzw;
   if (cb0[148].z > 0) {
     r1.xy = -cb0[148].xy + v1.xy;
-    r1.yz = cb0[148].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[148].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[147].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[148].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[148].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[147].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[147].xyz;
@@ -41,7 +41,7 @@ void main(
     r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
   r0.xyz = lutShaper(r0.xyz, false, 1);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyw = cb0[138].zzz * r0.xyz;
   r0.w = floor(r0.w);
   r1.xy = float2(0.5,0.5) * cb0[138].xy;
@@ -58,16 +58,13 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t1, r0.xyz, cb0[138].z + 1u);
   }
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
-  } else if(injectedData.tonemapCheck > 1.f || injectedData.count2Old < injectedData.count2New){
-  float newPeak = renodx::lut::Sample(t1, s0_s, lutShaper((injectedData.toneMapPeakNits / injectedData.toneMapGameNits).xxx, false, 1), cb0[138].z + 1u).x * injectedData.toneMapGameNits;
-  float ratio = injectedData.toneMapPeakNits / newPeak;
-  if(ratio < 0.992f){
-    r0.xyz = rolloff(r0.xyz, ratio);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld <= injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD <= CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

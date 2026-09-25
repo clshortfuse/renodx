@@ -40,7 +40,7 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(2.20000005,2.20000005,2.20000005) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = min(float3(1,1,1), r0.xyz);
   }
   r1.x = 1 + -cb0[179].y;

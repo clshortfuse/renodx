@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture3D<float4> t6 : register(t6);
@@ -55,10 +55,10 @@ void main(
   r3.xyzw = r4.xyzw + r3.xyzw;
   r1.xyzw = t3.Sample(s3_s, r1.zw).xyzw;
   r1.xyzw = r3.xyzw + r1.xyzw;
-  r1.xyzw = cb0[32].yyyy * r1.xyzw * injectedData.fxBloom;
+  r1.xyzw = cb0[32].yyyy * r1.xyzw * CUSTOM_BLOOM;
   r3.xyzw = t4.Sample(s4_s, r0.xy).xyzw;
   r4.xyz = float3(0.25,0.25,0.25) * r1.xyz;
-  r3.xyz = cb0[32].zzz * r3.xyz * injectedData.fxLens;
+  r3.xyz = cb0[32].zzz * r3.xyz * CUSTOM_LENS;
   r1.xyzw = float4(0.25,0.25,0.25,1) * r1.xyzw;
   r5.xyz = cb0[33].xyz * r1.xyz;
   r5.w = 0.25 * r1.w;
@@ -68,7 +68,7 @@ void main(
   r1.xyzw = r2.xyzw + r1.xyzw;
   if (cb0[41].y < 0.5) {
     r0.zw = -cb0[39].xy + r0.xy;
-    r2.yz = cb0[40].xx * abs(r0.wz) * min(1.f, injectedData.fxVignette);
+    r2.yz = cb0[40].xx * abs(r0.wz) * min(1.f, CUSTOM_VIGNETTE);
     r0.z = cb0[22].x / cb0[22].y;
     r0.z = -1 + r0.z;
     r0.z = cb0[40].w * r0.z + 1;
@@ -81,7 +81,7 @@ void main(
     r0.z = 1 + -r0.z;
     r0.z = max(0, r0.z);
     r0.z = log2(r0.z);
-    r0.z = cb0[40].y * r0.z * max(1.f, injectedData.fxVignette);
+    r0.z = cb0[40].y * r0.z * max(1.f, CUSTOM_VIGNETTE);
     r0.z = exp2(r0.z);
     r2.xyz = float3(1,1,1) + -cb0[38].xyz;
     r2.xyz = r0.zzz * r2.xyz + cb0[38].xyz;
@@ -100,13 +100,16 @@ void main(
   }
   r0.xyzw = cb0[37].wwww * r2.xyzw;
   r0.xyz = lutShaper(r0.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyz = cb0[37].zzz * r0.xyz;
   r1.x = 0.5 * cb0[37].y;
   r0.xyz = r0.xyz * cb0[37].yyy + r1.xxx;
   r1.xyzw = t6.Sample(s6_s, r0.xyz).xyzw;
   } else {
     r1.xyz = renodx::lut::SampleTetrahedral(t6, r0.xyz, 1 / cb0[37].y);
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
   }
   r0.xy = v1.xy * cb0[28].xy + cb0[28].zw;
   r2.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
@@ -118,7 +121,7 @@ void main(
   r0.x = 1 + -r0.x;
   r0.x = r0.y * r0.x;
   r0.xyz = applyDither(r1.xyz, r0.x * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

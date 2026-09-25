@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 static const float4 _73[5] = { float4(1.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 1.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 1.0f), 0.0f.xxxx };
 
@@ -171,7 +171,7 @@ void comp_main()
     float _404;
     float _406;
     float _408;
-    if (injectedData.toneMapType == 0.f) {
+    if (RENODX_TONE_MAP_TYPE == 0.f) {
     _404 = clamp((max(_385, 0.0f) / cb0_m10.x) * _395, 0.0f, 65504.0f);
     _406 = clamp((max(_384.z, 0.0f) / cb0_m10.x) * _395, 0.0f, 65504.0f);
     _408 = clamp((max(_384.y, 0.0f) / cb0_m10.x) * _395, 0.0f, 65504.0f) * 0.5f;

@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -225,7 +225,7 @@ void main(
   r0.y = 1 + -r0.y;
   r0.y = r0.z * r0.y;
   r0.yzw = applyDither(r1.xyz, r0.y * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.yzw = PostToneMapScale(r0.yzw);
   }
   o0.xyzw = r0.yzwx;

@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -19,30 +19,30 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  if(injectedData.isClamped != 0.f){
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
     r0.xyz = rolloffSdr(r0.xyz);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
   r1.xyzw = t0.Sample(s0_s, w1.xy).xyzw;
-  if(injectedData.isClamped != 0.f){
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r1.xyz = rolloffSdr(r1.xyz);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.xyzw = r1.xyzw + r0.xyzw;
   r1.xyzw = t0.Sample(s0_s, v2.xy).xyzw;
-  if(injectedData.isClamped != 0.f){
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r1.xyz = rolloffSdr(r1.xyz);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.xyzw = r1.xyzw + r0.xyzw;
   r1.xyzw = t0.Sample(s0_s, w2.xy).xyzw;
-  if(injectedData.isClamped != 0.f){
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r1.xyz = rolloffSdr(r1.xyz);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.xyzw = r1.xyzw + r0.xyzw;
   r0.xyzw = r0.xyzw * float4(0.25,0.25,0.25,0.25) + -cb0[1].zzzz;

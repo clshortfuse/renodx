@@ -116,7 +116,7 @@ void main(
   r2.xyzw = t1.SampleBias(s0_s, r0.xw, cb0[5].x).xyzw;
   r1.xyw = r2.xyz * cb1[4].xyz + -r2.xyz;
   r1.xyz = r1.zzz * r1.xyw + r2.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r0.x = r0.y * -2 + 3;

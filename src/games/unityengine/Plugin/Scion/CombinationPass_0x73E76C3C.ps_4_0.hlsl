@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -26,20 +26,20 @@ void main(
   r0.yzw = cb0[18].xyz * r1.xyz;
   r1.xyz = -cb0[18].xyz * r1.xyz + r1.xyz;
   r0.xyz = r0.xxx * r1.xyz + r0.yzw;
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r0.w = v1.y * 541.169983 + v1.x;
   r0.w = cb0[19].x + r0.w;
   r0.w = sin(r0.w);
   r0.w = r0.w * 273351.5 + cb0[19].x;
   r0.w = frac(r0.w);
   r0.w = r0.w * 2 + -1;
-  r0.w = cb0[17].x * r0.w * injectedData.fxFilmGrain;
+  r0.w = cb0[17].x * r0.w * CUSTOM_FILM_GRAIN;
   r0.xyz = r0.www * r0.xyz + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
   }
   o0.xyz = cb0[14].xxx * r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     o0.xyz = saturate(r0.xyz);
   }
   o0.w = 1;

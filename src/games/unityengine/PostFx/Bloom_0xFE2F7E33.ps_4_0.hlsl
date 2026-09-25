@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -22,12 +22,12 @@ void main(
   r0.xy = r0.xy * cb0[3].xy + cb0[3].zw;
   r1.xyzw = t0.Sample(s1_s, r0.xy).xyzw;
   r0.xyzw = t1.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r0.xyz = InvertToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r0.xyz = rolloffSdr(r0.xyz);
   }
   r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -69,7 +69,7 @@ void main(
   r0.yz = v1.xy * float2(2,2) + float2(-1,-1);
   r0.w = dot(r0.yz, r0.yz);
   r0.yz = r0.yz * r0.ww;
-  r0.yz = cb0[35].ww * r0.yz * injectedData.fxCA;
+  r0.yz = cb0[35].ww * r0.yz * CUSTOM_CHROMATIC_ABERRATION;
   r2.xy = cb0[31].zw * -r0.yz;
   r2.xy = float2(0.5,0.5) * r2.xy;
   r0.w = dot(r2.xy, r2.xy);
@@ -169,11 +169,11 @@ void main(
   r0.xy = cb0[26].xx * r0.xy;
   r0.xyzw = t3.Sample(s3_s, r0.xy).xyzw;
   r0.xyzw = r3.xyzw + r0.xyzw;
-  r0.xyzw = cb0[34].yyyy * r0.xyzw * injectedData.fxBloom;
+  r0.xyzw = cb0[34].yyyy * r0.xyzw * CUSTOM_BLOOM;
   r1.xy = r1.zw * cb0[33].xy + cb0[33].zw;
   r1.xyzw = t4.Sample(s4_s, r1.xy).xyzw;
   r3.xyz = float3(0.0625,0.0625,0.0625) * r0.xyz;
-  r1.xyz = cb0[34].zzz * r1.xyz * injectedData.fxLens;
+  r1.xyz = cb0[34].zzz * r1.xyz * CUSTOM_LENS;
   r0.xyzw = float4(0.0625,0.0625,0.0625,1) * r0.xyzw;
   r4.xyz = cb0[35].xyz * r0.xyz;
   r4.w = 0.0625 * r0.w;
@@ -183,13 +183,16 @@ void main(
   r0.xyzw = r1.xyzw + r0.xyzw;
   r0.xyzw = cb0[36].zzzz * r0.xyzw;
   r0.xyz = lutShaper(r0.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyz = cb0[36].yyy * r0.xyz;
   r1.x = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
   r1.xyzw = t6.Sample(s6_s, r0.xyz).xyzw;
   } else {
     r1.xyz = renodx::lut::SampleTetrahedral(t6, r0.xyz, 1 / cb0[36].x);
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
   }
   r0.xyz = r1.xyz;
   r1.xy = v1.xy * cb0[30].xy + cb0[30].zw;
@@ -202,7 +205,7 @@ void main(
   r1.x = 1 + -r1.x;
   r1.x = r1.y * r1.x;
   r0.xyz = applyDither(r0.xyz, r1.x * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

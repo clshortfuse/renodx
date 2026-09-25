@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture2D<float4> t4 : register(t4);
@@ -33,7 +33,7 @@ void main(
   r0.xy = v1.xy * float2(2,2) + float2(-1,-1);
   r0.z = dot(r0.xy, r0.xy);
   r0.xy = r0.xy * r0.zz;
-  r0.xy = cb0[4].xx * r0.xy * injectedData.fxCA;
+  r0.xy = cb0[4].xx * r0.xy * CUSTOM_CHROMATIC_ABERRATION;
   r0.zw = cb0[2].zw * -r0.xy;
   r0.zw = float2(0.5,0.5) * r0.zw;
   r0.z = dot(r0.zw, r0.zw);
@@ -103,10 +103,10 @@ void main(
   r1.xy = r1.xy * cb0[8].xx + w2.xy;
   r1.xyzw = t3.Sample(s3_s, r1.xy).xyzw;
   r1.xyz = r2.xyz + r1.xyz;
-  r1.xyz = cb0[8].yyy * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[8].yyy * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * float3(0.0625,0.0625,0.0625) + r0.xyz;
   r1.xy = -cb0[14].xy + v1.xy;
-  r1.xy = cb0[15].xx * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+  r1.xy = cb0[15].xx * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
   r1.xy = log2(r1.xy);
   r1.xy = cb0[15].zz * r1.xy;
   r1.xy = exp2(r1.xy);
@@ -114,22 +114,22 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = max(0, r0.w);
   r0.w = log2(r0.w);
-  r0.w = cb0[15].y * r0.w * max(1.f, injectedData.fxVignette);
+  r0.w = cb0[15].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
   r0.w = exp2(r0.w);
   r1.xyz = float3(1,1,1) + -cb0[13].xyz;
   r1.xyz = r0.www * r1.xyz + cb0[13].xyz;
   r0.xyz = r1.xyz * r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = v1.xy * cb0[12].xy + cb0[12].zw;
   r1.xyzw = t4.Sample(s5_s, r1.xy).xyzw;
   r0.w = renodx::color::y::from::BT709(saturate(r0.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[11].x * -r0.w + 1;
   r1.xyz = r1.xyz * r0.xyz;
-  r1.xyz = cb0[11].yyy * r1.xyz * injectedData.fxFilmGrain;
+  r1.xyz = cb0[11].yyy * r1.xyz * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.xyz * r0.www + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, w1);
@@ -139,10 +139,10 @@ void main(
   r1.xyz = r1.xyz + -r2.xyz;
   r0.xyz = cb0[10].www * r1.xyz + r2.xyz;
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

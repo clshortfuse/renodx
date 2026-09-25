@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 cbuffer cb0 : register(b0){
@@ -30,13 +30,13 @@ void main(
   r3.xyz = t0.Load(r3.xyz).xyz;
   r1.zw = float2(0,0);
   r1.xyz = t0.Load(r1.xyz).xyz;
-  if(injectedData.toneMapType >= 2.f){
-    r0.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r4.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r2.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r3.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r1.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r0.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r4.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r2.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r3.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r1.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r0.xyz /= 50.f;
     r4.xyz /= 50.f;
     r2.xyz /= 50.f;
@@ -74,14 +74,14 @@ void main(
   r0.w = -r1.x * r0.w + 2;
   r0.w = r1.x * r0.w;
   r0.xyz = r0.xyz * r0.www;
-  if(injectedData.toneMapType >= 2.f){
-    r0.xyz *= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r0.xyz *= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r0.xyz *= 50.f;
   }
-  if (injectedData.countOld == injectedData.countNew) {
-    r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-  } else if(injectedData.gammaSpace != 0.f) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+  } else if(CUSTOM_GAMMA_SPACE != 0.f) {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   }
   o0.xyz = r0.xyz;

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -29,11 +29,11 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xzyw;
   o0.w = r0.w;
-  float3 preCG = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xzy) : r0.xzy;
+  float3 preCG = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xzy) : r0.xzy;
   float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(preCG);
-  float3 lutInput = injectedData.toneMapType <= 1.f ? preCG : sdrColor;
+  float3 lutInput = RENODX_TONE_MAP_TYPE <= 1.f ? preCG : sdrColor;
   r0.xzy = lutInput;
-  r0.xzy = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xzy) : r0.xzy;
+  r0.xzy = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xzy) : r0.xzy;
   r1.x = r0.y;
   r1.yw = float2(0.625,0.5);
   r2.xyzw = t4.Sample(s4_s, r1.xy).xyzw;
@@ -55,25 +55,25 @@ void main(
   r1.z = 1 / r0.w;
   r1.xyzw = t3.Sample(s3_s, r1.zw).xyzw;
   r0.xyz = r1.xxx * r2.xyz + r0.xyz;
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  if(RENODX_TONE_MAP_TYPE != 0.f){
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
     r0.xyz = RestoreSaturationLoss(lutInput, r0.xyz);
     r0.xyz = renodx::tonemap::UpgradeToneMap(preCG, lutInput, r0.xyz, 1.f);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
   r0.w = dot(r0.xyz, float3(0.219999999,0.707000017,0.0710000023));
   r0.xyz = r0.xyz + -r0.www;
   o0.xyz = cb0[4].xxx * r0.xyz + r0.www;
-  if(injectedData.gammaSpace != 0.f){
+  if(CUSTOM_GAMMA_SPACE != 0.f){
     o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
   }
-  o0.xyz = lerp(preCG, o0.xyz, injectedData.colorGradeUserLUTStrength);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    o0.xyz = applyUserNoTonemap(o0.xyz);
+  o0.xyz = lerp(preCG, o0.xyz, CUSTOM_USER_LUT_STRENGTH);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    o0.xyz = GradeAndDisplayMap(o0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
-    o0.xyz = PostToneMapScale(o0.xyz, injectedData.gammaSpace != 0.f);
-  } else if(injectedData.gammaSpace != 0.f){
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    o0.xyz = PostToneMapScale(o0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+  } else if(CUSTOM_GAMMA_SPACE != 0.f){
     o0.xyz = renodx::color::srgb::EncodeSafe(o0.xyz);
   }
   return;

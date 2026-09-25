@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture3D<float4> t5 : register(t5);
@@ -68,10 +68,10 @@ void main(
   r0.zw = cb0[26].xx * r0.zw;
   r1.xyzw = t2.Sample(s2_s, r0.zw).xyzw;
   r1.xyzw = r3.xyzw + r1.xyzw;
-  r1.xyzw = cb0[32].yyyy * r1.xyzw * injectedData.fxBloom;
+  r1.xyzw = cb0[32].yyyy * r1.xyzw * CUSTOM_BLOOM;
   r3.xyzw = t3.Sample(s3_s, r0.xy).xyzw;
   r4.xyz = float3(0.0625,0.0625,0.0625) * r1.xyz;
-  r3.xyz = cb0[32].zzz * r3.xyz * injectedData.fxLens;
+  r3.xyz = cb0[32].zzz * r3.xyz * CUSTOM_LENS;
   r1.xyzw = float4(0.0625,0.0625,0.0625,1) * r1.xyzw;
   r5.xyz = cb0[33].xyz * r1.xyz;
   r5.w = 0.0625 * r1.w;
@@ -81,7 +81,7 @@ void main(
   r1.xyzw = r2.xyzw + r1.xyzw;
   if (cb0[41].y < 0.5) {
     r0.zw = -cb0[39].xy + r0.xy;
-    r2.yz = cb0[40].xx * abs(r0.wz) * min(1.f, injectedData.fxVignette);
+    r2.yz = cb0[40].xx * abs(r0.wz) * min(1.f, CUSTOM_VIGNETTE);
     r0.z = cb0[22].x / cb0[22].y;
     r0.z = -1 + r0.z;
     r0.z = cb0[40].w * r0.z + 1;
@@ -94,7 +94,7 @@ void main(
     r0.z = 1 + -r0.z;
     r0.z = max(0, r0.z);
     r0.z = log2(r0.z);
-    r0.z = cb0[40].y * r0.z * max(1.f, injectedData.fxVignette);
+    r0.z = cb0[40].y * r0.z * max(1.f, CUSTOM_VIGNETTE);
     r0.z = exp2(r0.z);
     r2.xyz = float3(1,1,1) + -cb0[38].xyz;
     r2.xyz = r0.zzz * r2.xyz + cb0[38].xyz;
@@ -113,7 +113,7 @@ void main(
   }
   r0.xyzw = cb0[37].wwww * r2.xyzw;
   r0.xyz = lutShaper(r0.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyz = cb0[37].zzz * r0.xyz;
   r1.x = 0.5 * cb0[37].y;
   r0.xyz = r0.xyz * cb0[37].yyy + r1.xxx;
@@ -121,12 +121,15 @@ void main(
   } else {
     r1.yzw = renodx::lut::SampleTetrahedral(t5, r0.xyz, 1 / cb0[37].y);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.yzw = GradeAndDisplayMap(r1.yzw);
+  }
   if (cb0[43].x > 0.5) {
     r1.x = renodx::color::y::from::BT709(saturate(r1.yzw));
   } else {
     r1.x = r0.w;
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r1.yzw = PostToneMapScale(r1.yzw);
   }
   o0.xyzw = r1.yzwx;

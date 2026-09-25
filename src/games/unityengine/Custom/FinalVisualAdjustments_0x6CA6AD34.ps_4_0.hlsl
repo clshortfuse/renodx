@@ -18,7 +18,7 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   o0.w = r0.w;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = log2(r0.xyz);
   r0.xyz = cb0[28].xxx * r0.xyz;
   r0.xyz = exp2(r0.xyz);

@@ -91,7 +91,7 @@ void main(
   r0.x = cb0[17].x * r0.y;
   r4.xyzw = cb0[19].xyzw + -cb0[18].xyzw;
   r4.xyzw = r0.xxxx * r4.xyzw + cb0[18].xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r4.xyzw = max(float4(0,0,0,0), r4.xyzw);
     r4.xyzw = min(float4(2,2,2,2), r4.xyzw);
   }
@@ -106,7 +106,7 @@ void main(
   r0.xyz = r1.xyz * r0.xyz + cb0[21].xyz;
   r2.xyz = r1.xyz + -r0.xyz;
   r1.xyz = r0.www * r2.xyz + r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyzw = max(float4(0,0,0,0), r1.xyzw);
   }
   o0.xyzw = r1.xyzw;

@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -110,10 +110,10 @@ void main(
   r1.z = 1 + -r1.z;
   r1.z = cb0[12].w * r1.z;
   r0.xyzw = r1.zzzz * r2.xyzw + r0.xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r2.xyz = float3(-0.5,-0.5,-0.5) + r0.xyz;
   r2.xyz = -r2.xyz * float3(2,2,2) + float3(1,1,1);
   r3.xyzw = float4(10,5,5,10) * cb1[0].xxxx;
@@ -129,7 +129,7 @@ void main(
   r1.w = sqrt(r1.w);
   r1.w = dot(cb0[3].ww, r1.ww);
   r1.z = r1.z + r1.w;
-  r1.z = cb0[13].z * r1.z * injectedData.fxFilmGrain;
+  r1.z = cb0[13].z * r1.z * CUSTOM_FILM_GRAIN;
   r3.xyz = r1.zzz * r3.xyz + float3(0.5,0.5,0.5);
   r4.xyz = float3(1,1,1) + -r3.xyz;
   r2.xyz = -r2.xyz * r4.xyz + float3(1,1,1);
@@ -141,7 +141,7 @@ void main(
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   r1.z = cb1[6].x / cb1[6].y;

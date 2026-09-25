@@ -41,7 +41,7 @@ void main(
   r0.x = dot(cb0[4].yy, r0.xx);
   r0.x = -cb0[4].y + r0.x;
   o0.xyz = r1.xyz + r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     o0.xyz = saturate(o0.xyz);
   }
   o0.w = saturate(r1.w);

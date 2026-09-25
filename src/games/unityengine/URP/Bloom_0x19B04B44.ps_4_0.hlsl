@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -17,7 +17,7 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r0.xyz = rolloffSdr(r0.xyz);
   }
   r0.xyz = min(cb0[119].yyy, r0.xyz);

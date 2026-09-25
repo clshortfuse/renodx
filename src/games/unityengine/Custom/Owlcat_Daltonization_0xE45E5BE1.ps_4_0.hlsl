@@ -42,7 +42,7 @@ void main(
   r2.x = 0;
   r0.xyz = r2.xyz + r1.xyz;
   r2.w = saturate(r0.w);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r2.xyz = r0.xyz;

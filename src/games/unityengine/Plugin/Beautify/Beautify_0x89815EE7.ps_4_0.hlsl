@@ -19,7 +19,7 @@ void main(
 
   r0.xy = v1.xy * float2(2,2) + float2(-1,-1);
   r0.z = dot(r0.xy, r0.xy);
-  r0.zw = cb0[134].xy * r0.zz * injectedData.fxCA;
+  r0.zw = cb0[134].xy * r0.zz * CUSTOM_CHROMATIC_ABERRATION;
   r0.xy = r0.xy * r0.zz;
   r0.z = (int)r0.w;
   r0.z = (int)r0.z + 1;

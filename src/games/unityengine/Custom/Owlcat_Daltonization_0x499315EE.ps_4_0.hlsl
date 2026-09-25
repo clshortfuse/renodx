@@ -43,7 +43,7 @@ void main(
   r3.yz = r3.xx * float2(0.699999988,0.699999988) + r3.yz;
   r3.x = 0.5;
   r0.xyz = r3.xyz + r1.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = saturate(r0.xyz);
   }
   r1.xyz = r0.xyz;

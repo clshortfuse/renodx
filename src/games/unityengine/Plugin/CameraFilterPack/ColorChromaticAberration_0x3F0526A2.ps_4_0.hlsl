@@ -16,7 +16,7 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.y = cb0[2].y * injectedData.fxCA;
+  r0.y = cb0[2].y * CUSTOM_CHROMATIC_ABERRATION;
   r0.x = 0;
   r0.zw = v0.xy * cb0[4].xy + cb0[4].zw;
   r1.xyzw = r0.zwzw + r0.yxxy;

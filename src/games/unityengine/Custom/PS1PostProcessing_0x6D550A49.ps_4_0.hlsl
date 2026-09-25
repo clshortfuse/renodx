@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -73,7 +73,7 @@ void main(
   r0.z = r0.y * r0.z + 0.0125228781;
   r1.x = r0.y * r0.z + r1.y;
   r0.xyz = r1.xzw * float3(255,255,255) + r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(float3(255,255,255), r0.xyz);
   }
@@ -81,11 +81,11 @@ void main(
   r0.xyz = cb0[3].xxx * r0.xyz;
   r0.xyz = floor(r0.xyz);
   r0.xyz = r0.xyz / cb0[3].xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r0.xyz = fastSrgbDecodeSafe(r0.xyz);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

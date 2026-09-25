@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);

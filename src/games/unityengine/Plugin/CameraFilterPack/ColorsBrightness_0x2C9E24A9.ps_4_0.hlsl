@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -22,9 +22,9 @@ void main(
   r0.xyz = r1.xyz + r0.xxx;
   r1.xyz = cb0[2].xxx * r1.xyz;
   o0.xyz = cb0[2].x < 1 ? r1.xyz : r0.xyz;
-  if (injectedData.countOld == injectedData.countNew) {
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
-    o0.xyz = PostToneMapScale(o0.xyz, injectedData.gammaSpace != 0.f);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+    o0.xyz = PostToneMapScale(o0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   o0.w = 1;
   return;

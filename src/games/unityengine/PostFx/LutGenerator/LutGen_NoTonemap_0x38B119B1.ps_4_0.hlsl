@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -130,14 +130,10 @@ void main(
   r0.x = dot(float3(1.70504999,-0.621789992,-0.0832599998), r1.xyz);
   r0.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r1.xyz);
   r0.z = dot(float3(-0.0240000002,-0.128969997,1.15296996), r1.xyz);
-  float3 hdrColor = r0.xyz;
-  float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(hdrColor);
-  float3 curvesInput = injectedData.toneMapType <= 1.f ? hdrColor : sdrColor;
-  r0.xyz = curvesInput;
-  bool isWCG = r0.x < 0.0 || r0.y < 0.0 || r0.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = isWCG ? renodx::color::bt2020::from::BT709(r0.xyz) : r0.xyz;
-  }
+  float compress_scale;
+  float max_channel_scale;
+  GamutCompression(r0.xyz, compress_scale);
+  NeutwoMaxCh(r0.xyz, max_channel_scale);
   r0.xyz = float3(0.00390625,0.00390625,0.00390625) + r0.xyz;
   r0.w = 0.75;
   r1.xyzw = t0.Sample(s0_s, r0.xw).wxyz;
@@ -155,13 +151,8 @@ void main(
   o0.z = saturate(r0.z);
   o0.y = saturate(r1.y);
   o0.w = 1;
-  if (injectedData.toneMapType != 0.f) {
-    o0.xyz = isWCG ? renodx::color::bt709::from::BT2020(o0.xyz) : o0.xyz;
-    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, 1.f);
-  }
-  o0.xyz = lerp(preCG, o0.xyz, injectedData.colorGradeInternalLUTStrength);
-  if(injectedData.tonemapCheck <= 1.5f){
-  o0.xyz = applyUserNoTonemap(o0.xyz);
-  }
+  NeutwoMaxChInverse(o0.xyz, max_channel_scale);
+  GamutDecompression(o0.xyz, compress_scale);
+  o0.xyz = lerp(preCG, o0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   return;
 }

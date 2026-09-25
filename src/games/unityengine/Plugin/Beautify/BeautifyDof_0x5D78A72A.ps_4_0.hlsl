@@ -34,7 +34,7 @@ void main(
   r0.y = r0.y / r0.x;
   o0.w = cb0[6].y >= r0.x ? r0.y : 0;
   r0.xyzw = t0.Sample(s1_s, v1.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(cb0[6].xxx, r0.xyz);
   }

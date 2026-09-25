@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -38,31 +38,31 @@ void main(
   float midGray = vanillaHBD(float3(0.18f, 0.18f, 0.18f)).x;
   float3 hueCorrectionColor = vanillaHBD(r0.yzx);
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
+  config.type = min(3, RENODX_TONE_MAP_TYPE);
+  config.peak_nits = RENODX_PEAK_WHITE_NITS;
+  config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
+  config.gamma_correction = RENODX_GAMMA_CORRECTION;
+  config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  config.shadows = RENODX_TONE_MAP_SHADOWS;
+  config.contrast = RENODX_TONE_MAP_CONTRAST;
+  //config.saturation = RENODX_TONE_MAP_SATURATION;
+  //config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
+  //config.reno_drt_blowout = 1.f - RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
   config.reno_drt_contrast = 1.f;
-  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
-                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  //config.reno_drt_flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
+  //config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
+//                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
+  //config.hue_correction_strength = injectedData.toneMapHueCorrection;
   config.hue_correction_color = lerp(r0.yzx, hueCorrectionColor, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
-  config.reno_drt_tone_map_method = injectedData.toneMapType == 3.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+  //config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
+  config.reno_drt_tone_map_method = RENODX_TONE_MAP_TYPE == 3.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
                                                                     : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 100.f : injectedData.colorGradeClip;
-  if (injectedData.toneMapType == 0.f) {
+  //config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
+  config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP == 0.f ? 100.f : RENODX_RENO_DRT_WHITE_CLIP;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.yzx = hueCorrectionColor;
   }
    if(injectedData.colorGradeLUTStrength == 0.f || config.type == 1.f) {
@@ -72,7 +72,7 @@ void main(
       float3 hdrColor = tone_maps.color_hdr;
       float3 sdrColor = tone_maps.color_sdr;
       r0.yzx = sdrColor;
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.yzw = cb0[6].zzz * saturate(r0.xyz);
   r1.xy = float2(0.5,0.5) * cb0[6].xy;
   r1.yz = r0.zw * cb0[6].xy + r1.xy;
@@ -96,7 +96,7 @@ void main(
     r0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, r0.xyz, injectedData.colorGradeLUTStrength);
   }
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

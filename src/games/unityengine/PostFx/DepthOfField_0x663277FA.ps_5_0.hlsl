@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -20,16 +20,16 @@ void main(
 
   r0.xyzw = -cb0[2].xyxy * float4(0.5,0.5,-0.5,0.5) + v1.xyxy;
   r1.xyz = t0.Sample(s0_s, r0.zw).xyz;
-  if(injectedData.isClamped != 0.f){
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r1.xyz = rolloffSdr(r1.xyz);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.xyz = t0.Sample(s0_s, r0.xy).xyz;
-  if(injectedData.isClamped != 0.f){
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
     r0.xyz = rolloffSdr(r0.xyz);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
   r0.w = max(r1.y, r1.z);
   r0.w = max(r1.x, r0.w);
@@ -49,16 +49,16 @@ void main(
   r0.w = r2.y + r0.w;
   r3.xyzw = cb0[2].xyxy * float4(-0.5,0.5,0.5,0.5) + v1.xyxy;
   r1.xyz = t0.Sample(s0_s, r3.xy).xyz;
-  if(injectedData.isClamped != 0.f){
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r1.xyz = rolloffSdr(r1.xyz);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r2.yzw = t0.Sample(s0_s, r3.zw).xyz;
-  if(injectedData.isClamped != 0.f){
-    r2.yzw = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r2.yzw) : r2.yzw;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r2.yzw = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r2.yzw) : r2.yzw;
     r2.yzw = rolloffSdr(r2.yzw);
-    r2.yzw = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r2.yzw) : r2.yzw;
+    r2.yzw = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r2.yzw) : r2.yzw;
   }
   r3.x = max(r1.y, r1.z);
   r3.x = max(r3.x, r1.x);

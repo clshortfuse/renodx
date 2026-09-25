@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture3D<float4> t6 : register(t6);
@@ -152,7 +152,7 @@ void main(
   r1.zw = float2(0.025,0.025) * r5.xy;
   r1.xy = r1.xy * float2(0.1,0.1) + r1.zw;
   r0.zw = r1.xy * cb0[40].ww + r0.zw;
-  r0.zw = cb0[50].ww * r0.zw * injectedData.fxFilmGrain;
+  r0.zw = cb0[50].ww * r0.zw * CUSTOM_FILM_GRAIN;
   r0.zw = r0.zw * float2(0.075,0.075) + v1.xy;
   r1.xyzw = t3.Sample(s3_s, v1.xy).xyzw;
   r0.zw = float2(-0.5,-0.5) + r0.zw;
@@ -257,9 +257,9 @@ void main(
   r3.xyzw = r4.xyzw * float4(0.2,0.2,0.2,0.2) + r3.xyzw;
   r1.x = -1 + r1.x;
   r1.x = r1.x * 0.75 + 1;
-  r1.x = cb0[39].y * r1.x * injectedData.fxBloom;
+  r1.x = cb0[39].y * r1.x * CUSTOM_BLOOM;
   r1.xyzw = r3.xyzw * r1.xxxx;
-  r3.xyz = cb0[39].zzz * r6.xyz * injectedData.fxLens;
+  r3.xyz = cb0[39].zzz * r6.xyz * CUSTOM_LENS;
   r3.w = 0;
   r3.xyzw = float4(1,1,1,1) + r3.xyzw;
   r0.xyzw = r1.xyzw * r3.xyzw + r0.xyzw;
@@ -273,14 +273,14 @@ void main(
   r0.xyzw = -r0.xyzw * r3.xxxx + r1.xyzw;
   r0.xyzw = r3.yyyy * r0.xyzw + r4.xyzw;
   r1.xyz = r0.xyz * r5.xyz;
-  if(injectedData.fxFilmGrainType == 0.f){
-  r1.xyz = r1.xyz * cb0[50].www * injectedData.fxFilmGrain + r0.xyz;
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
+  r1.xyz = r1.xyz * cb0[50].www * CUSTOM_FILM_GRAIN + r0.xyz;
   } else {
     r1.xyz = applyFilmGrain(r0.xyz, v1);
   }
   r1.xyz = cb0[45].xxx * r1.xyz;
   r1.xyz = lutShaper(r1.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r1.xyz = cb0[42].zzz * r1.xyz;
   r1.w = 0.5 * cb0[42].y;
   r1.xyz = r1.xyz * cb0[42].yyy + r1.www;
@@ -291,7 +291,7 @@ void main(
   if (cb0[50].y < 0.5) {
     r0.x = dot(r0.xyz, float3(0.272228986,0.674081981,0.0536894985));
     r0.yz = -cb0[48].xy + v1.xy;
-    r2.yz = cb0[49].xx * abs(r0.zy) * min(1.f, injectedData.fxVignette);
+    r2.yz = cb0[49].xx * abs(r0.zy) * min(1.f, CUSTOM_VIGNETTE);
     r0.y = cb0[26].x / cb0[26].y;
     r0.y = -1 + r0.y;
     r0.y = cb0[49].w * r0.y + 1;
@@ -304,7 +304,7 @@ void main(
     r0.y = 1 + -r0.y;
     r0.y = max(0, r0.y);
     r0.y = log2(r0.y);
-    r0.y = cb0[49].y * r0.y * max(1.f, injectedData.fxVignette);
+    r0.y = cb0[49].y * r0.y * max(1.f, CUSTOM_VIGNETTE);
     r0.y = exp2(r0.y);
     r0.z = r0.y * r0.y;
     r1.w = r0.z * r0.x;
@@ -317,6 +317,9 @@ void main(
     r2.xyz = cb0[50].xxx * r3.xyz + r1.xyz;
     r0.w = 1;
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r2.xyz = GradeAndDisplayMap(r2.xyz);
+  }
   r1.xy = v1.xy * cb0[35].xy + cb0[35].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
   r1.x = r1.w * 2 + -1;
@@ -327,7 +330,7 @@ void main(
   r1.x = 1 + -r1.x;
   r1.x = r1.y * r1.x;
   r0.xyz = applyDither(r2.xyz, r1.x * (1.0 / 64.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

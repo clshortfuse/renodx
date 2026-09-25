@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -17,7 +17,7 @@ void main(
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   o0.w = r0.w;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = saturate(r0.xyz * cb0[4].xxx + cb0[4].yyy);
   r0.xyz = log2(r0.xyz);
   r0.xyz = cb0[4].zzz * r0.xyz;

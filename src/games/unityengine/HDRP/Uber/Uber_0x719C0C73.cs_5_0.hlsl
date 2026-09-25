@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -82,12 +82,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r3.xyz = -r2.xyz * r0.www + r2.xyz;
     r3.xyz = r0.xyz * cb1[9].xyz + r3.xyz;
     r3.xyz = r3.xyz + -r2.xyz;
-    r2.xyz = cb1[7].xxx * r3.xyz * injectedData.fxBloom + r2.xyz;
+    r2.xyz = cb1[7].xxx * r3.xyz * CUSTOM_BLOOM + r2.xyz;
     if (cb1[7].w != 0) {
       r1.xy = r1.xy * cb1[10].xy + cb1[10].zw;
       r1.xyz = t2.SampleLevel(s0_s, r1.xy, 0).xyz;
       r0.xyz = r1.xyz * r0.xyz;
-      r2.xyz = r0.xyz * cb1[7].yyy * injectedData.fxLens + r2.xyz;
+      r2.xyz = r0.xyz * cb1[7].yyy * CUSTOM_LENS + r2.xyz;
     }
     r0.xyz = r2.xyz;
   } else {
@@ -99,7 +99,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     if (cb1[6].w != 0) {
       r1.xyz = cb1[6].zzz * r0.xyz;
       r1.xyz = lutShaper(r1.xyz);
-      if (injectedData.colorGradeLUTSampling == 0.f) {
+      if (CUSTOM_LUT_SAMPLE == 0.f) {
       r1.xyz = cb1[6].yyy * r1.xyz;
       r0.w = 0.5 * cb1[6].x;
       r1.xyz = r1.xyz * cb1[6].xxx + r0.www;
@@ -113,6 +113,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r1.yzw = r0.xyz + -r2.xyz;
   r1.xyz = r1.xxx * r1.yzw + r2.xyz;
   r2.xyz = cb1[12].w == 0.0 ? r1.xyz : r0.xyz;
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r2.xyz = GradeAndDisplayMap(r2.xyz);
+  }
   u0[vThreadID] = r2.xyzw;
   return;
 }

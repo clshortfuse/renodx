@@ -21,7 +21,7 @@ void main(
   r0.xyzw = r0.xyzw * cb0[6].wwww + -r1.xyzw;
   r0.xyzw = r0.xyzw * cb0[7].xxxx + r1.xyzw;
   r0.w = saturate(r0.w);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
     r0.xyzw = log2(r0.xyzw);
     r0.xyzw = cb0[7].yyyy * r0.xyzw;

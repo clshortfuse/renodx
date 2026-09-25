@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -21,21 +21,21 @@ void main(
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[4].x).xyzw;
   r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r1.xyzw = t1.SampleBias(s0_s, v1.xy, cb0[4].x).xyzw;
   r1.xyz = cb0[137].xyz * cb0[137].www;
   r1.xyz = r1.xyz * r1.www;
   r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r0.xyz = r1.xyz + r0.xyz;
   r1.xyzw = t2.SampleBias(s0_s, v1.xy, cb0[4].x).xyzw;
   r1.xyzw = cb0[138].xyzw * r1.xyzw;
   r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r1.xyz = r1.xyz * r0.xyz + -r0.xyz;

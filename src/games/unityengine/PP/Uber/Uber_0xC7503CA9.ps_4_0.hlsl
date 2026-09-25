@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -29,7 +29,7 @@ void main(
   r0.xyz = r1.xyz * r0.xxx;
   if (cb0[40].y < 0.5) {
     r1.xy = -cb0[38].xy + v1.xy;
-    r1.yz = cb0[39].xx * abs(r1.yx) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[39].xx * abs(r1.yx) * min(1.f, CUSTOM_VIGNETTE);
     r0.w = cb0[22].x / cb0[22].y;
     r0.w = -1 + r0.w;
     r0.w = cb0[39].w * r0.w + 1;
@@ -42,7 +42,7 @@ void main(
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[39].y * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[39].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[37].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[37].xyz;
@@ -61,7 +61,7 @@ void main(
   }
   r2.w = saturate(r2.w);
   r0.yzx = lutShaper(r2.xyz, false, 2);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.yzw = cb0[36].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r1.xy = float2(0.5,0.5) * cb0[36].xy;
@@ -78,11 +78,14 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.yzx, cb0[36].z + 1u);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r2.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   if (cb0[42].x > 0.5) {
     r2.w = renodx::color::y::from::BT709(saturate(r2.xyz));
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r2.xyz = PostToneMapScale(r2.xyz);
   }
   o0.xyzw = r2.xyzw;

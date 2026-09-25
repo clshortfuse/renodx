@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t8 : register(t8);
 Texture2D<float4> t7 : register(t7);
@@ -125,20 +125,20 @@ void main(
   r1.z = r1.w / r1.z;
   r5.xyzw = r5.xyzw * r1.zzzz;
   r2.xyzw = saturate(-r5.xyzw * float4(4,4,4,4) + r2.xyzw);
-  r4.xyz = cb0[36].zzz * r4.xyz * injectedData.fxLens;
+  r4.xyz = cb0[36].zzz * r4.xyz * CUSTOM_LENS;
   r4.w = 0;
   r1.zw = cb0[28].yy * r1.xy;
   r5.xyzw = t2.Sample(s2_s, r1.zw).xyzw;
   r1.z = r5.y + r5.y;
   r0.xyzw = r0.xyzw * float4(0.0625,0.0625,0.0625,0.0625) + -r2.xyzw;
   r0.xyzw = cb0[37].wwww * r0.xyzw + r2.xyzw;
-  r2.xyzw = cb0[36].yyyy * r0.xyzw * injectedData.fxBloom;
+  r2.xyzw = cb0[36].yyyy * r0.xyzw * CUSTOM_BLOOM;
   r2.xyzw = r2.xyzw * r1.zzzz + r3.xyzw;
   r0.xyzw = r0.xyzw * r4.xyzw + r2.xyzw;
   if (cb0[44].y < 0.5) {
     r1.zw = r1.xy / cb0[28].xx;
     r2.xy = -cb0[42].xy + r1.zw;
-    r2.yz = cb0[43].xx * abs(r2.yx) * min(1.f, injectedData.fxVignette);
+    r2.yz = cb0[43].xx * abs(r2.yx) * min(1.f, CUSTOM_VIGNETTE);
     r2.w = cb0[29].x / cb0[29].y;
     r2.w = -1 + r2.w;
     r2.w = cb0[43].w * r2.w + 1;
@@ -151,7 +151,7 @@ void main(
     r2.x = 1 + -r2.x;
     r2.x = max(0, r2.x);
     r2.x = log2(r2.x);
-    r2.x = cb0[43].y * r2.x * max(1.f, injectedData.fxVignette);
+    r2.x = cb0[43].y * r2.x * max(1.f, CUSTOM_VIGNETTE);
     r2.x = exp2(r2.x);
     r1.zw = r1.zw * cb0[41].xy + cb0[41].wz;
     r3.xyzw = t7.Sample(s7_s, r1.zw).xyzw;
@@ -177,7 +177,7 @@ void main(
   }
   r0.xyzw = cb0[40].xxxx * r4.xyzw;
   r1.yzx = lutShaper(r0.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r1.yzw = cb0[39].www * r1.xyz;
   r1.y = floor(r1.y);
   r2.xy = float2(0.5,0.5) * cb0[39].yz;
@@ -194,10 +194,13 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t6, r1.yzx, cb0[39].w + 1u);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   if (cb0[53].y > 0.5) {
     r0.w = renodx::color::y::from::BT709(saturate(r0.xyz));
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

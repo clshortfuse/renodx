@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -36,7 +36,7 @@ void main(
   r0.xyz = r0.xyz * r2.zzz + r3.xyz;
   r0.xyz = max(r1.xyz, r0.xyz);
   o0.xyz = max(r2.xyw, r0.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     o0.xyz = saturate(o0.xyz);
   }
   o0.w = 1;

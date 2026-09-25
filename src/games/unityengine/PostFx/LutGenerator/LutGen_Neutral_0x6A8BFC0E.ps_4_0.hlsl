@@ -1,30 +1,9 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
 cbuffer cb0 : register(b0){
   float4 cb0[18];
-}
-
-float3 vanillaNeutral(float3 color) {
-float a = cb0[15].x;
-float b = cb0[15].y;
-float c = cb0[15].z;
-float d = cb0[15].w;
-float e = cb0[16].x;
-float f = cb0[16].y;
-float w1 = cb0[16].z;
-float w2 = cb0[16].w;
-
-float scale = 1.0 / renodx::tonemap::ApplyCurve(w1, a, b, c, d, e, f);
-return renodx::tonemap::ApplyCurve(max(0.f, color) * scale, a, b, c, d, e, f) * scale / w2;
-}
-
-float setNeutralParam(float4 params0, float4 params1) {
-  /*if (params0.x == 0.02 && params1.z == 10.13 && params1.w == 0.938) return 1;*/      // Shadows Awakening
-  if(params0.x == 0.20 && params0.w == 0.185 && params1.z == 17.55) return 2;  // The Forest
-  else return 1;
-//return 0;
 }
 
 void main(
@@ -44,6 +23,7 @@ void main(
   r0.w = -r1.x + r0.y;
   r0.xyz = r0.xzw * cb0[17].www;
   r0.xyz = lutShaper(r0.xyz, true);
+  float3 preCG = r0.xyz;
   r1.x = dot(float3(0.439700991,0.382977992,0.177334994), r0.xyz);
   r1.y = dot(float3(0.0897922963,0.813422978,0.0967615992), r0.xyz);
   r1.z = dot(float3(0.0175439995,0.111543998,0.870703995), r0.xyz);
@@ -153,54 +133,13 @@ void main(
   r0.x = dot(float3(1.70504999,-0.621789992,-0.0832599998), r1.xyz);
   r0.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r1.xyz);
   r0.z = dot(float3(-0.0240000002, -0.128969997, 1.15296996), r1.xyz);
-  float midGray = vanillaNeutral(float3(0.18f, 0.18f, 0.18f)).x;
-  float3 hueCorrectionColor = vanillaNeutral(r0.xyz);
-  float neutralParam = setNeutralParam(cb0[15], cb0[16]);
-  float defaultClip = 4.f;
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = neutralParam == 0.f ? 0.f : (injectedData.toneMapType >= 2.f ? 3.f : injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_value = midGray;
-  config.mid_gray_nits = midGray * 100;
-  if (neutralParam == 1.f) {
-    config.reno_drt_contrast = 0.9f;
-    defaultClip = 4.25f;
-  } else if (neutralParam == 2.f){
-    config.reno_drt_highlights = 0.92f;
-    config.reno_drt_contrast = 1.2f;
-    defaultClip = 6.f;
-  }
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
-                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = lerp(r0.xyz, hueCorrectionColor, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
-  config.reno_drt_tone_map_method = injectedData.toneMapType - 2.f;
-  config.reno_drt_working_color_space = 0;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? defaultClip : injectedData.colorGradeClip;
-  if(injectedData.toneMapType == 0.f){
-    r0.xyz = saturate(hueCorrectionColor);
-  }
-  r0.xyz = renodx::tonemap::config::Apply(r0.xyz, config);
-  float3 hdrColor = r0.xyz;
-  float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(hdrColor);
-  float3 curvesInput = injectedData.toneMapType <= 1.f ? hdrColor : sdrColor;
-  r0.xyz = curvesInput;
-  bool isWCG = r0.x < 0.0 || r0.y < 0.0 || r0.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = isWCG ? renodx::color::bt2020::from::BT709(r0.xyz) : r0.xyz;
-  }
+  r0.xyz = lerp(preCG, r0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
+  r0.xyz = NeutralTonemap(r0.xyz, cb0[15].x, cb0[15].y, cb0[15].z, cb0[15].w, cb0[16].x, cb0[16].y, cb0[16].z, cb0[16].w);
+  float compress_scale;
+  float max_channel_scale;
+  float3 curvesInput = r0.xyz;
+  GamutCompression(r0.xyz, compress_scale);
+  NeutwoMaxCh(r0.xyz, max_channel_scale);
   r0.xyz = float3(0.00390625, 0.00390625, 0.00390625) + r0.xyz;
   r0.w = 0.75;
   r1.xyzw = t0.Sample(s0_s, r0.xw).wxyz;
@@ -217,12 +156,9 @@ void main(
   r0.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
   o0.z = saturate(r0.z);
   o0.y = saturate(r1.y);
-  if (injectedData.toneMapType != 0.f) {
-    o0.xyz = isWCG ? renodx::color::bt709::from::BT2020(o0.xyz) : o0.xyz;
-    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, injectedData.colorGradeInternalLUTStrength);
-  } else {
-    o0.xyz = lerp(curvesInput, o0.xyz, injectedData.colorGradeInternalLUTStrength);
-  }
+  NeutwoMaxChInverse(o0.xyz, max_channel_scale);
+  GamutDecompression(o0.xyz, compress_scale);
+  o0.xyz = lerp(curvesInput, o0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   o0.w = 1;
   return;
 }

@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -28,7 +28,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r0.w = t0.Load(float4(0,0,0,0)).x;
   r0.w = r0.w == 0.0 ? 1 : r0.w;
   r0.xyz = r0.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(float3(65504,65504,65504), r0.xyz);
   }
@@ -38,7 +38,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r3.yzw = t1.Load(r1.xzy).xyz;
   r3.yzw = r3.yzw / cb0[6].xxx;
   r3.yzw = r3.yzw * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r3.yzw = max(float3(0,0,0), r3.yzw);
   r3.yzw = min(float3(65504,65504,65504), r3.yzw);
   }
@@ -49,7 +49,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r2.xyz = t1.Load(r2.xyz).xyz;
   r2.xyz = r2.xyz / cb0[6].xxx;
   r2.xyz = r2.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r2.xyz = max(float3(0,0,0), r2.xyz);
   r2.xyz = min(float3(65504,65504,65504), r2.xyz);
   }
@@ -62,7 +62,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r5.xyz = t1.Load(r5.xyz).xyz;
   r5.xyz = r5.xyz / cb0[6].xxx;
   r5.xyz = r5.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r5.xyz = max(float3(0,0,0), r5.xyz);
   r5.xyz = min(float3(65504,65504,65504), r5.xyz);
   }
@@ -72,7 +72,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r6.xyz = t1.Load(r6.xyz).xyz;
   r6.xyz = r6.xyz / cb0[6].xxx;
   r6.xyz = r6.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r6.xyz = max(float3(0,0,0), r6.xyz);
   r6.xyz = min(float3(65504,65504,65504), r6.xyz);
   }
@@ -139,7 +139,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r0.xyz = t1.Load(r2.xyz).xyz;
   r0.xyz = r0.xyz / cb0[6].xxx;
   r0.xyz = r0.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(float3(65504,65504,65504), r0.xyz);
   }
@@ -150,13 +150,13 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r3.xyz = t1.Load(r1.xyw).xyz;
   r3.xyz = r3.xyz / cb0[6].xxx;
   r3.xyz = r3.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r3.xyz = max(float3(0,0,0), r3.xyz);
   r3.xyz = min(float3(65504,65504,65504), r3.xyz);
   }
   r2.yzw = r2.yzw / cb0[6].xxx;
   r2.yzw = r2.yzw * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r2.yzw = max(float3(0,0,0), r2.yzw);
   r2.yzw = min(float3(65504,65504,65504), r2.yzw);
   }
@@ -168,7 +168,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r4.xyz = t1.Load(r4.xyz).xyz;
   r4.xyz = r4.xyz / cb0[6].xxx;
   r4.xyz = r4.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r4.xyz = max(float3(0,0,0), r4.xyz);
   r4.xyz = min(float3(65504,65504,65504), r4.xyz);
   }
@@ -180,7 +180,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r5.xyz = t1.Load(r5.xyz).xyz;
   r5.xyz = r5.xyz / cb0[6].xxx;
   r5.xyz = r5.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r5.xyz = max(float3(0,0,0), r5.xyz);
   r5.xyz = min(float3(65504,65504,65504), r5.xyz);
   }
@@ -191,7 +191,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r6.xyz = t1.Load(r6.xyz).xyz;
   r6.xyz = r6.xyz / cb0[6].xxx;
   r6.xyz = r6.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r6.xyz = max(float3(0,0,0), r6.xyz);
   r6.xyz = min(float3(65504,65504,65504), r6.xyz);
   }
@@ -258,7 +258,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r0.xyz = t1.Load(r2.xyz).xyz;
   r0.xyz = r0.xyz / cb0[6].xxx;
   r0.xyz = r0.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(float3(65504,65504,65504), r0.xyz);
   }
@@ -271,7 +271,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r2.yzw = t1.Load(r4.xyz).xyz;
   r2.yzw = r2.yzw / cb0[6].xxx;
   r2.yzw = r2.yzw * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r2.yzw = max(float3(0,0,0), r2.yzw);
   r2.yzw = min(float3(65504,65504,65504), r2.yzw);
   }
@@ -284,7 +284,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r4.xyz = t1.Load(r4.xyz).xyz;
   r4.xyz = r4.xyz / cb0[6].xxx;
   r4.xyz = r4.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r4.xyz = max(float3(0,0,0), r4.xyz);
   r4.xyz = min(float3(65504,65504,65504), r4.xyz);
   }
@@ -294,7 +294,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r5.xyz = t1.Load(r5.xyz).xyz;
   r5.xyz = r5.xyz / cb0[6].xxx;
   r5.xyz = r5.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r5.xyz = max(float3(0,0,0), r5.xyz);
   r5.xyz = min(float3(65504,65504,65504), r5.xyz);
   }
@@ -362,14 +362,14 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r0.xyz = t1.Load(r3.yzw).xyz;
   r0.xyz = r0.xyz / cb0[6].xxx;
   r0.xyz = r0.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = min(float3(65504,65504,65504), r0.xyz);
   }
   r3.xyz = t1.Load(r2.xyz).xyz;
   r3.xyz = r3.xyz / cb0[6].xxx;
   r3.xyz = r3.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r3.xyz = max(float3(0,0,0), r3.xyz);
   r3.xyz = min(float3(65504,65504,65504), r3.xyz);
   }
@@ -382,7 +382,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r1.xyw = t1.Load(r6.xyz).xyz;
   r1.xyw = r1.xyw / cb0[6].xxx;
   r1.xyw = r1.xyw * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r1.xyw = max(float3(0,0,0), r1.xyw);
   r1.xyw = min(float3(65504,65504,65504), r1.xyw);
   }
@@ -396,7 +396,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r4.xyz = t1.Load(r4.xyz).xyz;
   r4.xyz = r4.xyz / cb0[6].xxx;
   r4.xyz = r4.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r4.xyz = max(float3(0,0,0), r4.xyz);
   r4.xyz = min(float3(65504,65504,65504), r4.xyz);
   }
@@ -406,7 +406,7 @@ void main(uint vThreadIDInGroup: SV_GroupThreadID, uint2 vThreadGroupID: SV_Grou
   r5.xyz = t1.Load(r5.xyz).xyz;
   r5.xyz = r5.xyz / cb0[6].xxx;
   r5.xyz = r5.xyz * r0.www;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r5.xyz = max(float3(0,0,0), r5.xyz);
   r5.xyz = min(float3(65504,65504,65504), r5.xyz);
   }

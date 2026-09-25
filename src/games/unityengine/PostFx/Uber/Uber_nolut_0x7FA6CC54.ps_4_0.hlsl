@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -48,7 +48,7 @@ void main(
   r1.xyz = r3.xyz + r1.xyz;
   r1.xyz = r2.xyz * float3(2,2,2) + r1.xyz;
   r0.xyz = r1.xyz + r0.xyz;
-  r0.xyz = cb0[11].yyy * r0.xyz * injectedData.fxBloom;
+  r0.xyz = cb0[11].yyy * r0.xyz * CUSTOM_BLOOM;
   r0.xyz = float3(0.0625,0.0625,0.0625) * r0.xyz;
   r1.xyzw = t0.Sample(s1_s, v1.xy).xyzw;
   r2.xyzw = t1.Sample(s0_s, w1.xy).xyzw;
@@ -59,7 +59,7 @@ void main(
   r0.w = -1 + r0.w;
   r0.w = cb0[16].w * r0.w + 1;
   r1.xy = -cb0[15].xy + v1.xy;
-  r1.xy = cb0[16].xx * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+  r1.xy = cb0[16].xx * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
   r0.w = r1.x * r0.w;
   r1.y = log2(r1.y);
   r1.x = log2(r0.w);
@@ -69,18 +69,18 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = max(0, r0.w);
   r0.w = log2(r0.w);
-  r0.w = cb0[16].y * r0.w * max(1.f, injectedData.fxVignette);
+  r0.w = cb0[16].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
   r0.w = exp2(r0.w);
   r1.xyz = float3(1,1,1) + -cb0[14].xyz;
   r1.xyz = r0.www * r1.xyz + cb0[14].xyz;
   r0.xyz = r1.xyz * r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -31,7 +31,7 @@ void main(
   r1.xyz = r0.yyy * r1.xyz;
   o0.w = r0.y * r1.w + r0.x;
   o0.xyz = cb0[0].xyz * r0.xxx + r1.xyz;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz);
   }
   return;

@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 struct u0_t {
   float val[4];
@@ -34,7 +34,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r2.w = u0[1].val[0/4+3];
   r1.zw = r1.zw * r2.xy + r2.zw;
   r2.xy = t0.GatherGreen(s0_s, r1.zw).xy;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r2.zw = log2(abs(r2.xy));
   r2.xyzw = float4(12.9200001,12.9200001,0.416666657,0.416666657) * r2.xyzw;
   r2.xy = max(float2(0.0404499359,0.0404499359), r2.xy);
@@ -46,7 +46,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r3.z = r2.x;
   r4.xy = t0.GatherBlue(s0_s, r1.zw).xy;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r4.zw = log2(abs(r4.xy));
   r4.xyzw = float4(12.9200001,12.9200001,0.416666657,0.416666657) * r4.xyzw;
   r4.xy = max(float2(0.0404499359,0.0404499359), r4.xy);
@@ -58,7 +58,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r3.w = r4.x;
   r4.zw = t0.GatherRed(s0_s, r1.zw).xy;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r5.xy = log2(abs(r4.zw));
   r4.zw = float2(12.9200001,12.9200001) * r4.zw;
   r4.zw = max(float2(0.0404499359,0.0404499359), r4.zw);
@@ -75,7 +75,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r4.w = u0[3].val[0/4+1];
   r4.zw = r4.zw + r1.zw;
   r5.xy = t0.GatherRed(s0_s, r4.zw).zw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r5.zw = log2(abs(r5.xy));
   r5.xyzw = float4(12.9200001,12.9200001,0.416666657,0.416666657) * r5.xyzw;
   r5.xy = max(float2(0.0404499359,0.0404499359), r5.xy);
@@ -87,7 +87,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r6.xy = t0.GatherGreen(s0_s, r4.zw).zw;
   r4.zw = t0.GatherBlue(s0_s, r4.zw).zw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r6.zw = log2(abs(r6.xy));
   r6.xyzw = float4(12.9200001,12.9200001,0.416666657,0.416666657) * r6.xyzw;
   r6.xy = max(float2(0.0404499359,0.0404499359), r6.xy);
@@ -98,7 +98,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
     r6.xy = renodx::math::SignSqrt(r6.xy);
   }
   r7.xy = r5.xy * float2(0.5,0.5) + r6.xy;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r7.zw = log2(abs(r4.zw));
   r4.zw = float2(12.9200001,12.9200001) * r4.zw;
   r4.zw = max(float2(0.0404499359,0.0404499359), r4.zw);
@@ -116,7 +116,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r8.w = u0[2].val[0/4+3];
   r8.xyzw = r8.xyzw + r1.zwzw;
   r9.xyzw = t0.GatherRed(s0_s, r8.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r10.xyzw = log2(abs(r9.zwyx));
   r9.xyzw = float4(12.9200001,12.9200001,12.9200001,12.9200001) * r9.zwyx;
   r9.xyzw = max(float4(0.0404499359,0.0404499359,0.0404499359,0.0404499359), r9.xyzw);
@@ -128,7 +128,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
     r9.yxzw = renodx::math::SignSqrt(r9.zwyx);
   }
   r10.xyzw = t0.GatherGreen(s0_s, r8.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r11.xyzw = log2(abs(r10.zwyx));
   r10.xyzw = float4(12.9200001,12.9200001,12.9200001,12.9200001) * r10.zwyx;
   r10.xyzw = max(float4(0.0404499359,0.0404499359,0.0404499359,0.0404499359), r10.xyzw);
@@ -141,7 +141,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r11.xyzw = r9.yxzw * float4(0.5,0.5,0.5,0.5) + r10.xyzw;
   r12.xyzw = t0.GatherBlue(s0_s, r8.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r13.xyzw = log2(abs(r12.zwyx));
   r12.xyzw = float4(12.9200001,12.9200001,12.9200001,12.9200001) * r12.zwyx;
   r12.xyzw = max(float4(0.0404499359,0.0404499359,0.0404499359,0.0404499359), r12.xyzw);
@@ -162,7 +162,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r8.xy = r3.xy * float2(0.5,0.5) + r2.xy;
   r4.xy = r4.xy * float2(0.5,0.5) + r8.xy;
   r13.xyzw = t0.GatherRed(s0_s, r8.zw).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r14.xyzw = log2(abs(r13.xyzw));
   r13.xyzw = float4(12.9200001,12.9200001,12.9200001,12.9200001) * r13.xyzw;
   r13.xyzw = max(float4(0.0404499359,0.0404499359,0.0404499359,0.0404499359), r13.xyzw);
@@ -175,7 +175,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r14.xyzw = t0.GatherGreen(s0_s, r8.zw).xyzw;
   r8.xyzw = t0.GatherBlue(s0_s, r8.zw).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r15.xyzw = log2(abs(r14.xyzw));
   r14.xyzw = float4(12.9200001,12.9200001,12.9200001,12.9200001) * r14.xyzw;
   r14.xyzw = max(float4(0.0404499359,0.0404499359,0.0404499359,0.0404499359), r14.xyzw);
@@ -187,7 +187,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
     r14.xzyw = renodx::math::SignSqrt(r14.xyzw);
   }
   r15.xyzw = r13.xyzw * float4(0.5,0.5,0.5,0.5) + r14.xzyw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r16.xyzw = log2(abs(r8.xyzw));
   r8.xyzw = float4(12.9200001,12.9200001,12.9200001,12.9200001) * r8.xyzw;
   r8.xyzw = max(float4(0.0404499359,0.0404499359,0.0404499359,0.0404499359), r8.xyzw);
@@ -455,7 +455,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r3.xyz = max(r3.xyz, r9.xyz);
   r1.xyz = max(r2.xyz, r1.xyz);
   r1.xyz = min(r3.xyz, r1.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r1.xyz = renodx::color::srgb::Decode(r1.xyz);
   } else {
     r1.xyz = sign(r1.xyz) * r1.xyz * r1.xyz;

@@ -47,7 +47,7 @@ void main(
   r2.y = r0.y * cb0[2].y + -r3.y;
   r1.yzw = t1.SampleBias(s0_s, r2.zyw, cb1[79].y).xyz;
   r2.xyz = t1.SampleBias(s0_s, r2.zxw, cb1[79].y).xyz;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
   r2.xyz = max(float3(0,0,0), r2.xyz);
   }
   r0.w = renodx::color::y::from::NTSC1953(r1.yzw);
@@ -139,7 +139,7 @@ void main(
   r1.yzw = r0.www * r1.yzw + float3(1,1,1);
   r1.yzw = r2.xyz * r1.yzw + float3(-0.5,-0.5,-0.5);
   r1.yzw = r1.yzw * cb0[7].yyy + float3(0.5, 0.5, 0.5);
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r1.yzw = saturate(r1.yzw);
   }
   r2.xyz = float3(1,1,1) + -r1.yzw;
@@ -161,7 +161,7 @@ void main(
   r0.x = -0.5 + r0.x;
   r0.x = cb0[8].w * r0.x;
   r0.xyz = r1.yzw * cb0[7].xxx + r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = max(float3(0,0,0), r0.xyz);
   }
   r0.xyz = -cb0[10].xyz + r0.xyz;

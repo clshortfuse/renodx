@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -24,7 +24,7 @@ void main(
   r2.xyz = float3(1,1,1) + -r0.xyz;
   r1.xyz = -r1.xyz * cb0[128].xxx + float3(1,1,1);
   r1.xyz = -r2.xyz * r1.xyz + float3(1,1,1);
-  r1.xyz = cb0[128].yyy * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[128].yyy * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = max(r1.xyz, r0.xyz);
   r1.xyzw = t4.SampleBias(s0_s, v1.xy, cb0[19].x).xyzw;
   r2.xyz = max(r1.xyz, r0.xyz);
@@ -56,13 +56,13 @@ void main(
   r0.xyz = r0.xyz * r1.xyz + r2.xyz;
   if (cb0[139].z > 0) {
     r1.xy = -cb0[139].xy + v1.xy;
-    r1.yz = cb0[139].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[139].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[138].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[139].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[139].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[138].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[138].xyz;
@@ -70,7 +70,7 @@ void main(
   }
   r0.xyz = cb0[129].www * r0.zxy;
   r0.yzx = lutShaper(r0.yzx);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.yzw = cb0[129].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r1.xy = float2(0.5,0.5) * cb0[129].xy;
@@ -94,7 +94,10 @@ void main(
     r1.xyz = cb0[130].www * r2.xyz + r1.xyz;
     r0.xyz = fastSrgbDecodeSafe(r1.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

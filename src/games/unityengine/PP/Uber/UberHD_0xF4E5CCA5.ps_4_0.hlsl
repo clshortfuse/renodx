@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture3D<float4> t4 : register(t4);
@@ -60,11 +60,11 @@ void main(
   r0.xy = cb0[26].xx * r0.xy;
   r0.xyzw = t2.Sample(s2_s, r0.xy).xyzw;
   r0.xyzw = r2.xyzw + r0.xyzw;
-  r0.xyzw = cb0[34].yyyy * r0.xyzw * injectedData.fxBloom;
+  r0.xyzw = cb0[34].yyyy * r0.xyzw * CUSTOM_BLOOM;
   r2.xy = v1.xy * cb0[33].xy + cb0[33].zw;
   r2.xyzw = t3.Sample(s3_s, r2.xy).xyzw;
   r3.xyz = float3(0.0625,0.0625,0.0625) * r0.xyz;
-  r2.xyz = cb0[34].zzz * r2.xyz * injectedData.fxLens;
+  r2.xyz = cb0[34].zzz * r2.xyz * CUSTOM_LENS;
   r0.xyzw = float4(0.0625,0.0625,0.0625,1) * r0.xyzw;
   r4.xyz = cb0[35].xyz * r0.xyz;
   r4.w = 0.0625 * r0.w;
@@ -72,21 +72,21 @@ void main(
   r1.xyz = r2.xyz * r3.xyz;
   r1.w = 0;
   r0.xyzw = r1.xyzw + r0.xyzw;
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = w1.xy * cb0[41].xy + cb0[41].zw;
   r1.xyzw = t5.Sample(s5_s, r1.xy).xyzw;
   r1.w = renodx::color::y::from::BT709(saturate(r0.xyz));
   r1.w = sqrt(r1.w);
   r1.w = cb0[40].z * -r1.w + 1;
   r1.xyz = r1.xyz * r0.xyz;
-  r1.xyz = cb0[40].www * r1.xyz * injectedData.fxFilmGrain;
+  r1.xyz = cb0[40].www * r1.xyz * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, w1);
   }
   r0.xyzw = cb0[36].zzzz * r0.xyzw;
   r0.xyz = lutShaper(r0.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyz = cb0[36].yyy * r0.xyz;
   r1.x = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
@@ -94,12 +94,15 @@ void main(
   } else {
     r1.xyz = renodx::lut::SampleTetrahedral(t4, r0.xyz, 1 / cb0[36].x);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
+  }
   if (cb0[42].x > 0.5) {
     o0.w = renodx::color::y::from::BT709(saturate(r1.xyz));
   } else {
     o0.w = r0.w;
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r1.xyz = PostToneMapScale(r1.xyz, true);
   } else {
     r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);

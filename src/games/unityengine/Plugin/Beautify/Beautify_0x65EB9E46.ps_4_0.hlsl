@@ -652,7 +652,7 @@ void main(
   r1.xyz = r1.xyz * cb0[141].xxx + r1.www;
   r1.xyz = float3(1,1,1) + r1.xyz;
   r0.xyz = r1.xyz * r0.xyz;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.xyz = saturate(r0.xyz);
   }
   r1.xy = -cb0[169].xy + v1.xy;

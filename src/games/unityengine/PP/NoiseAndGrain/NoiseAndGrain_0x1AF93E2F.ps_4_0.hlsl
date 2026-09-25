@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -39,7 +39,7 @@ void main(
   r1.xy = saturate(cb0[12].yz * r0.ww);
   r0.w = dot(cb0[10].zy, r1.xy);
   r0.w = max(0, r0.w);
-  r0.w = cb0[10].x * injectedData.fxFilmGrain + r0.w;
+  r0.w = cb0[10].x * CUSTOM_FILM_GRAIN + r0.w;
   r1.xyz = cb0[8].xyz * r0.www;
   o0.xyz = saturate(r1.xyz * r0.xyz + float3(0.5,0.5,0.5));
   return;

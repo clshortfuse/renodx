@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -19,9 +19,9 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  if(injectedData.countOld < injectedData.countNew){
-    r0.xyz = InvertToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+  if(CUSTOM_COUNT_OLD < CUSTOM_COUNT_NEW){
+    r0.xyz = InvertToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
   if (cb0[16].w == 0.0) {
     r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
@@ -146,7 +146,7 @@ void main(
   r1.xyz = asint(cb0[6].y) == int(2) ? r5.xyz : r1.xyz;
   r1.xyz = asint(cb0[6].y) == int(1) ? r4.xyz : r1.xyz;
   r1.xyz = cb0[6].yyy ? r1.xyz : r2.yzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r2.yz = float2(1,1) + -cb0[6].zx;
@@ -164,7 +164,7 @@ void main(
   r1.xyz = asint(cb0[6].w) == int(2) ? r5.xyz : r1.xyz;
   r1.xyz = asint(cb0[6].w) == int(1) ? r4.xyz : r1.xyz;
   r1.xyz = cb0[6].www ? r1.xyz : r3.yzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r0.w = 1 + -cb0[7].y;
@@ -196,7 +196,7 @@ void main(
   r0.w = cb0[16].x * cb0[4].z + r0.w;
   r0.w = sin(r0.w);
   r0.z = r0.w * cb0[16].y + r0.z;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r1.xyzw = cb0[9].xyzw * r0.yyyy;
@@ -206,13 +206,13 @@ void main(
   r1.xyz = cb0[13].xyz + -cb0[12].xyz;
   r0.xyz = r0.xyz / r1.xyz;
   r0.xyz = cb0[12].xyz + r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(cb0[14].xyz, r0.xyz);
   r0.xyz = min(cb0[15].xyz, r0.xyz);
   }
-  if (injectedData.countOld <= injectedData.countNew) {
-  r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
-  r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
+  if (CUSTOM_COUNT_OLD <= CUSTOM_COUNT_NEW) {
+  r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   o0.xyz = r0.xyz;
   o0.w = r0.w;

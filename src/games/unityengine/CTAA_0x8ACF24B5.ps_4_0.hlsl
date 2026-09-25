@@ -194,7 +194,7 @@ void main(
   r1.x = 4 * r1.x;
   o0.xyz = r1.xxx * r0.xyz;
   o0.w = r0.w;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   o0.xyz = min(float3(0,0,0), -o0.xyz);
   o0.xyz = -o0.xyz;
   } else {

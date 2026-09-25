@@ -345,7 +345,7 @@ void main(
   r0.w = exp2(r0.w);
   r0.xyz = -cb0[61].xyz + r0.xyz;
   o0.xyz = r0.www * r0.xyz + cb0[61].xyz;
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     o0 = saturate(o0);
   }
   return;

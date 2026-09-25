@@ -41,7 +41,7 @@ void main(
   r0.xyz = r1.xyz * float3(8,8,8) + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   o0.xyz = float3(0.125,0.125,0.125) * r0.xyz;
-  o0.xyz = lerp(preDoF, o0.xyz, injectedData.fxDoF);
+  o0.xyz = lerp(preDoF, o0.xyz, CUSTOM_DOF);
   o0.w = 1;
   return;
 }

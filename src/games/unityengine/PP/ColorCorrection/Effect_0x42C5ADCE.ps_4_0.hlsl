@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -20,11 +20,11 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  float3 preCG = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  float3 preCG = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
   float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(preCG);
-  float3 lutInput = injectedData.toneMapType <= 1.f ? preCG : sdrColor;
+  float3 lutInput = RENODX_TONE_MAP_TYPE <= 1.f ? preCG : sdrColor;
     r0.xyz = lutInput;
-  r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+  r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   r1.xyzw = t2.Sample(s2_s, r0.xx).xyzw;
   r1.x = 9.99999975e-06 + r1.x;
   r2.xyzw = t2.Sample(s2_s, r0.yy).xyzw;
@@ -40,11 +40,11 @@ void main(
   r1.w = r0.w;
   r1.xyzw = r1.xyzw + -r0.xyzw;
   r0.xyzw = cb0[2].xxxx * r1.xyzw + r0.xyzw;
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  if(RENODX_TONE_MAP_TYPE != 0.f){
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
     r0.xyz = RestoreSaturationLoss(lutInput, r0.xyz);
     r0.xyz = renodx::tonemap::UpgradeToneMap(preCG, lutInput, r0.xyz, 1.f);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
   o0.xyzw = r0.xyzw;
   return;

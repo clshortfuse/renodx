@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 cbuffer cb1 : register(b1){
@@ -64,7 +64,7 @@ void main(
   r0.w = r0.w * 0.5 + 0.2;
   o0.xyz = r0.xyz * r0.www;
   o0.w = 1;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
     o0.xyz = PostToneMapScale(o0.xyz, true);
   }

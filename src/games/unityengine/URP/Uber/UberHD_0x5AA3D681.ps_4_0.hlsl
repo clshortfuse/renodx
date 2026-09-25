@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture2D<float4> t4 : register(t4);
@@ -28,17 +28,17 @@ void main(
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8,8,8) * r2.xyz;
   }
-  r1.xyz = cb0[2].xxx * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[2].xxx * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * cb0[2].yzw + r0.xyz;
   if (cb0[10].z > 0) {
     r1.xy = -cb0[10].xy + v1.xy;
-    r1.yz = cb0[10].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[10].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[9].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[10].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[10].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[9].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[9].xyz;
@@ -46,7 +46,7 @@ void main(
   }
   r0.xyz = cb0[0].www * r0.zxy;
   r0.yzx = lutShaper(r0.yzx);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.yzw = cb0[0].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r1.xy = float2(0.5,0.5) * cb0[0].xy;
@@ -75,7 +75,10 @@ void main(
     r1.xyz = r1.xyz + -r0.xyz;
     r0.xyz = cb0[15].xxx * r1.xyz + r0.xyz;
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = v1.xy * cb0[12].xy + cb0[12].zw;
   r1.xyzw = t2.Sample(s1_s, r1.xy).xyzw;
   r0.w = -0.5 + r1.w;
@@ -84,7 +87,7 @@ void main(
   r1.x = sqrt(r1.x);
   r1.x = cb0[11].y * -r1.x + 1;
   r1.yzw = r0.xyz * r0.www;
-  r1.yzw = cb0[11].xxx * r1.yzw * injectedData.fxFilmGrain;
+  r1.yzw = cb0[11].xxx * r1.yzw * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.yzw * r1.xxx + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
@@ -99,7 +102,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
     r0.xyz = PostToneMapScale(r0.xyz, true);
   }

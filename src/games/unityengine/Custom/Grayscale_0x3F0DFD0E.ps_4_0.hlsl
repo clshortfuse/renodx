@@ -54,7 +54,7 @@ void main(
   r1.xy = r1.xy * r0.yy + float2(0.5,0.5);
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
   r0.y = abs(r0.w) * 0.5 + 1;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r2.xyzw = log2(r1.xyzw);
   r2.xyzw = r2.xyzw * r0.yyyy;
   r2.xyzw = exp2(r2.xyzw);

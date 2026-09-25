@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 struct u0_t {
   float val[4];
@@ -21,7 +21,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r2.xyzw = (int4)r1.xyxy + int4(0,-1,-1,0);
   r0.xy = r2.zw;
   r0.xyz = t0.Load(r0.xyz).xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r3.xyz = log2(abs(r0.xyz));
   r0.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
   r0.xyz = max(float3(0.0404499359,0.0404499359,0.0404499359), r0.xyz);
@@ -34,7 +34,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r4.xy = r3.zw;
   r4.zw = float2(0,0);
   r4.xyz = t0.Load(r4.xyz).xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r5.xyz = log2(abs(r4.xyz));
   r4.xyz = float3(12.9200001,12.9200001,12.9200001) * r4.xyz;
   r4.xyz = max(float3(0.0404499359,0.0404499359,0.0404499359), r4.xyz);
@@ -45,7 +45,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r2.zw = float2(0,0);
   r2.xyz = t0.Load(r2.xyz).xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r6.xyz = log2(abs(r2.xyz));
   r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r2.xyz;
   r2.xyz = max(float3(0.0404499359,0.0404499359,0.0404499359), r2.xyz);
@@ -56,7 +56,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   }
   r3.zw = float2(0,0);
   r3.xyz = t0.Load(r3.xyz).xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r6.xyz = log2(abs(r3.xyz));
   r3.xyz = float3(12.9200001,12.9200001,12.9200001) * r3.xyz;
   r3.xyz = max(float3(0.0404499359,0.0404499359,0.0404499359), r3.xyz);
@@ -64,12 +64,12 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r6.xyz = exp2(r6.xyz);
   r6.xyz = r6.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
   r3.xyz = min(r6.xyz, r3.xyz);
-  } else if(injectedData.toneMapType >= 2.f){
-    r0.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r4.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r2.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r3.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  } else if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r0.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r4.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r2.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r3.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r0.xyz /= 50.f;
     r4.xyz /= 50.f;
     r2.xyz /= 50.f;
@@ -102,7 +102,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r0.w = r0.w * 4 + 1;
   r1.zw = float2(0,0);
   r2.xyz = t0.Load(r1.xyz).xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r3.xyz = log2(abs(r2.xyz));
   r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r2.xyz;
   r2.xyz = max(float3(0.0404499359,0.0404499359,0.0404499359), r2.xyz);
@@ -110,9 +110,9 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r3.xyz = exp2(r3.xyz);
   r3.xyz = r3.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
   r2.xyz = min(r3.xyz, r2.xyz);
-  } else if(injectedData.toneMapType >= 2.f){
-    r2.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  } else if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r2.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r2.xyz /= 50.f;
   }
   r0.xyz = r2.xyz + r0.xyz;
@@ -120,11 +120,11 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r0.w = -r1.z * r0.w + 2;
   r0.w = r1.z * r0.w;
   r0.xyz = r0.xyz * r0.www;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = renodx::color::srgb::Decode(r0.xyz);
-  } else if(injectedData.toneMapType >= 2.f){
-    r0.xyz *= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  } else if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r0.xyz *= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r0.xyz *= 50.f;
   }
   r0.w = 1;

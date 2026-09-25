@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2DArray<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -159,11 +159,11 @@ void main(
   r0.x = -0.5 + r0.x;
   r0.x = r0.x + r0.x;
   r0.xyz = r4.xyz * r0.xxx;
-  r0.xyz = cb0[0].xxx * r0.xyz * injectedData.fxFilmGrain;
+  r0.xyz = cb0[0].xxx * r0.xyz * CUSTOM_FILM_GRAIN;
   r0.w = renodx::color::y::from::BT709(saturate(r4.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[0].y * -r0.w + 1;
-  if (injectedData.fxFilmGrainType == 0.f) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f) {
     r0.xyz = r0.xyz * r0.www + r4.xyz;
   } else {
     r0.rgb = applyFilmGrain(r4.rgb, v1);

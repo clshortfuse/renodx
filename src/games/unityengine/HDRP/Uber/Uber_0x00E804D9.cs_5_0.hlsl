@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture3D<float4> t5 : register(t5);
@@ -88,17 +88,17 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r3.xyz = -r2.xyz * r0.www + r2.xyz;
     r3.xyz = r0.xyz * cb2[9].xyz + r3.xyz;
     r3.xyz = r3.xyz + -r2.xyz;
-    r2.xyz = cb2[7].xxx * r3.xyz * injectedData.fxBloom + r2.xyz;
+    r2.xyz = cb2[7].xxx * r3.xyz * CUSTOM_BLOOM + r2.xyz;
     if (cb2[7].w != 0) {
       r3.xy = r1.zw * cb2[10].xy + cb2[10].zw;
       r3.xyz = t3.SampleLevel(s0_s, r3.xy, 0).xyz;
       r0.xyz = r3.xyz * r0.xyz;
-      r2.xyz = r0.xyz * cb2[7].yyy * injectedData.fxLens + r2.xyz;
+      r2.xyz = r0.xyz * cb2[7].yyy * CUSTOM_LENS + r2.xyz;
     }
   }
   if ((uint)cb2[1].z == 0) {
     r0.xy = r1.xy * cb1[47].zw + -cb2[1].xy;
-    r0.yz = cb2[2].xx * abs(r0.yx) * min(1.f, injectedData.fxVignette);
+    r0.yz = cb2[2].xx * abs(r0.yx) * min(1.f, CUSTOM_VIGNETTE);
     r0.w = cb1[47].x / cb1[47].y;
     r0.w = -1 + r0.w;
     r0.w = cb2[2].w * r0.w + 1;
@@ -111,7 +111,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.x = 1 + -r0.x;
     r0.x = max(0, r0.x);
     r0.x = log2(r0.x);
-    r0.x = cb2[2].y * r0.x * max(1.f, injectedData.fxVignette);
+    r0.x = cb2[2].y * r0.x * max(1.f, CUSTOM_VIGNETTE);
     r0.x = exp2(r0.x);
     r0.yzw = float3(1,1,1) + -cb2[3].xyz;
     r0.xyz = r0.xxx * r0.yzw + cb2[3].xyz;
@@ -138,7 +138,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.w = r0.w * r1.w + cb2[6].z;
     r0.xyz = r1.www * r0.xyz;
     r0.xyz = lutShaper(r0.xyz);
-    if(injectedData.colorGradeLUTSampling == 0.f){
+    if(CUSTOM_LUT_SAMPLE == 0.f){
     r0.xyz = cb2[6].yyy * r0.xyz;
     r1.w = 0.5 * cb2[6].x;
     r0.xyz = r0.xyz * cb2[6].xxx + r1.www;
@@ -150,6 +150,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     }
     r0.xyz = r0.xyz + -r2.xyz;
     r1.xyz = r0.www * r0.xyz + r2.xyz;
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
   }
   u0[vThreadID] = r1.xyzx;
   return;

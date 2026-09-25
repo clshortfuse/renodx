@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture3D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -24,7 +24,7 @@ void main(
   r0.xy = r1.xy * r0.zz + r0.xy;
   r0.xy = r0.xy * cb0[2].zz + float2(0.5,0.5);
   r1.xyz = t1.Sample(s1_s, r0.xy).xyz;
-  r1.xyz = cb0[0].xxx * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[0].xxx * r1.xyz * CUSTOM_BLOOM;
   r1.xyz = float3(8,8,8) * r1.xyz;
   r2.xyz = t0.Sample(s0_s, r0.xy).xyz;
   r0.xy = r0.xy * float2(2,2) + float2(-1,-1);
@@ -47,7 +47,7 @@ void main(
   r0.xyz = r0.xxx * r0.yzw + cb0[1].xyz;
   r0.xyz = r1.xyz * r0.xyz;
   r0.xyz = r0.xyz * cb0[6].www + cb0[6].xyz;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

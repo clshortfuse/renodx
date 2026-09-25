@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -28,9 +28,9 @@ void main(
   r0.y = 1 + -r0.y;
   r0.x = r0.x * r0.y;
   r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
-  r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
-  r1.xyz = applyDither(r1.xyz, r0.x * (1.0 / 255.0), injectedData.gammaSpace != 0.f ? 0 : 1);
-  r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+  r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  r1.xyz = applyDither(r1.xyz, r0.x * (1.0 / 255.0), CUSTOM_GAMMA_SPACE != 0.f ? 0 : 1);
+  r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   o0.xyzw = r1.xyzw;
   return;
 }

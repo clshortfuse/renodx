@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -8,10 +8,19 @@ cbuffer cb0 : register(b0){
   float4 cb0[5];
 }
 
-float3 vanillaExp(float3 color){
-  return 1 - exp2(-color);
+float3 Tonemap(float3 color) {
+  bool extended = RENODX_TONE_MAP_TYPE != 0.f;
+  float3 sdr_color = 1 - exp2(-color);
+  float3 output_color;
+  [branch]
+  if (!extended) {
+    output_color = saturate(sdr_color);
+  } else {
+    float3 hdr_color = color > 0.3679 ? color * 0.692186396868 + 0.0531582277248 : sdr_color;
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+  }
+  return output_color;
 }
-
 
 void main(
   float4 v0 : SV_POSITION0,
@@ -27,38 +36,12 @@ void main(
   r0.xyzw = t0.SampleLevel(s0_s, v3.xy, 0).xyzw;
   r0.xyz = cb0[4].yyy * r0.xyz;
   o0.w = r0.w;
-  float midGray = vanillaExp(float3(0.18f, 0.18f, 0.18f)).x;
-  float3 hueCorrectionColor = vanillaExp(r0.xyz);
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = injectedData.toneMapType >= 2.f ? 3.f : injectedData.toneMapType;
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.mid_gray_value = midGray;
-  config.mid_gray_nits = midGray * 100;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
-                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = lerp(r0.xyz, hueCorrectionColor, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
-  config.reno_drt_tone_map_method = injectedData.toneMapType - 2.f;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_working_color_space = 0;
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 6.0 : injectedData.colorGradeClip;
-  if(config.type == 0.f){
-    r0.xyz = saturate(hueCorrectionColor);
-  }
-  r0.xyz = renodx::tonemap::config::Apply(r0.xyz, config);
+  r0.xyz = Tonemap(r0.xyz);
   r0.xyz = handleUserLUT(r0.xyz, t1, s1_s, float3(1 / 1024, 1 / 32, 31), 1, true);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

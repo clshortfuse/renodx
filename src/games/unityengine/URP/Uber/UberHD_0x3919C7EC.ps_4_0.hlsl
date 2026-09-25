@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -26,7 +26,7 @@ void main(
   r2.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
   r1.y = dot(r2.zw, r2.zw);
   r2.xyzw = r2.xyzw * r1.yyyy;
-  r2.xyzw = cb0[143].xxxx * r2.xyzw * injectedData.fxCA;
+  r2.xyzw = cb0[143].xxxx * r2.xyzw * CUSTOM_CHROMATIC_ABERRATION;
   r2.xyzw = r2.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
   r0.xyzw = min(r2.xyzw, r0.xyzw);
   r2.xyzw = t0.SampleBias(s0_s, r0.xy, cb0[4].x).xyzw;
@@ -69,19 +69,19 @@ void main(
   r2.xzw = r3.zzz * r5.xyz + r2.xzw;
   r2.xzw = r3.yyy * r2.xzw;
   r1.yzw = r3.www * r1.yzw + r2.xzw;
-  r1.yzw = cb0[138].xxx * r1.yzw * injectedData.fxBloom;
+  r1.yzw = cb0[138].xxx * r1.yzw * CUSTOM_BLOOM;
   r0.x = r1.x;
   r0.y = r2.y;
   r0.xyz = r1.yzw * cb0[138].yzw + r0.xyz;
   if (cb0[145].z > 0) {
     r1.xy = -cb0[145].xy + v1.xy;
-    r1.yz = cb0[145].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[145].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[144].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[145].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[145].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[144].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[144].xyz;
@@ -89,7 +89,7 @@ void main(
   }
   r0.xyz = cb0[136].www * r0.zxy;
   r0.yzx = lutShaper(r0.yzx);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.yzw = cb0[136].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r1.xy = float2(0.5,0.5) * cb0[136].xy;
@@ -113,7 +113,10 @@ void main(
     r1.xyz = cb0[137].www * r2.xyz + r1.xyz;
     r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
-  if (injectedData.fxFilmGrainType) {
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if (CUSTOM_FILM_GRAIN_TYPE) {
   r1.xy = v1.xy * cb0[147].xy + cb0[147].zw;
   r1.xyzw = t2.SampleBias(s1_s, r1.xy, cb0[4].x).xyzw;
   r0.w = -0.5 + r1.w;
@@ -122,12 +125,12 @@ void main(
   r1.x = sqrt(r1.x);
   r1.x = cb0[146].y * -r1.x + 1;
   r1.yzw = r0.xyz * r0.www;
-  r1.yzw = cb0[146].xxx * r1.yzw * injectedData.fxFilmGrain;
+  r1.yzw = cb0[146].xxx * r1.yzw * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.yzw * r1.xxx + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -61,24 +61,27 @@ void main(
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8,8,8) * r2.xyz;
   }
-  r1.xyz = cb0[140].xxx * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[140].xxx * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * cb0[140].yzw + r0.xyz;
   if (cb0[148].z > 0) {
     r1.xy = -cb0[148].xy + v1.xy;
-    r1.yz = cb0[148].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[148].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[147].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[148].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[148].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[147].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[147].xyz;
     r0.xyz = r1.xyz * r0.xyz;
   }
   r0.xyz = cb0[138].www * r0.xyz;
-  r1.xyz = applyUserTonemapACES(r0.xyz, 2);
+  r1.y = dot(float3(0.4397010,0.3829780,0.1773350), r0.xyz);
+  r1.z = dot(float3(0.0897923,0.8134230,0.0967616), r0.xyz);
+  r1.w = dot(float3(0.0175440,0.1115440,0.8707040), r0.xyz);
+  r1.xyz = Ap1AcesTonemap(r1.yzw, 2);
   if (cb0[139].w > 0) {
     r0.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
     r2.xyz = handleUserLUT(r1.xyz, t3, s0_s, cb0[139].xyz);
@@ -87,7 +90,7 @@ void main(
     r1.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   }
   r1.xyz = lutShaper(r1.xyz, false, 1);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyz = cb0[138].zzz * r1.zxy;
   r0.x = floor(r0.x);
   r1.xy = float2(0.5,0.5) * cb0[138].xy;
@@ -104,14 +107,11 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t2, r1.xyz, cb0[138].z + 1u);
   }
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
-  float3 newPeak = renodx::lut::Sample(t2, s0_s, lutShaper((injectedData.toneMapPeakNits / injectedData.toneMapGameNits), false, 1), cb0[138].z + 1u) * injectedData.toneMapGameNits;
-  float newPeakY = renodx::color::y::from::BT709(newPeak);
-  float ratio = renodx::math::DivideSafe(injectedData.toneMapPeakNits / newPeakY, 1.f);
-  if(ratio < 0.985f){
-    r0.xyz = rolloff(r0.xyz, ratio);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
   r1.xy = v1.xy * cb0[152].xy + cb0[152].zw;
   r1.xyzw = t4.SampleBias(s1_s, r1.xy, cb0[29].x).xyzw;
@@ -122,7 +122,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

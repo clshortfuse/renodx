@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -69,7 +69,7 @@ void main(
   r0.yz = v1.xy * float2(2,2) + float2(-1,-1);
   r0.w = dot(r0.yz, r0.yz);
   r0.yz = r0.yz * r0.ww;
-  r0.yz = cb0[35].ww * r0.yz * injectedData.fxCA;
+  r0.yz = cb0[35].ww * r0.yz * CUSTOM_CHROMATIC_ABERRATION;
   r2.xy = cb0[31].zw * -r0.yz;
   r2.xy = float2(0.5,0.5) * r2.xy;
   r0.w = dot(r2.xy, r2.xy);
@@ -141,7 +141,7 @@ void main(
   r0.xyz = r0.yzw * r0.xxx;
   if (cb0[40].y < 0.5) {
     r1.xy = -cb0[38].xy + r1.zw;
-    r3.yz = cb0[39].xx * abs(r1.yx) * min(1.f, injectedData.fxVignette);
+    r3.yz = cb0[39].xx * abs(r1.yx) * min(1.f, CUSTOM_VIGNETTE);
     r0.w = cb0[22].x / cb0[22].y;
     r0.w = -1 + r0.w;
     r0.w = cb0[39].w * r0.w + 1;
@@ -154,7 +154,7 @@ void main(
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[39].y * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[39].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r3.xyz = float3(1,1,1) + -cb0[37].xyz;
     r3.xyz = r0.www * r3.xyz + cb0[37].xyz;
@@ -170,21 +170,21 @@ void main(
     r0.x = -1 + r3.w;
     r4.w = r1.w * r0.x + 1;
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r0.xy = w1.xy * cb0[41].xy + cb0[41].zw;
   r0.xyzw = t6.Sample(s6_s, r0.xy).xyzw;
   r0.w = renodx::color::y::from::BT709(saturate(r3.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[40].z * -r0.w + 1;
   r0.xyz = r3.xyz * r0.xyz;
-  r0.xyz = cb0[40].www * r0.xyz * injectedData.fxFilmGrain;
+  r0.xyz = cb0[40].www * r0.xyz * CUSTOM_FILM_GRAIN;
   r4.xyz = r0.xyz * r0.www + r3.xyz;
   } else {
     r4.xyz = applyFilmGrain(r3.xyz, w1);
   }
   r4.w = saturate(r4.w);
   r0.yzx = lutShaper(r4.xyz, false, 2);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.yzw = cb0[36].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r1.xy = float2(0.5,0.5) * cb0[36].xy;
@@ -201,6 +201,9 @@ void main(
     r0.xyz = renodx::lut::SampleTetrahedral(t4, r0.yzx, cb0[36].z + 1u);
   }
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r1.xy = v1.xy * cb0[30].xy + cb0[30].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
   r0.w = r1.w * 2 + -1;
@@ -211,7 +214,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
   r4.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r4.xyz = PostToneMapScale(r4.xyz, true);
   } else {
     r4.xyz = renodx::color::srgb::EncodeSafe(r4.xyz);

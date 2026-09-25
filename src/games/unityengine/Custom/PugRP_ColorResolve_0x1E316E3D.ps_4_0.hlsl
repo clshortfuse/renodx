@@ -25,9 +25,9 @@ void main(
   r1.xy = cb0[130].xy * r1.xy;
   r1.xyzw = t0.SampleBias(s0_s, r1.xy, cb0[5].x).xyzw;
   r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
-  r1.xyz = cb0[167].xxx * r1.xyz * injectedData.fxNoise;
+  r1.xyz = cb0[167].xxx * r1.xyz * CUSTOM_NOISE;
   r0.xyz = r1.xyz * (1.0 / 255.0) + r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r1.xyz = cb0[169].xyz + -r0.xyz;

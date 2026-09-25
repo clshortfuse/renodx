@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -14,8 +14,6 @@ cbuffer cb0 : register(b0) {
   float4 cb0[18];
 }
 
-#define cmp -
-
 [numthreads(4, 4, 4)]
 void main(uint3 vThreadID: SV_DispatchThreadID) {
   float4 r0, r1, r2, r3, r4, r5, r6, r7;
@@ -26,8 +24,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float3 preCG;
   if (cb0[17].x > 0) {
     r1.xyz = r0.xyz * cb0[0].yyy;
-    r1.rgb = lutShaper(r1.rgb, true);
-    preCG = r1.rgb;
+    r1.xyz = lutShaper(r1.xyz, true);
+    preCG = r1.xyz;
     // white balance
     r2.x = dot(float3(0.390405,0.549941,0.00892632), r1.xyz);
     r2.y = dot(float3(0.0708416,0.963172,0.00135775), r1.xyz);
@@ -36,10 +34,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.x = dot(float3(2.85847,-1.62879,-0.0248910), r1.xyz);
     r2.y = dot(float3(-0.210182,1.15820,0.000324281), r1.xyz);
     r2.z = dot(float3(-0.0418120,-0.118169,1.06867), r1.xyz);
+    r2.xyz = lerp(preCG, r2.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
     // unity_to_ACES
     r1.x = dot(float3(0.4397010, 0.3829780, 0.1773350), r2.xyz);
     r1.y = dot(float3(0.0897923, 0.8134230, 0.0967616), r2.xyz);
     r1.z = dot(float3(0.0175440, 0.1115440, 0.8707040), r2.xyz);
+    preCG = r1.xyz;
     // to acescc
     r1.xyz = acesccEncode(r1.xyz);
     // contrast
@@ -204,18 +204,15 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.xyz = max(float3(0, 0, 0), r1.xyz);
   } else {
     r0.xyz = r0.xyz * cb0[0].yyy;
-    r1.rgb = lutShaper(r0.rgb, true);
+    r1.xyz = lutShaper(r0.xyz, true);
   }
   r0.xyz = max(float3(0, 0, 0), r1.xyz);
   // Ap1 to ap0
   r1.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
   r1.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
   r1.w = dot(float3(-0.00552588282, 0.00402521016, 1.00150073), r0.xyz);
-  r0.x = dot(float3(2.52169, -1.13413, -0.38756), r1.yzw);
-  r0.y = dot(float3(-0.27648, 1.37272, -0.09624), r1.yzw);
-  r0.z = dot(float3(-0.01538, -0.15298, 1.16835), r1.yzw);
-  r0.xyz = lerp(preCG, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-  r0.xyz = applyUserTonemapACES(r0.xyz, 2);
+  r0.xyz = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+  r0.xyz = Ap1AcesTonemap(r0.xyz, 2);
   r0.w = 1;
   u0[vThreadID] = r0;
   return;

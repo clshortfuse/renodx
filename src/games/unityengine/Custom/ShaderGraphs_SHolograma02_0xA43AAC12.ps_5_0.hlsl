@@ -530,7 +530,7 @@ void main(
   r0.xyz = r7.xyz * r6.xyz + r5.xyz;
   r0.xyz = r0.xyz + r8.xyz;
   o0.xyz = cb5[3].xyz * r1.yzw + r0.xyz;
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
   o0 = saturate(o0);
   }
   return;

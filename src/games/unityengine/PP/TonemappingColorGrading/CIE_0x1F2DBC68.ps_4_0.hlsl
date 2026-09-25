@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -56,49 +56,49 @@ void main(
   float param = setParam(float3(cb0[7].xy, midGray));
   float defaultClip = 5.f;
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = param == 0.f ? 0.f : (injectedData.toneMapType >= 2.f ? 3.f : injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  //config.saturation = injectedData.colorGradeSaturation;
-  //config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  //config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
+  config.type = param == 0.f ? 0.f : (RENODX_TONE_MAP_TYPE >= 2.f ? 3.f : RENODX_TONE_MAP_TYPE);
+  config.peak_nits = RENODX_PEAK_WHITE_NITS;
+  config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
+  config.gamma_correction = RENODX_GAMMA_CORRECTION;
+  config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  config.shadows = RENODX_TONE_MAP_SHADOWS;
+  config.contrast = RENODX_TONE_MAP_CONTRAST;
+  //config.saturation = RENODX_TONE_MAP_SATURATION;
+  //config.reno_drt_dechroma = RENODX_TONE_MAP_BLOWOUT;
+  //config.reno_drt_blowout = 1.f - RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
   config.mid_gray_value = midGray;
   config.mid_gray_nits = midGray * 100;
-  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+  //config.reno_drt_flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
   if(param == 1){
   config.reno_drt_contrast = 1.1f;
-  config.reno_drt_flare = 0.045f * pow(injectedData.colorGradeFlare, 2.f);
+  //config.reno_drt_flare = 0.045f * pow(RENODX_TONE_MAP_FLARE, 2.f);
   } else if(param == 2){
   defaultClip = 2.f;
   config.reno_drt_highlights = 1.06f;
   config.reno_drt_contrast = 1.1f;
-  config.reno_drt_flare = 0.09f * pow(injectedData.colorGradeFlare, 2.f);
+  //config.reno_drt_flare = 0.09f * pow(RENODX_TONE_MAP_FLARE, 2.f);
   } else if(param == 3){
   config.reno_drt_highlights = 1.06f;
   config.reno_drt_shadows = 1.05f;
   config.reno_drt_contrast = 1.28f;
   }
-  config.hue_correction_type = injectedData.toneMapPerChannel != 1.f ? renodx::tonemap::config::hue_correction_type::INPUT
-                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = lerp(r0.xyz, hueCorrectionColor, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
-  config.reno_drt_tone_map_method = injectedData.toneMapType - 2.f;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 1.f;
+  //config.hue_correction_type = injectedData.toneMapPerChannel != 1.f ? renodx::tonemap::config::hue_correction_type::INPUT
+  //                                                                   : renodx::tonemap::config::hue_correction_type::CUSTOM;
+  ////config.hue_correction_strength = injectedData.toneMapHueCorrection;
+  //config.hue_correction_color = lerp(r0.xyz, hueCorrectionColor, injectedData.toneMapHueShift);
+  //config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
+  config.reno_drt_tone_map_method = RENODX_TONE_MAP_TYPE - 2.f;
+  //config.reno_drt_per_channel = injectedData.toneMapPerChannel != 1.f;
   config.reno_drt_working_color_space = 0;
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? defaultClip : injectedData.colorGradeClip;
+  config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP == 0.f ? defaultClip : RENODX_RENO_DRT_WHITE_CLIP;
   if (config.type == 0.f) {
     r0.xyz = saturate(hueCorrectionColor);
   }
   r0.xyz = renodx::tonemap::config::Apply(r0.xyz, config);
   r0.xyz = handleUserLUT(r0.xyz, t2, s2_s, cb0[10].xyz, 2, true);
-  r0.xyz = grading(r0.xyz);
-  if (injectedData.countOld == injectedData.countNew) {
+  //r0.xyz = grading(r0.xyz);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

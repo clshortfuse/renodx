@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -45,13 +45,13 @@ void main(
   r1.xyz = r2.xyz + r1.xyz;
   r1.xyz = r3.xyz * float3(2,2,2) + r1.xyz;
   r0.xyz = r1.xyz + r0.xyz;
-  r0.xyz = cb0[7].xxx * r0.xyz * injectedData.fxBloom;
+  r0.xyz = cb0[7].xxx * r0.xyz * CUSTOM_BLOOM;
   r0.xyz = float3(0.0625,0.0625,0.0625) * r0.xyz;
   r1.xyzw = t0.Sample(s1_s, w1.xy).xyzw;
   r2.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   r0.xyz = r2.xyz + r0.xyz;
   o0.w = r1.w;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

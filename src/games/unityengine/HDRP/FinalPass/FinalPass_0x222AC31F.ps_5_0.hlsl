@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2DArray<float4> t3 : register(t3);
 Texture2DArray<float4> t2 : register(t2);
@@ -72,7 +72,7 @@ void main(
   r4.xyz = t0.SampleLevel(s1_s, r4.xyz, 0).xyz;
   r1.xyz = r5.zzz * r4.xyz + r1.xyz;
   r0.xyz = r5.www * r1.xyz + r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r3.z = cb0[2].z;
@@ -87,7 +87,7 @@ void main(
   r2.z = 0;
   r1.xyzw = t1.SampleLevel(s0_s, r2.xyz, 0).xyzw;
   o0.xyz = r1.www * r0.xyz + r1.xyz;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz);
   }
   r0.xy = cb1[50].xy * v1.xy;

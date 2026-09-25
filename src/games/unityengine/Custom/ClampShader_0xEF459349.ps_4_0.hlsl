@@ -16,7 +16,7 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyzw = max(float4(0,0,0,0), r0.xyzw);
   o0.xyzw = min(cb0[6].xxxx, r0.xyzw);
   } else {

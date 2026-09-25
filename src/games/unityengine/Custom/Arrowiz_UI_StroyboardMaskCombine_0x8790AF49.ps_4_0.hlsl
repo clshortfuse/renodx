@@ -21,7 +21,7 @@ void main(
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r1.xyz = cb0[6].xxx * r0.xyz;
   r0.xyz = r1.xyz * float3(-0.3,-0.3,-0.3) + r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   } else {
     r0.xyz = renodx::color::bt709::clamp::AP1(r0.xyz);

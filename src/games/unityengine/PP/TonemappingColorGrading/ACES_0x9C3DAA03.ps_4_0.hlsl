@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -24,16 +24,6 @@ cbuffer cb0 : register(b0){
   float4 cb0[13];
 }
 
-float3 vanillaNarkACES(float3 color, float exposure) {
-  const float a = 2.51f;
-  const float b = 0.03f;
-  const float c = 2.43f;
-  const float d = 0.59f;
-  const float e = 0.14f;
-  float3 exposed_color = exposure * color;
-  return (exposed_color * (a * exposed_color + b)) / (exposed_color * (c * exposed_color + d) + e);
-}
-
 void main(
   float4 v0 : SV_POSITION0,
   float2 v1 : TEXCOORD0,
@@ -45,49 +35,8 @@ void main(
 
   r0.z = cb0[9].y;
   r1.xyzw = t0.Sample(s2_s, v1.xy).xyzw;
-  float midGray1 = vanillaNarkACES(float3(0.18f, 0.18f, 0.18f), cb0[4].x).x;
-  float3 hueCorrectionColor1 = vanillaNarkACES(r1.xyz, cb0[4].x);
-  float midGray2 = vanillaNarkACES(float3(0.18f, 0.18f, 0.18f), cb0[4].y).x;
-  float3 hueCorrectionColor2 = vanillaNarkACES(r1.xyz, cb0[4].y);
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_value = midGray2;
-  config.mid_gray_nits = midGray2 * 100;
-  config.reno_drt_contrast = 1.6f;
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
-                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = lerp(r1.xyz, hueCorrectionColor2, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
-  config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_working_color_space = 0;
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 8.0f / cb0[4].y : injectedData.colorGradeClip;
-  if(injectedData.toneMapType == 0.f){
-    r2.xyz = saturate(hueCorrectionColor2);
-    r3.xyz = saturate(hueCorrectionColor1);
-  } else {
-    r2.xyz = r1.xyz;
-    r3.xyz = r1.xyz;
-  }
-  r2.xyz = renodx::tonemap::config::Apply(r2.xyz, config);
-  config.mid_gray_value = midGray1;
-  config.mid_gray_nits = midGray1 * 100;
-  config.hue_correction_color = lerp(r1.xyz, hueCorrectionColor1, injectedData.toneMapHueShift);
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 8.0f / cb0[4].x : injectedData.colorGradeClip;
-  r3.xyz = renodx::tonemap::config::Apply(r3.xyz, config);
+  r2.xyz = Bt709AcesTonemap(r1.xyz, cb0[4].y);
+  r3.xyz = Bt709AcesTonemap(r1.xyz, cb0[4].x);
   r4.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
   r2.xyz = lerp(r3.xyz, r2.xyz, r4.x);
   r5.xyz = handleUserLUT(r2.xyz, t3, s4_s, cb0[9].xyz, 1, true);
@@ -136,7 +85,10 @@ void main(
   r1.x = -r1.x * 3.75 + 1;
   r1.x = r2.y * r1.x + r1.y;
   o0.xyzw = r1.xxxx * r0.xyzw;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    o0.xyz = GradeAndDisplayMap(o0.xyz);
+  }
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz);
   }
   return;

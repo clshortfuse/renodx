@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -32,10 +32,10 @@ void main(
   r0.x = sqrt(r0.x);
   r0.x = saturate(cb0[146].y + -r0.x);
   r1.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
-  if(injectedData.isClamped != 0.f){
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_IS_CLAMPED != 0.f){
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r1.xyz = rolloffSdr(r1.xyz);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.yzw = -cb0[143].xyz + r1.xyz;
   r0.yzw = max(float3(0,0,0), r0.yzw);

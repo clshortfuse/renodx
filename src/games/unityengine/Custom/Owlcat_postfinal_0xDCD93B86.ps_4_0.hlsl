@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -92,13 +92,13 @@ void main(
   r0.x = max(r0.x, r0.y);
   r0.y = min(r1.y, r0.w);
   r0.xyz = (r0.z < r0.y) || (r0.z > r0.x) ? r2.yzw : r3.xyz;
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = v1.xy * cb0[2].xy + cb0[2].zw;
   r1.xyzw = t1.Sample(s1_s, r1.xy).xyzw;
   r0.w = -0.5 + r1.w;
   r0.w = r0.w + r0.w;
   r1.xyz = r0.xyz * r0.www;
-  r1.xyz = cb0[1].xxx * r1.xyz * injectedData.fxFilmGrain;
+  r1.xyz = cb0[1].xxx * r1.xyz * CUSTOM_FILM_GRAIN;
   r0.w = renodx::color::y::from::BT709(saturate(r0.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[1].y * -r0.w + 1;
@@ -117,7 +117,7 @@ void main(
   r1.x = 1 + -r1.x;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
     r0.xyz = PostToneMapScale(r0.xyz, true);
   }

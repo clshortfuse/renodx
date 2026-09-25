@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t9 : register(t9);
 Texture3D<float4> t8 : register(t8);
@@ -124,7 +124,7 @@ void main(
   r1.xz = r3.xy * float2(0.100000001,0.100000001) + r1.xz;
   r0.zw = r1.xz * cb0[40].ww + r0.zw;
   r0.zw = float2(0.075000003,0.075000003) * r0.zw;
-  r0.zw = r0.zw * cb0[50].ww * injectedData.fxFilmGrain + v1.xy;
+  r0.zw = r0.zw * cb0[50].ww * CUSTOM_FILM_GRAIN + v1.xy;
   r3.xyzw = t4.Sample(s4_s, v1.xy).xyzw;
   r0.zw = float2(-0.5,-0.5) + r0.zw;
   r1.xz = r0.zw * cb0[32].zz + float2(0.5,0.5);
@@ -210,7 +210,7 @@ void main(
   r1.xz = v1.xy * float2(2,2) + float2(-1,-1);
   r1.w = dot(r1.xz, r1.xz);
   r1.xz = r1.xz * r1.ww;
-  r1.xz = cb0[42].xx * r1.xz * injectedData.fxCA;
+  r1.xz = cb0[42].xx * r1.xz * CUSTOM_CHROMATIC_ABERRATION;
   r0.z = r0.z <= 0.99 ? 1.30 : 0.3;
   r3.yz = cb0[36].zw * -r1.xz;
   r3.yz = float2(0.5,0.5) * r3.yz;
@@ -223,7 +223,7 @@ void main(
   r1.xz = -r1.xz / r3.yy;
   r0.z = r0.z * r0.w;
   r0.zw = float2(0.01,0.0007) * r0.zz;
-  r3.z = 0.1 + cb0[42].x * injectedData.fxCA;
+  r3.z = 0.1 + cb0[42].x * CUSTOM_CHROMATIC_ABERRATION;
   r0.zw = r0.zw * r3.zz + r1.xz;
   r6.y = 0;
   r7.w = 1;
@@ -349,9 +349,9 @@ void main(
   r0.xyzw = r0.xyzw * float4(0.2,0.2,0.2,0.2) + r2.xyzw;
   r2.x = -1 + r3.x;
   r2.x = r2.x * 0.75 + 1;
-  r2.x = cb0[39].y * r2.x * injectedData.fxBloom;
+  r2.x = cb0[39].y * r2.x * CUSTOM_BLOOM;
   r0.xyzw = r2.xxxx * r0.xyzw;
-  r2.xyz = cb0[39].zzz * r7.xyz * injectedData.fxLens;
+  r2.xyz = cb0[39].zzz * r7.xyz * CUSTOM_LENS;
   r2.w = 0;
   r2.xyzw = float4(1,1,1,1) + r2.xyzw;
   r1.xyzw = r0.xyzw * r2.xyzw + r1.xyzw;
@@ -365,14 +365,14 @@ void main(
   r0.xyzw = -r1.xyzw * r2.xxxx + r0.xyzw;
   r0.xyzw = r2.yyyy * r0.xyzw + r3.xyzw;
   r1.xyz = r0.xyz * r4.xyz;
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xyz = r1.xyz * cb0[50].www + r0.xyz;
   } else {
     r1.xyz = applyFilmGrain(r0.xyz, v1);
   }
   r1.xyz = cb0[45].xxx * r1.xyz;
   r1.xyz = lutShaper(r1.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r1.xyz = cb0[42].zzz * r1.xyz;
   r1.w = 0.5 * cb0[42].y;
   r1.xyz = r1.xyz * cb0[42].yyy + r1.www;
@@ -383,7 +383,7 @@ void main(
   if (cb0[50].y < 0.5) {
     r0.x = dot(r0.xyz, float3(0.272228986,0.674081981,0.0536894985));
     r0.yz = -cb0[48].xy + v1.xy;
-    r2.yz = cb0[49].xx * abs(r0.zy) * min(1.f, injectedData.fxVignette);
+    r2.yz = cb0[49].xx * abs(r0.zy) * min(1.f, CUSTOM_VIGNETTE);
     r0.y = cb0[26].x / cb0[26].y;
     r0.y = -1 + r0.y;
     r0.y = cb0[49].w * r0.y + 1;
@@ -396,7 +396,7 @@ void main(
     r0.y = 1 + -r0.y;
     r0.y = max(0, r0.y);
     r0.y = log2(r0.y);
-    r0.y = cb0[49].y * r0.y * max(1.f, injectedData.fxVignette);
+    r0.y = cb0[49].y * r0.y * max(1.f, CUSTOM_VIGNETTE);
     r0.y = exp2(r0.y);
     r0.z = r0.y * r0.y;
     r1.w = r0.z * r0.x;
@@ -409,6 +409,9 @@ void main(
     r2.xyz = cb0[50].xxx * r0.xyz + r1.xyz;
     o0.w = 1;
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r2.xyz = GradeAndDisplayMap(r2.xyz);
+  }
   r0.xy = v1.xy * cb0[35].xy + cb0[35].zw;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r0.x = r0.w * 2 + -1;
@@ -419,7 +422,7 @@ void main(
   r0.x = 1 + -r0.x;
   r0.x = r0.y * r0.x;
   r0.xyz = applyDither(r2.xyz, r0.x * (1.0 / 64.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

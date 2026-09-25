@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -29,9 +29,9 @@ void main(
   r0.xyz = r1.xyz * float3(0,0,1) + r0.xyz;
   r0.xyz = float3(-0.5,-0.5,-0.5) + r0.xyz;
   r1.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  if (injectedData.countOld == injectedData.countNew) {
-    r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r2.xyz = cb0[3].xyz * r1.xyz;
   r2.xz = r2.xx + r2.yz;
@@ -45,15 +45,15 @@ void main(
   r0.w = dot(cb0[10].zy, r2.xy);
   r0.w = max(0, r0.w);
   r0.w = cb0[10].x + r0.w;
-  r2.xyz = cb0[8].xyz * r0.www * injectedData.fxFilmGrain;
+  r2.xyz = cb0[8].xyz * r0.www * CUSTOM_FILM_GRAIN;
   r0.xyz = r2.xyz * r0.xyz + float3(0.5,0.5,0.5);
   r0.xyz = saturate(r0.xyz);
   r2.xyz = float3(1,1,1) + -r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r1.xyz = saturate(r1.xyz);
   }
   o0.w = r1.w;
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r3.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
   r3.xyz = -r3.xyz * float3(2,2,2) + float3(1,1,1);
   r2.xyz = -r3.xyz * r2.xyz + float3(1,1,1);
@@ -64,13 +64,13 @@ void main(
   r0.xyz = r0.xyz + r0.xyz;
   r0.xyz = r1.xyz * r2.xyz + r0.xyz;
   } else {
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
     r0.xyz = applyFilmGrain(r1.xyz, v1);
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   }
-  if (injectedData.countOld == injectedData.countNew) {
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
-    r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+    r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   o0.xyz = r0.xyz;
   return;

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -23,8 +23,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.xyz = (uint3)vThreadID.xyz;
   if (cb0[17].x > 0) {
     r1.xyz = r0.xyz * cb0[0].yyy;
-    r1.rgb = lutShaper(r1.rgb, true);
-    float3 ungraded = r1.rgb;
+    r1.xyz = lutShaper(r1.xyz, true);
+    float3 preCG = r1.xyz;
     r2.x = dot(float3(0.390405,0.549941,0.00892632), r1.xyz);
     r2.y = dot(float3(0.0708416,0.963172,0.00135775), r1.xyz);
     r2.z = dot(float3(0.0231082,0.128021,0.936245), r1.xyz);
@@ -190,15 +190,15 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.x = dot(float3(1.70504999,-0.621789992,-0.0832599998), r1.xyz);
     r2.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r1.xyz);
     r2.z = dot(float3(-0.0240000002,-0.128969997,1.15296996), r1.xyz);
-    r2.rgb = lerp(ungraded, r2.rgb, injectedData.colorGradeInternalLUTStrength);
+    r2.xyz = lerp(preCG, r2.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   } else {
     r0.xyz = r0.xyz * cb0[0].yyy;
-    r0.rgb = lutShaper(r0.rgb, true);
+    r0.xyz = lutShaper(r0.xyz, true);
     r2.x = dot(float3(1.70504999,-0.621789992,-0.0832599998), r0.xyz);
     r2.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r0.xyz);
     r2.z = dot(float3(-0.0240000002,-0.128969997,1.15296996), r0.xyz);
   }
-    r2.xyz = applyUserNoTonemap(r2.xyz);
+  //r2.xyz = GradeAndDisplayMap(r2.xyz);
   r2.w = 1;
   u0[vThreadID] = r2;
   return;

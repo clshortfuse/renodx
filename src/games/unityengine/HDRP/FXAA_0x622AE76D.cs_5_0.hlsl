@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../shared.h"
 
 Texture2DArray<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);

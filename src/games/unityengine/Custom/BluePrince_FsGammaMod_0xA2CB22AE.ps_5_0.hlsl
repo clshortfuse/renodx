@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -26,7 +26,7 @@ void main(
   r0.yzw = r1.xyz * r0.zzz + -r0.yyy;
   o0.w = r1.w;
   r0.xyz = r0.yzw / r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r0.xyz = cb0[5].yzw * r0.xyz;
@@ -34,7 +34,7 @@ void main(
   r1.xyz = cb0[3].www * r0.xyz;
   r0.xyz = cb0[3].www * r0.xyz + float3(0.5,0.5,0.5);
   r1.xyz = r1.xyz + r1.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r2.xyz = r1.xyz * float3(-2,-2,-2) + float3(3,3,3);
@@ -46,7 +46,7 @@ void main(
   r1.xyz = r0.xyz * r2.yyy + -r0.xyz;
   r2.xyz = float3(-0.5,-0.5,-0.5) + r0.xyz;
   r2.xyz = float3(-2,-2,-2) * r2.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r2.xyz = saturate(r2.xyz);
   }
   r3.xyz = r2.xyz * float3(-2,-2,-2) + float3(3,3,3);
@@ -56,7 +56,7 @@ void main(
   r0.w = dot(r0.xyz, float3(0.212599993,0.715200007,0.0722000003));
   r0.xyz = r0.xyz + -r0.www;
   r0.xyz = cb0[4].xxx * r0.xyz + r0.www;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(float3(0.0001,0.0001,0.0001), r0.xyz);
   r0.xyz = log2(r0.xyz);
   r0.w = 1 / cb0[3].y;
@@ -67,10 +67,10 @@ void main(
     r0.xyz = renodx::math::SignPow(r0.xyz, 1 / cb0[3].y);
   }
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

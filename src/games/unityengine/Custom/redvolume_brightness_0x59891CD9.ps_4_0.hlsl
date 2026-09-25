@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -19,7 +19,7 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[19].x).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = log2(abs(r0.xyz));
   r0.xyz = cb1[2].xxx * r0.xyz;
   r0.xyz = exp2(r0.xyz);

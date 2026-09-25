@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture3D<float4> t6 : register(t6);
@@ -33,7 +33,7 @@ void main(
   r0.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
   r1.x = dot(r0.zw, r0.zw);
   r0.xyzw = r1.xxxx * r0.xyzw;
-  r0.xyzw = cb0[35].wwww * r0.xyzw * injectedData.fxCA;
+  r0.xyzw = cb0[35].wwww * r0.xyzw * CUSTOM_CHROMATIC_ABERRATION;
   r0.xyzw = saturate(r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy);
   r0.xyzw = cb0[26].xxxx * r0.xyzw;
   r1.xyzw = t1.SampleLevel(s1_s, r0.zw, 0).xyzw;
@@ -88,7 +88,7 @@ void main(
   r2.xyzw = r4.xyzw + r2.xyzw;
   r2.xyzw = r3.xyzw * float4(2,2,2,2) + r2.xyzw;
   r1.xyzw = r2.xyzw + r1.xyzw;
-  r1.xyzw = cb0[34].yyyy * r1.xyzw * injectedData.fxBloom;
+  r1.xyzw = cb0[34].yyyy * r1.xyzw * CUSTOM_BLOOM;
   r2.xyzw = float4(0.0625,0.0625,0.0625,1) * r1.xyzw;
   r1.xyzw = float4(0.0625,0.0625,0.0625,0.0625) * r1.xyzw;
   r3.xyz = cb0[35].xyz * r2.xyz;
@@ -96,17 +96,17 @@ void main(
   r0.xyzw = r3.xyzw + r0.xyzw;
   r2.xy = v1.xy * cb0[33].xy + cb0[33].zw;
   r2.xyzw = t4.Sample(s4_s, r2.xy).xyzw;
-  r2.xyz = cb0[34].zzz * r2.xyz * injectedData.fxLens;
+  r2.xyz = cb0[34].zzz * r2.xyz * CUSTOM_LENS;
   r2.w = 0;
   r0.xyzw = r2.xyzw * r1.xyzw + r0.xyzw;
-  if (injectedData.fxFilmGrainType == 0.f) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f) {
   r1.x = renodx::color::y::from::BT709(saturate(r0.xyz));
   r1.x = sqrt(r1.x);
   r1.x = cb0[40].z * -r1.x + 1;
   r1.yz = w1.xy * cb0[41].xy + cb0[41].zw;
   r2.xyzw = t7.Sample(s7_s, r1.yz).xyzw;
   r1.yzw = r2.xyz * r0.xyz;
-  r1.yzw = cb0[40].www * r1.yzw * injectedData.fxFilmGrain;
+  r1.yzw = cb0[40].www * r1.yzw * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.yzw * r1.xxx + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
@@ -114,13 +114,16 @@ void main(
   r0.xyzw = cb0[36].zzzz * r0.xyzw;
   o0.w = r0.w;
   r0.xyz = lutShaper(r0.xyz);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.xyz = cb0[36].yyy * r0.xyz;
   r0.w = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r0.www;
   r0.xyzw = t6.Sample(s6_s, r0.xyz).xyzw;
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t6, r0.xyz, 1 / cb0[36].x);
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
   r1.xy = v1.xy * cb0[30].xy + cb0[30].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
@@ -132,7 +135,7 @@ void main(
   r1.x = 1 + -r1.x;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

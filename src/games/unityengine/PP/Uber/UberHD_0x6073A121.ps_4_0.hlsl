@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -57,11 +57,11 @@ void main(
   r1.xy = cb0[26].xx * r1.xy;
   r1.xyzw = t2.Sample(s2_s, r1.xy).xyzw;
   r1.xyzw = r2.xyzw + r1.xyzw;
-  r1.xyzw = cb0[46].yyyy * r1.xyzw * injectedData.fxBloom;
+  r1.xyzw = cb0[46].yyyy * r1.xyzw * CUSTOM_BLOOM;
   r2.xy = v1.xy * cb0[45].xy + cb0[45].zw;
   r2.xyz = t3.Sample(s3_s, r2.xy).xyz;
   r3.xyzw = float4(0.0625,0.0625,0.0625,0.0625) * r1.xyzw;
-  r2.xyz = cb0[46].zzz * r2.xyz * injectedData.fxLens;
+  r2.xyz = cb0[46].zzz * r2.xyz * CUSTOM_LENS;
   r2.w = 0;
   r1.xyzw = float4(0.0625,0.0625,0.0625,1) * r1.xyzw;
   r4.xyz = cb0[47].xyz * r1.xyz;
@@ -219,6 +219,9 @@ void main(
   r3.xyz = r2.xyw + -r1.xyz;
   r1.xyz = r1.www * r3.xyz + r1.xyz;
   r1.xyz = r2.zzz ? r2.xyw : r1.xyz;
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
+  }
   r0.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
   r1.xyzw = float4(0.0973,0.103,0.1099,0.1031) * v0.xyyx;
   r1.xyzw = frac(r1.xyzw);
@@ -228,9 +231,9 @@ void main(
   r2.xyzw = r1.wwyx + r1.yxxz;
   r1.xyzw = r2.xyzw * r1.xyzw;
   r1.xyzw = frac(r1.xyzw);
-  r0.xyzw = r1.xyzw * (1.0 / 255.0) * injectedData.fxNoise + r0.xyzw;
+  r0.xyzw = r1.xyzw * (1.0 / 255.0) * CUSTOM_NOISE + r0.xyzw;
   r1.yzw = renodx::color::srgb::DecodeSafe(r0.xyz);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = asint(cb0[42].y) == 1 ? PostToneMapScale(r1.yzw) : PostToneMapScale(r1.yzw, true);
   } else {
     r0.xyz = asint(cb0[42].y) == 1 ? r1.yzw : r0.xyz;

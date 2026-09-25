@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture3D<float4> t4 : register(t4);
@@ -32,7 +32,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r2.xy = r1.zw * float2(2,2) + float2(-1,-1);
   r0.w = dot(r2.xy, r2.xy);
   r2.xy = r2.xy * r0.ww;
-  r2.xy = cb1[0].xx * r2.xy * injectedData.fxCA;
+  r2.xy = cb1[0].xx * r2.xy * CUSTOM_CHROMATIC_ABERRATION;
   r2.zw = cb0[42].xy * -r2.xy;
   r2.zw = float2(0.5,0.5) * r2.zw;
   r0.w = dot(r2.zw, r2.zw);
@@ -118,12 +118,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r3.xyz = -r2.xyz * r0.www + r2.xyz;
     r3.xyz = r0.xyz * cb1[9].xyz + r3.xyz;
     r3.xyz = r3.xyz + -r2.xyz;
-    r2.xyz = cb1[7].xxx * r3.xyz * injectedData.fxBloom + r2.xyz;
+    r2.xyz = cb1[7].xxx * r3.xyz * CUSTOM_BLOOM + r2.xyz;
     if (cb1[7].w != 0) {
       r3.xy = r1.zw * cb1[10].xy + cb1[10].zw;
       r3.xyz = t2.SampleLevel(s0_s, r3.xy, 0).xyz;
       r0.xyz = r3.xyz * r0.xyz;
-      r2.xyz = r0.xyz * cb1[7].yyy * injectedData.fxLens + r2.xyz;
+      r2.xyz = r0.xyz * cb1[7].yyy * CUSTOM_LENS + r2.xyz;
     }
   }
   if (asuint(cb1[1].z) == 0) {
@@ -161,7 +161,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   } else {
     r0.xyz = cb1[6].zzz * r0.xyz;
     r0.rgb = lutShaper(r0.rgb);
-    if (injectedData.colorGradeLUTSampling == 0.f) {
+    if (CUSTOM_LUT_SAMPLE == 0.f) {
     r0.xyz = cb1[6].yyy * r0.xyz;
     r0.w = 0.5 * cb1[6].x;
     r0.xyz = r0.xyz * cb1[6].xxx + r0.www;
@@ -169,6 +169,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     } else {
       r1.rgb = renodx::lut::SampleTetrahedral(t4, r0.rgb, 1 / cb1[6].x);
     }
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
   }
   u0[vThreadID] = r1.xyzx;
   return;

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture2D<float4> t4 : register(t4);
@@ -25,7 +25,7 @@ void main(
   r0.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
   r1.x = dot(r0.zw, r0.zw);
   r0.xyzw = r1.xxxx * r0.xyzw;
-  r0.xyzw = cb0[140].xxxx * r0.xyzw * injectedData.fxCA;
+  r0.xyzw = cb0[140].xxxx * r0.xyzw * CUSTOM_CHROMATIC_ABERRATION;
   r1.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
   r0.xyzw = r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
   r2.xyzw = t0.SampleBias(s0_s, r0.xy, cb0[5].x).xyzw;
@@ -74,24 +74,24 @@ void main(
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8,8,8) * r2.xyz;
   }
-  r1.xyz = cb0[134].xxx * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[134].xxx * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * cb0[134].yzw + r0.xyz;
   if (cb0[142].z > 0) {
     r1.xy = -cb0[142].xy + v1.xy;
-    r1.yz = cb0[142].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[142].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[141].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[142].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[142].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[141].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[141].xyz;
     r0.xyz = r1.xyz * r0.xyz;
   }
   r0.xyz = cb0[132].www * r0.xyz;
-  r0.xyz = applyUserTonemapNeutral(r0.xyz);
+  r0.xyz = NeutralTonemap(r0.xyz);
   if (cb0[133].w > 0) {
     r1.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
     r2.xyz = handleUserLUT(r0.xyz, t4, s0_s, cb0[133].xyz);
@@ -100,7 +100,7 @@ void main(
     r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
   r0.xyz = lutShaper(r0.xyz, false, 1);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.xyw = cb0[132].zzz * r0.xyz;
   r0.w = floor(r0.w);
   r1.xy = float2(0.5,0.5) * cb0[132].xy;
@@ -117,13 +117,10 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t3, r0.xyz, cb0[132].z + 1u);
   }
-  float3 newPeak = renodx::lut::Sample(t3, s0_s, lutShaper((injectedData.toneMapPeakNits / injectedData.toneMapGameNits), false, 1), cb0[132].z + 1u) * injectedData.toneMapGameNits;
-  float newPeakY = renodx::color::y::from::BT709(newPeak);
-  float ratio = renodx::math::DivideSafe(injectedData.toneMapPeakNits / newPeakY, 1.f);
-  if(ratio < 0.985f){
-    r0.xyz = rolloff(r0.xyz, ratio);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.fxFilmGrainType == 0.f) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f) {
   r1.xy = v1.xy * cb0[144].xy + cb0[144].zw;
   r1.xyzw = t2.SampleBias(s2_s, r1.xy, cb0[5].x).xyzw;
   r0.w = -0.5 + r1.w;
@@ -132,7 +129,7 @@ void main(
   r1.x = sqrt(r1.x);
   r1.x = cb0[143].y * -r1.x + 1;
   r1.yzw = r0.xyz * r0.www;
-  r1.yzw = cb0[143].xxx * r1.yzw * injectedData.fxFilmGrain;
+  r1.yzw = cb0[143].xxx * r1.yzw * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.yzw * r1.xxx + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
@@ -146,7 +143,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -19,7 +19,7 @@ void main(
   r1.xyzw = -cb0[2].xxxy * float4(1,0,0,1) + r0.zwzw;
   r2.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
   r1.xyzw = t0.Sample(s0_s, r1.zw).xyzw;
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
   r2.xyz = renodx::color::srgb::DecodeSafe(r2.xyz);
   r1.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   r2.xyz = rolloffSdr(r2.xyz);
@@ -30,7 +30,7 @@ void main(
   r1.xyz = min(float3(65000,65000,65000), r1.xyz);
   r2.xyz = min(float3(65000,65000,65000), r2.xyz);
   r3.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
   r3.xyz = renodx::color::srgb::DecodeSafe(r3.xyz);
   r3.xyz = rolloffSdr(r3.xyz);
   r3.xyz = renodx::color::srgb::EncodeSafe(r3.xyz);
@@ -40,7 +40,7 @@ void main(
   r4.xyz = r3.xyz + r2.xyz;
   r5.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r0.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
   r5.xyz = renodx::color::srgb::DecodeSafe(r5.xyz);
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   r5.xyz = rolloffSdr(r5.xyz);

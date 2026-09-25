@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -35,19 +35,19 @@ void main(
   r1.xyz = r1.xyz * float3(2,2,2) + float3(-1,-1,-1);
   r2.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   o0.w = r2.w;
-  if(injectedData.fxFilmGrainType == 0.f){
-  r1.xyz = r1.xyz * cb0[4].xxx * injectedData.fxFilmGrain + r2.xyz;
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
+  r1.xyz = r1.xyz * cb0[4].xxx * CUSTOM_FILM_GRAIN + r2.xyz;
   } else {
-    r2.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(r2.xyz) : r2.xyz;
+    r2.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r2.xyz) : r2.xyz;
     r1.xyz = applyFilmGrain(r2.xyz, v1);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   }
   r0.yzw = r0.yzw * cb0[4].yyy + r1.xyz;
   r1.xyz = cb0[6].xyz + -r0.yzw;
   o0.xyz = r0.xxx * r1.xyz + r0.yzw;
-  if (injectedData.countOld == injectedData.countNew) {
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
-    o0.xyz = PostToneMapScale(o0.xyz, injectedData.gammaSpace != 0.f);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+    o0.xyz = PostToneMapScale(o0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   return;
 }

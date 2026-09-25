@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -80,12 +80,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r3.xyz = -r2.xyz * r0.www + r2.xyz;
     r3.xyz = r0.xyz * cb1[9].xyz + r3.xyz;
     r3.xyz = r3.xyz + -r2.xyz;
-    r2.xyz = cb1[7].xxx * r3.xyz * injectedData.fxBloom + r2.xyz;
+    r2.xyz = cb1[7].xxx * r3.xyz * CUSTOM_BLOOM + r2.xyz;
     if (cb1[7].w != 0) {
       r1.xy = r1.xy * cb1[10].xy + cb1[10].zw;
       r1.xyz = t2.SampleLevel(s0_s, r1.xy, 0).xyz;
       r0.xyz = r1.xyz * r0.xyz;
-      r2.xyz = r0.xyz * cb1[7].yyy * injectedData.fxLens + r2.xyz;
+      r2.xyz = r0.xyz * cb1[7].yyy * CUSTOM_LENS + r2.xyz;
     }
   }
   if (cb1[12].x != 0) {
@@ -94,7 +94,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     if (cb1[6].w != 0) {
       r0.xyz = cb1[6].zzz * r2.xyz;
       r0.rgb = lutShaper(r0.rgb);
-      if (injectedData.colorGradeLUTSampling == 0.f) {
+      if (CUSTOM_LUT_SAMPLE == 0.f) {
       r0.xyz = cb1[6].yyy * r0.xyz;
       r0.w = 0.5 * cb1[6].x;
       r0.xyz = r0.xyz * cb1[6].xxx + r0.www;
@@ -103,6 +103,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
         r2.rgb = renodx::lut::SampleTetrahedral(t3, r0.rgb, 1 / cb1[6].x);
       }
     }
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r2.xyz = GradeAndDisplayMap(r2.xyz);
   }
   u0[vThreadID] = r2.xyzx;
   return;

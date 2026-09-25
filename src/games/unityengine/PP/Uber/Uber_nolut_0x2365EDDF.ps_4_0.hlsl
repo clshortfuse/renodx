@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -25,7 +25,7 @@ void main(
   r0.xyz = r1.xyz * r0.xxx;
   if (cb0[40].y < 0.5) {
     r1.xy = -cb0[38].xy + v1.xy;
-    r1.yz = cb0[39].xx * abs(r1.yx) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[39].xx * abs(r1.yx) * min(1.f, CUSTOM_VIGNETTE);
     r0.w = cb0[22].x / cb0[22].y;
     r0.w = -1 + r0.w;
     r0.w = cb0[39].w * r0.w + 1;
@@ -38,7 +38,7 @@ void main(
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[39].y * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[39].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[37].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[37].xyz;

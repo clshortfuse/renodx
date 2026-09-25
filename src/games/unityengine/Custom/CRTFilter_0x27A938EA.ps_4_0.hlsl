@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -46,11 +46,11 @@ void main(
   r1.xw = r4.xy + r0.zy;
   r4.xy = -r4.xz + r1.zy;
   r4.xyzw = t0.Sample(s0_s, r4.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r4.xyz = InvertToneMapScale(r4.xyz);
   }
   r5.xyzw = t0.Sample(s0_s, r1.xw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r5.xyz = InvertToneMapScale(r5.xyz);
   }
   r0.z = cb0[4].w * r5.x;
@@ -62,44 +62,44 @@ void main(
   r0.z = 2 + r0.z;
   r1.xw = cb0[4].yy + r1.zy;
   r6.xyzw = t0.Sample(s0_s, r1.xw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r6.xyz = InvertToneMapScale(r6.xyz);
   }
   r7.xyzw = t0.Sample(s0_s, r1.zy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r7.xyz = InvertToneMapScale(r7.xyz);
   }
   r6.xyzw = r7.xyzw + r6.xyzw;
   r7.xyzw = cb0[4].yyyy * float4(1,-1,-1,1) + r1.zyzy;
   r8.xyzw = t0.Sample(s0_s, r7.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r8.xyz = InvertToneMapScale(r8.xyz);
   }
   r7.xyzw = t0.Sample(s0_s, r7.zw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r7.xyz = InvertToneMapScale(r7.xyz);
   }
   r6.xyzw = r8.xyzw + r6.xyzw;
   r6.xyzw = r6.xyzw + r7.xyzw;
   r1.xw = -cb0[4].yy + r1.zy;
   r7.xyzw = t0.Sample(s0_s, r1.xw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r7.xyz = InvertToneMapScale(r7.xyz);
   }
   r6.xyzw = r7.xyzw + r6.xyzw;
   r1.xw = cb0[10].yz + r1.zy;
   r7.xyzw = t0.Sample(s0_s, r1.xw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r7.xyz = InvertToneMapScale(r7.xyz);
   }
   r6.x = r6.x * 0.2 + r7.x;
   r7.xyzw = cb0[11].xyzw + r1.zyzy;
   r8.xyzw = t0.Sample(s0_s, r7.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r8.xyz = InvertToneMapScale(r8.xyz);
   }
   r7.xyzw = t0.Sample(s0_s, r7.zw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r7.xyz = InvertToneMapScale(r7.xyz);
   }
   r6.z = r6.z * 0.2 + r7.z;
@@ -109,11 +109,11 @@ void main(
   r0.yw = r2.xy + r0.wy;
   r1.xw = -r2.xz + r1.zy;
   r2.xyzw = t0.Sample(s0_s, r1.xw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r2.xyz = InvertToneMapScale(r2.xyz);
   }
   r6.xyzw = t0.Sample(s0_s, r0.yw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r6.xyz = InvertToneMapScale(r6.xyz);
   }
   r0.y = cb0[4].w * r6.x;
@@ -161,7 +161,7 @@ void main(
   r3.w = -1 * r3.y;
   r0.zw = r3.xw * float2(0.5,1) + r1.zy;
   r2.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r2.xyz = InvertToneMapScale(r2.xyz);
   }
   r0.z = max(r2.y, r2.z);
@@ -173,7 +173,7 @@ void main(
   r2.xyzw = r2.xyzw * r0.zzzz;
   r1.xw = r3.xy * float2(-0.5,-1) + r1.zy;
   r5.xyzw = t0.Sample(s0_s, r1.xw).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
     r5.xyz = InvertToneMapScale(r5.xyz);
   }
   r0.z = max(r5.y, r5.z);
@@ -254,7 +254,7 @@ void main(
   r0.x = r0.x * r0.x;
   r0.x = r0.y * r0.x;
   o0.xyzw = r1.xyzw * r0.xxxx;
-  if(injectedData.countOld == injectedData.countNew){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
   o0.xyz = PostToneMapScale(o0.xyz);
   }
   return;

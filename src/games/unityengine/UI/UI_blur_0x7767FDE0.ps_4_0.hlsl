@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -72,7 +72,7 @@ void main(
   r4.xyz = -cb1[2].xyz * float3(2,2,2) + float3(1,1,1);
   r3.xyz = r4.xyz * r3.xyz;
   r3.xyz = r1.xyz * cb1[2].xyz + r3.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r2.xyz = sqrt(r2.xyz);
   } else {
   r2.xyz = renodx::math::SignSqrt(r2.xyz);

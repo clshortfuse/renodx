@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t5 : register(t5);
 Texture2D<float4> t4 : register(t4);
@@ -32,7 +32,7 @@ void main(
   r0.yz = v1.xy * float2(2,2) + float2(-1,-1);
   r0.w = dot(r0.yz, r0.yz);
   r0.yz = r0.yz * r0.ww;
-  r0.yz = cb0[35].ww * r0.yz * injectedData.fxCA;
+  r0.yz = cb0[35].ww * r0.yz * CUSTOM_CHROMATIC_ABERRATION;
   r1.xy = cb0[31].zw * -r0.yz;
   r1.xy = float2(0.5,0.5) * r1.xy;
   r0.w = dot(r1.xy, r1.xy);
@@ -95,17 +95,17 @@ void main(
   r2.xy = cb0[26].xx * r2.xy;
   r2.xyzw = t2.Sample(s2_s, r2.xy).xyzw;
   r0.yzw = r2.xyz + r0.yzw;
-  r0.yzw = cb0[34].yyy * r0.yzw * injectedData.fxBloom;
+  r0.yzw = cb0[34].yyy * r0.yzw * CUSTOM_BLOOM;
   r2.xy = v1.xy * cb0[33].xy + cb0[33].zw;
   r2.xyzw = t3.Sample(s3_s, r2.xy).xyzw;
   r0.yzw = float3(0.0625,0.0625,0.0625) * r0.yzw;
-  r2.xyz = cb0[34].zzz * r2.xyz * injectedData.fxLens;
+  r2.xyz = cb0[34].zzz * r2.xyz * CUSTOM_LENS;
   r3.xyz = cb0[35].xyz * r0.yzw;
   r1.xyz = r1.xyz * r0.xxx + r3.xyz;
   r0.xyz = r2.xyz * r0.yzw + r1.xyz;
   r0.xyz = cb0[36].zzz * r0.xyz;
   r0.xyz = lutShaper(r0.xyz);
-  if (injectedData.colorGradeLUTSampling == 0.f) {
+  if (CUSTOM_LUT_SAMPLE == 0.f) {
   r0.xyz = cb0[36].yyy * r0.xyz;
   r0.w = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r0.www;
@@ -113,12 +113,15 @@ void main(
   } else {
     r0.yzw = renodx::lut::SampleTetrahedral(t5, r0.xyz, 1 / cb0[36].x);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.yzw = GradeAndDisplayMap(r0.yzw);
+  }
   if (cb0[42].x > 0.5) {
     r0.x = renodx::color::y::from::BT709(saturate(r0.yzw));
   } else {
     r0.x = r1.w;
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.yzw = PostToneMapScale(r0.yzw);
   }
   o0.xyzw = r0.yzwx;

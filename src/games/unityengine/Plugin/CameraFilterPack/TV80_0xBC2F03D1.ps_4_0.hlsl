@@ -73,7 +73,7 @@ void main(
   r0.w = (int)r1.y | (int)r1.x;
   o0.xyz = r0.www ? float3(0,0,0) : r0.xyz;
   o0.w = 1;
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
   o0.xyz = saturate(o0.xyz);
   }
   return;

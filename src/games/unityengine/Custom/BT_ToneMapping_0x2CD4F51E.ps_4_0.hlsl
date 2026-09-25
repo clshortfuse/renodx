@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -51,13 +51,13 @@ void main(
   r1.xyz = r2.xyz + r1.xyz;
   r1.xyz = r3.xyz * float3(2,2,2) + r1.xyz;
   r0.xyz = r1.xyz + r0.xyz;
-  r0.xyz = cb0[14].yyy * r0.xyz * injectedData.fxBloom;
+  r0.xyz = cb0[14].yyy * r0.xyz * CUSTOM_BLOOM;
   r1.xyzw = t4.Sample(s1_s, w1.xy).xyzw;
   r0.xyz = r0.xyz * float3(0.0625,0.0625,0.0625) + r1.xyz;
   o0.w = r1.w;
   r0.xyz = -cb0[47].xyz + r0.xyz;
   r1.xy = float2(-0.5,-0.5) + w1.xy;
-  r1.xy = cb0[48].xx * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+  r1.xy = cb0[48].xx * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
   r1.xy = log2(r1.xy);
   r1.xy = cb0[48].zz * r1.xy;
   r1.xy = exp2(r1.xy);
@@ -65,7 +65,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = max(0, r0.w);
   r0.w = log2(r0.w);
-  r0.w = cb0[48].y * r0.w * max(1.f, injectedData.fxVignette);
+  r0.w = cb0[48].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
   r0.w = exp2(r0.w);
   r0.w = min(1, r0.w);
   r0.xyz = r0.www * r0.xyz + cb0[47].xyz;
@@ -82,7 +82,7 @@ void main(
   r1.x = dot(float3(2.85846996,-1.62879002,-0.0248910002), r0.xyz);
   r1.y = dot(float3(-0.210181996,1.15820003,0.000324280991), r0.xyz);
   r1.z = dot(float3(-0.0418119989,-0.118169002,1.06867003), r0.xyz);
-  r1.yzx = applyUserTonemapACES(r1.xyz, 4);
+  r1.yzx = Ap1AcesTonemap(r1.xyz, 3);
   r0.xyz = handleUserLUT(r1.yzx, t1, s2_s, cb0[4].xyz, 2, true);
   r1.xy = v1.xy * cb0[7].xy + cb0[7].zw;
   r1.xyzw = t2.Sample(s4_s, r1.xy).xyzw;
@@ -93,7 +93,7 @@ void main(
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0), 1);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = log2(r0.xyz);
   r0.w = 1 + cb0[8].x;
   r0.w = 1 / r0.w;
@@ -105,10 +105,10 @@ void main(
   r1.xyzw = t3.Sample(s3_s, v1.xy).xyzw;
   r0.w = 1 + -r1.w;
   o0.xyz = r0.xyz * r0.www;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     o0.xyz = saturate(o0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
   o0.xyz = PostToneMapScale(o0.xyz);
   }
   return;

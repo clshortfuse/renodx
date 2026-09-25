@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t8 : register(t8);
 Texture2D<float4> t7 : register(t7);
@@ -58,28 +58,10 @@ void main(
   r1.xyz = exp2(r1.xyz);
   r1.xyz = cb0[3].yyy * r1.xyz;
   r2.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  r0.xyz = r0.xyz * cb0[3].xxx * injectedData.fxBloom + r2.xyz;
+  r0.xyz = r0.xyz * cb0[3].xxx * CUSTOM_BLOOM + r2.xyz;
   r3.xyzw = t7.Sample(s7_s, v1.xy).xyzw;
   r0.xyz = r1.xyz * r3.xyz + r0.xyz;
-  /*r1.xyz = r0.xyz * float3(2.50999999,2.50999999,2.50999999) + float3(0.0299999993,0.0299999993,0.0299999993);
-  r1.xyz = r1.xyz * r0.xyz;
-  r3.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
-  r0.xyz = r0.xyz * r3.xyz + float3(0.140000001,0.140000001,0.140000001);
-  r0.xyz = saturate(r1.xyz / r0.xyz);*/
-  r0.xyz = applyUserTonemapSapphire(r0.xyz);
-  /*r1.xyz = cb0[17].zzz * r0.zxy;
-  r3.xy = float2(0.5,0.5) * cb0[17].xy;
-  r3.yz = r1.yz * cb0[17].xy + r3.xy;
-  r0.w = floor(r1.x);
-  r3.x = r0.w * cb0[17].y + r3.y;
-  r0.w = r0.z * cb0[17].z + -r0.w;
-  r1.x = cb0[17].y;
-  r1.y = 0;
-  r1.xy = r3.xz + r1.xy;
-  r3.xyzw = t8.Sample(s8_s, r3.xz).xyzw;
-  r1.xyzw = t8.Sample(s8_s, r1.xy).xyzw;
-  r1.xyz = r1.xyz + -r3.xyz;
-  r1.xyz = r0.www * r1.xyz + r3.xyz;*/
+  r0.xyz = Bt709AcesTonemap(r0.xyz);
   r1.xyz = handleUserLUT(r0.xyz, t8, s8_s, cb0[17].xyz, 2, true);
   r1.xyz = r1.xyz + -r0.xyz;
   r2.xyz = cb0[17].www * r1.xyz + r0.xyz;
@@ -91,16 +73,15 @@ void main(
   r0.x = exp2(r0.x);
   r0.x = saturate(cb0[18].z + r0.x);
   r0.xyzw = r2.xyzw * r0.xxxx;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.xyz = saturate(r0.xyz);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r0.w = saturate(r0.w);
-  /*r0.xyzw = log2(r0.xyzw);
-  r1.x = 1 / cb0[22].z;
-  r0.xyzw = r1.xxxx * r0.xyzw;
-  o0.xyzw = exp2(r0.xyzw);*/
   r0.xyzw = renodx::math::SignPow(r0.xyzw, 1.0 / cb0[22].z);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

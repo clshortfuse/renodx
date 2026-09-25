@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -40,7 +40,7 @@ void main(
   r0.xyzw = t1.Sample(s0_s, r0.xy).xyzw;
   float3 hdrColor = r0.xyz;
   float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(hdrColor);
-  float3 curvesInput = injectedData.toneMapType <= 1.f ? hdrColor : sdrColor;
+  float3 curvesInput = RENODX_TONE_MAP_TYPE <= 1.f ? hdrColor : sdrColor;
   r0.xyz = curvesInput;
   r0.xyzw = log2(r0.xyzw);
   r0.xyzw = float4(0.474000007,0.474000007,0.474000007,0.474000007) * r0.xyzw;
@@ -61,17 +61,17 @@ void main(
   r2.y = r0.y;
   r0.xyz = r2.xyz + -r0.yyy;
   r0.xyz = cb0[4].xxx * r0.xyz + r2.yyy;
-  r0.xyz = lerp(preCG, r0.xyz, injectedData.colorGradeUserLUTStrength);
+  r0.xyz = lerp(preCG, r0.xyz, CUSTOM_USER_LUT_STRENGTH);
   r0.xyz = r1.yyy * float3(1.01810002,1.01810002,1.01810002) + r0.xyz;
   r0.w = 1.01810002 * r1.x;
   r0.xyz = r0.xyz * r0.www;
   r1.xyzw = t3.Sample(s1_s, v1.xy).xyzw;
-  r0.xyz = lerp(1.f, r1.xyz, injectedData.fxVignette) * r0.xyz;
+  r0.xyz = lerp(1.f, r1.xyz, CUSTOM_VIGNETTE) * r0.xyz;
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(2.10970473,2.10970473,2.10970473) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
   o0.xyz = float3(0.962813556,0.962813556,0.962813556) * r0.xyz;
-  if (injectedData.toneMapType != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     o0.xyz = RestoreSaturationLoss(curvesInput, o0.xyz);
     o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, 1.f);
   }

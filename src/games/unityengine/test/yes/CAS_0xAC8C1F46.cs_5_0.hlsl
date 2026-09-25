@@ -1,0 +1,253 @@
+#include "../../shared.h"
+
+struct u0_t {
+  float val[4];
+};
+RWStructuredBuffer<u0_t> u0 : register(u0);
+Texture2D<float4> t0 : register(t0);
+RWTexture2D<float4> u1 : register(u1);
+cbuffer cb0 : register(b0){
+  float4 cb0[128];
+}
+
+[numthreads(64, 1, 1)]
+void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_GroupID, uint3 vThreadID: SV_DispatchThreadID) {
+  float4 r0,r1,r2,r3,r4,r5,r6,r7;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.zw = float2(0,0);
+  r1.x = (uint)vThreadIDInGroup.x >> 3;
+  bitmask.w = ((~(-1 << 1)) << 0) & 0xffffffff;  r1.w = (((uint)vThreadIDInGroup.x << 0) & bitmask.w) | ((uint)r1.x & ~bitmask.w);
+  if (3 == 0) r1.z = 0; else if (3+1 < 32) {   r1.z = (uint)vThreadIDInGroup.x << (32-(3 + 1)); r1.z = (uint)r1.z >> (32-3);  } else r1.z = (uint)vThreadIDInGroup.x >> 1;
+  r1.zw = mad((int2)vThreadGroupID.xy, int2(16,16), (int2)r1.zw);
+  r2.xyzw = (int4)r1.zwzw + int4(1,0,0,1);
+  r2.xyzw = (int4)r2.xyzw;
+  r2.xyzw = min(cb0[127].zwzw, r2.xyzw);
+  r2.xyzw = (int4)r2.zwxy;
+  r0.xy = r2.zw;
+  r0.xyz = t0.Load(r0.xyz).xyz;
+  r3.zw = float2(0,0);
+  r4.xy = (int2)r1.zw;
+  r4.xy = min(cb0[127].zw, r4.xy);
+  r3.xy = (int2)r4.xy;
+  r3.xyz = t0.Load(r3.xyz).xyz;
+  r0.w = min(r3.y, r0.y);
+  r4.zw = float2(0,0);
+  r5.xyzw = (int4)r1.zwzw + int4(0,-1,-1,0);
+  r5.xyzw = (int4)r5.xyzw;
+  r5.xyzw = max(float4(0,0,0,0), r5.xyzw);
+  r5.xyzw = min(cb0[127].zwzw, r5.xyzw);
+  r5.xyzw = (int4)r5.xyzw;
+  r4.xy = r5.zw;
+  r4.xyz = t0.Load(r4.xyz).xyz;
+  r0.w = min(r4.y, r0.w);
+  r5.zw = float2(0,0);
+  r5.xyz = t0.Load(r5.xyz).xyz;
+  r2.zw = float2(0,0);
+  r2.xyz = t0.Load(r2.xyz).xyz;
+  r2.w = min(r5.y, r2.y);
+  r0.w = min(r2.w, r0.w);
+  r2.w = max(r3.y, r0.y);
+  r2.w = max(r4.y, r2.w);
+  r3.w = max(r5.y, r2.y);
+  r2.w = max(r3.w, r2.w);
+  r3.w = 1 + -r2.w;
+  r2.w = asfloat(2129690299u - asuint(r2.w));
+  r0.w = min(r3.w, r0.w);
+  r0.w = saturate(r0.w * r2.w);
+  r0.w = asfloat((asuint(r0.w) >> 1u) + 532432441u);
+  r2.w = u0[1].val[0/4];
+  r0.w = r2.w * r0.w;
+  r4.xyz = r4.xyz * r0.www;
+  r4.xyz = r5.xyz * r0.www + r4.xyz;
+  r0.xyz = r0.xyz * r0.www + r4.xyz;
+  r0.xyz = r2.xyz * r0.www + r0.xyz;
+  r0.w = r0.w * 4 + 1;
+  r0.xyz = r0.xyz + r3.xyz;
+  r2.x = asfloat(2129764351u - asuint(r0.w));
+  r0.w = -r2.x * r0.w + 2;
+  r0.w = r2.x * r0.w;
+  r0.xyz = r0.xyz * r0.www;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.xyz = saturate(r0.xyz);
+  }
+  r0.w = 1;
+  u1[uint2(r1.zw)] = r0.xyzw;
+  r0.zw = float2(0,0);
+  r1.xy = (int2)r1.zw + int2(8,8);
+  r3.xyzw = (int4)r1.xwxw + int4(1,0,0,1);
+  r3.xyzw = (int4)r3.xyzw;
+  r3.xyzw = min(cb0[127].zwzw, r3.xyzw);
+  r0.xy = (int2)r3.xy;
+  r3.xy = (int2)r3.zw;
+  r0.xyz = t0.Load(r0.xyz).xyz;
+  r4.zw = float2(0,0);
+  r5.xyzw = (int4)r1.xwxy;
+  r5.xyzw = min(cb0[127].zwzw, r5.xyzw);
+  r4.xy = (int2)r5.xy;
+  r5.xy = (int2)r5.zw;
+  r2.xyz = t0.Load(r4.xyz).xyz;
+  r0.w = min(r2.y, r0.y);
+  r4.zw = float2(0,0);
+  r6.xyzw = (int4)r1.xwxw + int4(0,-1,-1,0);
+  r6.xyzw = (int4)r6.xyzw;
+  r6.xy = max(float2(0,0), r6.xy);
+  r6.xyzw = min(cb0[127].zwzw, r6.xyzw);
+  r7.xy = (int2)r6.xy;
+  r4.xy = (int2)r6.zw;
+  r4.xyz = t0.Load(r4.xyz).xyz;
+  r0.w = min(r4.y, r0.w);
+  r7.zw = float2(0,0);
+  r6.xyz = t0.Load(r7.xyz).xyz;
+  r3.zw = float2(0,0);
+  r3.xyz = t0.Load(r3.xyz).xyz;
+  r1.z = min(r6.y, r3.y);
+  r0.w = min(r1.z, r0.w);
+  r1.z = max(r2.y, r0.y);
+  r1.z = max(r4.y, r1.z);
+  r3.w = max(r6.y, r3.y);
+  r1.z = max(r3.w, r1.z);
+  r3.w = 1 + -r1.z;
+  r1.z = asfloat(2129690299u - asuint(r1.z));
+  r0.w = min(r3.w, r0.w);
+  r0.w = saturate(r0.w * r1.z);
+  r0.w = asfloat((asuint(r0.w) >> 1u) + 532432441u);
+  r0.w = r0.w * r2.w;
+  r4.xyz = r4.xyz * r0.www;
+  r4.xyz = r6.xyz * r0.www + r4.xyz;
+  r0.xyz = r0.xyz * r0.www + r4.xyz;
+  r0.xyz = r3.xyz * r0.www + r0.xyz;
+  r0.w = r0.w * 4 + 1;
+  r0.xyz = r0.xyz + r2.xyz;
+  r1.z = asfloat(2129764351u - asuint(r0.w));
+  r0.w = -r1.z * r0.w + 2;
+  r0.w = r1.z * r0.w;
+  r0.xyz = r0.xyz * r0.www;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.xyz = saturate(r0.xyz);
+  }
+  r0.w = 1;
+  u1[uint2(r1.xw)] = r0.xyzw;
+// No code for instruction (needs manual fix):
+//store_uav_typed u1.xyzw, r1.xwww, r0.xyzw
+  r0.zw = float2(0,0);
+  r3.xyzw = (int4)r1.xyxy + int4(1,0,0,1);
+  r3.xyzw = (int4)r3.xyzw;
+  r3.xyzw = min(cb0[127].zwzw, r3.xyzw);
+  r3.xyzw = (int4)r3.zwxy;
+  r0.xy = r3.zw;
+  r0.xyz = t0.Load(r0.xyz).xyz;
+  r5.zw = float2(0,0);
+  r2.xyz = t0.Load(r5.xyz).xyz;
+  r0.w = min(r2.y, r0.y);
+  r4.zw = float2(0,0);
+  r5.xyzw = (int4)r1.xyxy + int4(0,-1,-1,0);
+  r5.xyzw = (int4)r5.xyzw;
+  r5.xyzw = min(cb0[127].zwzw, r5.xyzw);
+  r5.xyzw = (int4)r5.xyzw;
+  r4.xy = r5.zw;
+  r4.xyz = t0.Load(r4.xyz).xyz;
+  r0.w = min(r4.y, r0.w);
+  r5.zw = float2(0,0);
+  r5.xyz = t0.Load(r5.xyz).xyz;
+  r3.zw = float2(0,0);
+  r3.xyz = t0.Load(r3.xyz).xyz;
+  r1.z = min(r5.y, r3.y);
+  r0.w = min(r1.z, r0.w);
+  r1.z = max(r2.y, r0.y);
+  r1.z = max(r4.y, r1.z);
+  r1.w = max(r5.y, r3.y);
+  r1.z = max(r1.z, r1.w);
+  r1.w = 1 + -r1.z;
+  //r1.z = (int)-r1.z + 0x7ef07ebb;
+  r1.z = asfloat(2129690299u - asuint(r1.z));
+  r0.w = min(r1.w, r0.w);
+  r0.w = saturate(r0.w * r1.z);
+  //r0.w = (uint)r0.w >> 1;
+  //r0.w = (int)r0.w + 0x1fbc4639;
+  r0.w = asfloat((asuint(r0.w) >> 1u) + 532432441u);
+  r0.w = r0.w * r2.w;
+  r4.xyz = r4.xyz * r0.www;
+  r4.xyz = r5.xyz * r0.www + r4.xyz;
+  r0.xyz = r0.xyz * r0.www + r4.xyz;
+  r0.xyz = r3.xyz * r0.www + r0.xyz;
+  r0.w = r0.w * 4 + 1;
+  r0.xyz = r0.xyz + r2.xyz;
+  // r1.z = (int)-r0.w + 0x7ef19fff;
+  r1.z = asfloat(2129764351u - asuint(r0.w));
+  r0.w = -r1.z * r0.w + 2;
+  r0.w = r1.z * r0.w;
+  r0.xyz = r0.xyz * r0.www;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.xyz = saturate(r0.xyz);
+  }
+  r0.w = 1;
+  u1[uint2(r1.xy)] = r0.xyzw;
+  // No code for instruction (needs manual fix):
+  // store_uav_typed u1.xyzw, r1.xyyy, r0.xyzw
+  r0.w = (int)r1.y;
+  r3.xyz = (int3)r1.xxy + int3(-8,-8,-1);
+  r0.xyz = (int3)r3.yzx;
+  r0.xyzw = min(cb0[127].zwzw, r0.xyzw);
+  r4.xy = (int2)r0.xy;
+  r0.xy = (int2)r0.zw;
+  r0.zw = float2(0,0);
+  r0.xyz = t0.Load(r0.xyz).xyz;
+  r5.xyzw = (int4)r1.xyxy + int4(-9,0,-7,0);
+  r5.xyzw = (int4)r5.xyzw;
+  r1.zw = min(cb0[127].zw, r5.zw);
+  r2.xy = max(float2(0,0), r5.xy);
+  r2.xy = min(cb0[127].zw, r2.xy);
+  r5.xy = (int2)r2.xy;
+  r6.xy = (int2)r1.zw;
+  r6.zw = float2(0,0);
+  r2.xyz = t0.Load(r6.xyz).xyz;
+  r0.w = min(r2.y, r0.y);
+  r5.zw = float2(0,0);
+  r5.xyz = t0.Load(r5.xyz).xyz;
+  r0.w = min(r5.y, r0.w);
+  r1.xz = (int2)r1.xy + int2(-8,1);
+  r3.w = r1.y;
+  r1.xy = (int2)r1.xz;
+  r1.xy = min(cb0[127].zw, r1.xy);
+  r1.xy = (int2)r1.xy;
+  r1.zw = float2(0,0);
+  r1.xyz = t0.Load(r1.xyz).xyz;
+  r4.zw = float2(0,0);
+  r4.xyz = t0.Load(r4.xyz).xyz;
+  r1.w = min(r4.y, r1.y);
+  r0.w = min(r1.w, r0.w);
+  r1.w = max(r2.y, r0.y);
+  r1.w = max(r5.y, r1.w);
+  r3.y = max(r4.y, r1.y);
+  r1.w = max(r3.y, r1.w);
+  r3.y = 1 + -r1.w;
+  //r1.w = (int)-r1.w + 0x7ef07ebb;
+  r1.w = asfloat(2129690299u - asuint(r1.w));
+  r0.w = min(r3.y, r0.w);
+  r0.w = saturate(r0.w * r1.w);
+  //r0.w = (uint)r0.w >> 1;
+  //r0.w = (int)r0.w + 0x1fbc4639;
+  r0.w = asfloat((asuint(r0.w) >> 1u) + 532432441u);
+  r0.w = r0.w * r2.w;
+  r5.xyz = r5.xyz * r0.www;
+  r4.xyz = r4.xyz * r0.www + r5.xyz;
+  r2.xyz = r2.xyz * r0.www + r4.xyz;
+  r1.xyz = r1.xyz * r0.www + r2.xyz;
+  r0.w = r0.w * 4 + 1;
+  r0.xyz = r1.xyz + r0.xyz;
+  //r1.x = (int)-r0.w + 0x7ef19fff;
+  r1.x = asfloat(2129764351u - asuint(r0.w));
+  r0.w = -r1.x * r0.w + 2;
+  r0.w = r1.x * r0.w;
+  r0.xyz = r0.xyz * r0.www;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.xyz = saturate(r0.xyz);
+  }
+  r0.w = 1;
+  u1[uint2(r3.xw)] = r0.xyzw;
+// No code for instruction (needs manual fix):
+//store_uav_typed u1.xyzw, r3.xwww, r0.xyzw
+  return;
+}

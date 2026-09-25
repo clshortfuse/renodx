@@ -46,7 +46,7 @@ void main(
   r0.xyz = r0.xyz * r0.xyz;
   r0.xyz = r1.xyz * r0.xyz + -r3.xyz;
   o0.xyz = cb0[3].zzz * r0.xyz + r3.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     o0.xyz = saturate(o0.xyz);
   }
   return;

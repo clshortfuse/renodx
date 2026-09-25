@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -89,7 +89,7 @@ void main(
     r3.yzw = float3(0.5,0.5,0.5) * r3.yzw;
     r1.xyz = (r1.w < r3.x) || (r1.w > r2.z) ? r3.yzw : r1.xyz;
   } else {
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = max(float3(0,0,0), r0.xyz);
     r1.xyz = min(float3(8,8,8), r0.xyz);
     } else {
@@ -116,14 +116,14 @@ void main(
   r0.x = r0.x * r0.z + 1;
   r0.xyz = r1.xyz * r0.xxx;
   r3.xyzw = t2.Sample(s2_s, v1.xy).xyzw;
-  r2.xzw = cb0[15].xxx * r3.xyz * injectedData.fxBloom;
+  r2.xzw = cb0[15].xxx * r3.xyz * CUSTOM_BLOOM;
   r0.xyz = r0.xyz + r2.xzw;
   r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   r1.x = max(r0.y, r0.z);
   r1.x = max(r1.x, r0.x);
   r1.y = min(r0.y, r0.z);
   r1.y = min(r1.y, r0.x);
-  if(injectedData.toneMapType != 0.f){
+  if(RENODX_TONE_MAP_TYPE != 0.f){
     r1.y = max(0.f, r1.y);
   }
   r1.x = saturate(r1.x + -r1.y);
@@ -148,7 +148,7 @@ void main(
   r1.xyz = cb0[10].xxx * r1.xyz + float3(1,1,1);
   o0.xyz = r1.xyz * r0.xyz;
   o0.w = r0.w;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
     o0.xyz = PostToneMapScale(o0.xyz, true);
   }

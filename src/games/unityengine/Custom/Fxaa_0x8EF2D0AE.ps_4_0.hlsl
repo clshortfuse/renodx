@@ -61,7 +61,7 @@ void main(
   r4.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
   r0.xy = r0.xy * v3.zw + v1.xy;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r4.xyz = saturate(r4.xyz);
   r0.xyz = saturate(r0.xyz);
   }

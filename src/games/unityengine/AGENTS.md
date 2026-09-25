@@ -98,11 +98,11 @@ Only add a field when the corresponding effect exists in the shader.
 
 ### Chromatic aberration
 
-Scale the original channel-offset amount by `injectedData.fxCA`. Do not scale lens-distortion coordinates or unrelated offsets.
+Scale the original channel-offset amount by `CUSTOM_CHROMATIC_ABERRATION`. Do not scale lens-distortion coordinates or unrelated offsets.
 
 ### Bloom
 
-Preserve the original bloom decode, squaring, bicubic reconstruction, alpha weighting, tint, and blend. Multiply the bloom intensity by `injectedData.fxBloom` before adding it to linear scene color.
+Preserve the original bloom decode, squaring, bicubic reconstruction, alpha weighting, tint, and blend. Multiply the bloom intensity by `CUSTOM_BLOOM` before adding it to linear scene color.
 
 Do not assume bloom uses `t1`, a particular sampler, or fixed constant-buffer indices.
 
@@ -110,8 +110,8 @@ Do not assume bloom uses `t1`, a particular sampler, or fixed constant-buffer in
 
 Preserve the original shape and color. Apply:
 
-- `min(1.f, injectedData.fxVignette)` to the spatial vignette amount.
-- `max(1.f, injectedData.fxVignette)` to the exponent/intensity term.
+- `min(1.f, CUSTOM_VIGNETTE)` to the spatial vignette amount.
+- `max(1.f, CUSTOM_VIGNETTE)` to the exponent/intensity term.
 
 This preserves the established behavior for reducing and extending the effect.
 
@@ -119,9 +119,9 @@ This preserves the established behavior for reducing and extending the effect.
 
 If native film grain exists, retain it under:
 
-`if (injectedData.fxFilmGrainType == 0.f)`
+`if (CUSTOM_FILM_GRAIN_TYPE == 0.f)`
 
-Scale its native strength by `injectedData.fxFilmGrain`. In the alternate branch use `applyFilmGrain(linearColor, screenUV)`.
+Scale its native strength by `CUSTOM_FILM_GRAIN`. In the alternate branch use `applyFilmGrain(linearColor, screenUV)`.
 
 Do not add film-grain sampling to a variant that never had native film grain unless specifically requested.
 
@@ -131,7 +131,7 @@ Keep the original noise sample and triangular-noise reconstruction, but replace 
 
 `applyDither(linearColor, dither * (1.0 / 255.0))`
 
-The helper applies `injectedData.fxNoise`. Pass the correct encoding argument if the color at that point is not linear.
+The helper applies `CUSTOM_NOISE`. Pass the correct encoding argument if the color at that point is not linear.
 
 ## 7. Preserve LUT type and ordering
 
@@ -164,7 +164,7 @@ Never remove a channel rotation merely to make the LUT code look like another va
 
 Preserve the native packed-2D interpolation under:
 
-`if (injectedData.colorGradeLUTSampling == 0.f)`
+`if (CUSTOM_LUT_SAMPLE == 0.f)`
 
 In the alternate branch use `renodx::lut::SampleTetrahedral` with:
 
@@ -181,7 +181,7 @@ Determine whether the original shader writes linear or gamma output before repla
 For a gamma-output shader:
 
 ```hlsl
-if (injectedData.countOld == injectedData.countNew) {
+if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
   color = PostToneMapScale(color, true);
 } else {
   color = renodx::color::srgb::EncodeSafe(color);
@@ -191,7 +191,7 @@ if (injectedData.countOld == injectedData.countNew) {
 For a linear-output shader:
 
 ```hlsl
-if (injectedData.countOld == injectedData.countNew) {
+if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
   color = PostToneMapScale(color);
 }
 ```

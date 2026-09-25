@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -189,7 +189,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.x = dot(float3(1.70504999,-0.621789992,-0.0832599998), r1.xyz);
     r2.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r1.xyz);
     r2.z = dot(float3(-0.0240000002,-0.128969997,1.15296996), r1.xyz);
-    r2.xyz = lerp(preCG, r2.xyz, injectedData.colorGradeInternalLUTStrength);
+    r2.xyz = lerp(preCG, r2.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   } else {
     r0.xyz = r0.xyz * cb0[0].yyy;
     r0.xyz = lutShaper(r0.xyz, true);
@@ -197,7 +197,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.y = dot(float3(-0.130260006,1.1408,-0.0105499998), r0.xyz);
     r2.z = dot(float3(-0.0240000002,-0.128969997,1.15296996), r0.xyz);
   }
-  r0.xyz = applyUserTonemapNeutral(r2.xyz);
+  r0.xyz = NeutralTonemap(r2.xyz);
   r0.w = 1;
   u0[vThreadID] = r0;
   return;

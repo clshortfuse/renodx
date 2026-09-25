@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t9 : register(t9);
 Texture2D<float4> t8 : register(t8);
@@ -98,32 +98,14 @@ void main(
   r2.xyz = cb0[9].xxx * r2.xyz;
   r1.xyz = r2.xyz * cb0[15].xyz + r1.xyz;
   r1.xyz = r1.xyz / r1.www;
-  r0.xyz = r1.xyz * cb0[3].xxx * injectedData.fxBloom + r0.xyz;
+  r0.xyz = r1.xyz * cb0[3].xxx * CUSTOM_BLOOM + r0.xyz;
   r2.xyzw = t7.Sample(s7_s, v1.xy).xyzw;
   r1.xyz = log2(r1.xyz);
   r1.xyz = cb0[3].zzz * r1.xyz;
   r1.xyz = exp2(r1.xyz);
   r1.xyz = cb0[3].yyy * r1.xyz;
   r0.xyz = r1.xyz * r2.xyz + r0.xyz;
-  /*r1.xyz = r0.xyz * float3(2.50999999,2.50999999,2.50999999) + float3(0.0299999993,0.0299999993,0.0299999993);
-  r1.xyz = r1.xyz * r0.xyz;
-  r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
-  r0.xyz = r0.xyz * r2.xyz + float3(0.140000001,0.140000001,0.140000001);
-  r0.xyz = saturate(r1.xyz / r0.xyz);*/
-  r0.xyz = applyUserTonemapSapphire(r0.xyz);
-  /*r1.xyz = cb0[17].zzz * r0.zxy;
-  r1.x = floor(r1.x);
-  r2.xy = float2(0.5,0.5) * cb0[17].xy;
-  r2.yz = r1.yz * cb0[17].xy + r2.xy;
-  r2.x = r1.x * cb0[17].y + r2.y;
-  r3.xyzw = t8.Sample(s8_s, r2.xz).xyzw;
-  r4.x = cb0[17].y;
-  r4.y = 0;
-  r1.yz = r4.xy + r2.xz;
-  r2.xyzw = t8.Sample(s8_s, r1.yz).xyzw;
-  r1.x = r0.z * cb0[17].z + -r1.x;
-  r1.yzw = r2.xyz + -r3.xyz;
-  r1.xyz = r1.xxx * r1.yzw + r3.xyz;*/
+  r0.xyz = Bt709AcesTonemap(r0.xyz);
   r1.xyz = handleUserLUT(r0.xyz, t8, s8_s, cb0[17].xyz, 2, true);
   r1.xyz = r1.xyz + -r0.xyz;
   r1.xyz = cb0[17].www * r1.xyz + r0.xyz;
@@ -134,27 +116,21 @@ void main(
   r0.x = saturate(cb0[18].z + r0.x);
   r1.w = 1;
   r0.xyzw = r1.xyzw * r0.xxxx;
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r1.xy = v1.xy * cb0[20].xy + cb0[20].zw;
   r1.xyzw = t9.Sample(s9_s, r1.xy).xyzw;
   r1.x = r1.w * 2 + -1;
-  /*r1.y = cmp(0 < r1.x);
-  r1.z = cmp(r1.x < 0);
-  r1.y = (int)-r1.y + (int)r1.z;
-  r1.y = (int)r1.y;*/
   r1.y = sign(r1.x);
   r1.x = 1 + -abs(r1.x);
   r1.x = sqrt(r1.x);
   r1.x = 1 + -r1.x;
   r1.x = r1.y * r1.x;
-  //r0.xyz = saturate(r1.xxx * float3(0.0013071897,0.0013071897,0.0013071897) + r0.xyz);
   r0.xyz = applyDither(r0.xyz, r1.x * (1.0 / 765.0), 1);
   r0.w = saturate(r0.w);
-  /*r1.x = 1 / cb0[22].z;
-  r0.xyzw = log2(r0.xyzw);
-  r0.xyzw = r1.xxxx * r0.xyzw;
-  o0.xyzw = exp2(r0.xyzw);*/
   r0.xyzw = renodx::math::SignPow(r0.xyzw, 1.0 / cb0[22].z);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -23,10 +23,10 @@ void main(
   r0.w = -r1.x + r0.y;
   r0.xyz = r0.xzw * cb0[30].www;
   r0.xyz = lutShaper(r0.xyz, true);
-  float3 preCG = r0.xyz;
   r1.x = dot(float3(0.439700991,0.382977992,0.177334994), r0.xyz);
   r1.y = dot(float3(0.0897922963,0.813422978,0.0967615992), r0.xyz);
   r1.z = dot(float3(0.0175439995,0.111543998,0.870703995), r0.xyz);
+  float3 preCG = r1.xyz;
   r0.xyz = acesccEncode(r1.xyz);
   r0.xyz = float3(-0.4135884,-0.4135884,-0.4135884) + r0.xyz;
   r0.xyz = r0.xyz * cb0[34].zzz + float3(0.4135884,0.4135884,0.4135884);
@@ -111,17 +111,23 @@ void main(
   r1.y = dot(float3(0.695452213,0.140678704,0.163869068), r0.xyz);
   r1.z = dot(float3(0.0447945632,0.859671116,0.0955343172), r0.xyz);
   r1.w = dot(float3(-0.00552588282,0.00402521016,1.00150073), r0.xyz);
-  r0.xyz = mul(ACES_to_SRGB_MAT, r1.yzw);
-  r0.xyz = lerp(preCG, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-  r0.xyz = applyUserTonemapACES(r0.xyz, 0);
-  float3 hdrColor = r0.xyz;
+  r0.xyz = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+  r1.xyz = Ap1AcesTonemap(r0.xyz, 0);
+  /*float3 hdrColor = r0.xyz;
   float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(hdrColor);
-  float3 curvesInput = injectedData.toneMapType <= 1.f ? hdrColor : sdrColor;
+  float3 curvesInput = RENODX_TONE_MAP_TYPE <= 1.f ? hdrColor : sdrColor;
   r1.xyz = curvesInput;
   bool isWCG = r1.x < 0.0 || r1.y < 0.0 || r1.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
+  if(RENODX_TONE_MAP_TYPE != 0.f){
     r1.xyz = isWCG ? renodx::color::bt2020::from::BT709(r1.xyz) : r1.xyz;
-  }
+  }*/
+  float compression_scale;
+  float max_channel_scale;
+  GamutCompression(r1.xyz, compression_scale);
+  /*if (RENODX_TONE_MAP_TYPE != 0.f) {
+    r1.xyz = renodx::tonemap::neutwo::BT709(r1.xyz, 1.f, 20.f);
+  }*/
+  NeutwoMaxCh(r1.xyz, max_channel_scale);
   r0.xyz = float3(0.00390625,0.00390625,0.00390625) + r1.xyz;
   r0.w = 0.75;
   r1.xyzw = t0.Sample(s0_s, r0.xw).wxyz;
@@ -139,13 +145,18 @@ void main(
   o0.z = saturate(r0.z);
   o0.y = saturate(r1.y);
   o0.w = 1;
-  if(injectedData.toneMapType != 0.f){
+  /*if(RENODX_TONE_MAP_TYPE != 0.f){
     o0.xyz = isWCG ? renodx::color::bt709::from::BT2020(o0.xyz) : o0.xyz;
   }
-  if (injectedData.toneMapType != 0.f) {
-    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, injectedData.colorGradeInternalLUTStrength);
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   } else {
-    o0.xyz = lerp(curvesInput, o0.xyz, injectedData.colorGradeInternalLUTStrength);
-  }
+    o0.xyz = lerp(curvesInput, o0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
+  }*/
+  /*if (RENODX_TONE_MAP_TYPE != 0.f) {
+    r1.xyz = renodx::tonemap::inverse::neutwo::BT709(o0.xyz, 1.f, 20.f);
+  }*/
+  NeutwoMaxChInverse(o0.xyz, max_channel_scale);
+  GamutDecompression(o0.xyz, compression_scale);
   return;
 }

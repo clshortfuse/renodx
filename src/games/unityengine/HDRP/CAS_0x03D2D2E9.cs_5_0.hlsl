@@ -227,7 +227,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r0.x = -r0.y * r0.x + 2;
   r0.x = r0.y * r0.x;
   r0.xyz = r4.xyz * r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r0.w = 1;
@@ -438,7 +438,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r0.x = -r0.y * r0.x + 2;
   r0.x = r0.y * r0.x;
   r0.xyz = r2.xyz * r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r0.w = 1;
@@ -647,7 +647,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r0.x = -r0.y * r0.x + 2;
   r0.x = r0.y * r0.x;
   r0.xyz = r2.xyz * r0.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r0.w = 1;
@@ -857,7 +857,7 @@ void main(uint3 vThreadIDInGroup: SV_GroupThreadID, uint3 vThreadGroupID: SV_Gro
   r1.x = -r1.y * r1.x + 2;
   r1.x = r1.y * r1.x;
   r1.xyz = r2.xyz * r1.xxx;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r1.w = 1;

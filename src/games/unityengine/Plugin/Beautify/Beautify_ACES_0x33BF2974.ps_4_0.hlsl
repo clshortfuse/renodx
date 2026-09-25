@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -15,24 +15,6 @@ cbuffer cb1 : register(b1){
 }
 cbuffer cb0 : register(b0){
   float4 cb0[13];
-}
-
-float3 vanillaNarkACES(float3 color) {
-  const float a = 2.51f;
-  const float b = 0.03f;
-  const float c = 2.43f;
-  const float d = 0.59f;
-  const float e = 0.14f;
-  float3 exposed_color = cb0[5].xxx * color;
-  return (exposed_color * (a * exposed_color + b)) / (exposed_color * (c * exposed_color + d) + e);
-}
-
-float getNewPeak(float oldPeak){
-  float Contrast = cb0[5].y;
-  if(Contrast <= 1.f){return oldPeak;}
-  else {
-    return ((oldPeak - 0.5f) * Contrast + 0.5f);
-  }
 }
 
 void main(
@@ -114,47 +96,15 @@ void main(
   r1.xyz = saturate(r1.xyz * cb0[11].www + r1.www);
   r2.xyzw = t4.Sample(s2_s, w1.xy).xyzw;
   r1.xyz = r2.xyz * r1.xyz;
-  r0.xyw = r1.xyz * cb0[11].yyy * injectedData.fxBloom + r0.xyw;
-  float midGray = vanillaNarkACES(float3(0.18f, 0.18f, 0.18f)).x;
-  float3 hueCorrectionColor = vanillaNarkACES(r0.xyw);
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-  config.type = min(3, injectedData.toneMapType);
-  config.peak_nits = getNewPeak(injectedData.toneMapPeakNits);
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = injectedData.toneMapGammaCorrection;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_value = midGray;
-  config.mid_gray_nits = midGray * 100;
-  config.reno_drt_contrast = 1.6f;
-  config.reno_drt_dechroma = injectedData.colorGradeDechroma;
-  config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  config.hue_correction_type = injectedData.toneMapPerChannel != 0.f ? renodx::tonemap::config::hue_correction_type::INPUT
-                                                                     : renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  config.hue_correction_color = lerp(r0.xyw, hueCorrectionColor, injectedData.toneMapHueShift);
-  config.reno_drt_hue_correction_method = injectedData.toneMapHueProcessor;
-  config.reno_drt_tone_map_method = injectedData.toneMapType == 4.f ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-                                                                    : renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  config.reno_drt_per_channel = injectedData.toneMapPerChannel != 0.f;
-  config.reno_drt_blowout = 1.f - injectedData.colorGradeBlowout;
-  config.reno_drt_working_color_space = 0;
-  config.reno_drt_white_clip = injectedData.colorGradeClip == 0.f ? 8.0f / cb0[5].x : injectedData.colorGradeClip;
-  if(injectedData.toneMapType == 0.f){
-    r0.xyw = hueCorrectionColor;
-  }
-  r0.xyw = renodx::tonemap::config::Apply(r0.xyw, config);
+  r0.xyw = r1.xyz * cb0[11].yyy * CUSTOM_BLOOM + r0.xyw;
+  r0.xyw = Bt709AcesTonemap(r0.xyw, cb0[5].x);
+  float compression_scale = 1.f;
+  GamutCompression(r0.xyw, compression_scale);
   // vibrance
   r1.x = max(r0.y, r0.w);
-  r1.x = max(r1.x, r0.x); // max
+  r1.x = max(r1.x, r0.x);
   r1.y = min(r0.y, r0.w);
-  r1.y = min(r1.y, r0.x); // min (>= 0)
-  if(injectedData.toneMapType != 0.f){
-    r1.y = max(0.f, r1.y);
-  }
+  r1.y = min(r1.y, r0.x);
   r1.x = saturate(r1.x + -r1.y);
   r1.x = 1 + -r1.x;
   r1.x = cb0[5].z * r1.x;
@@ -175,9 +125,14 @@ void main(
   r1.xyz = frac(r1.xyz);
   r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
   r1.xyz = r0.zzz * r1.xyz + float3(1,1,1);
-  o0.xyz = r1.xyz * r0.xyw;
-  if (injectedData.countOld == injectedData.countNew) {
-    o0.xyz = PostToneMapScale(o0.xyz);
+  r0.xyz = r1.xyz * r0.xyw;
+  GamutDecompression(r0.xyz, compression_scale);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = PostToneMapScale(r0.xyz);
+  }
+  o0.xyz = r0.xyz;
   return;
 }

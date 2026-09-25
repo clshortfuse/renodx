@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -65,7 +65,7 @@ void main(
   r2.xyz = r1.xyz * r1.xyz;
   r2.xyz = float3(0.4,0.4,0.4) * r2.xyz;
   r1.xyz = r1.xyz * float3(0.6,0.6,0.6) + r2.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r0.z = r0.y * r0.x;
@@ -93,9 +93,9 @@ void main(
   r0.w = r0.w * 0.01 + 1;
   r0.xyz = r0.xyz * r0.www + -r2.xyz;
   o0.xyz = cb0[3].xxx * r0.xyz + r2.xyz;
-  if (injectedData.countOld == injectedData.countNew) {
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
-    o0.xyz = PostToneMapScale(o0.xyz, injectedData.gammaSpace != 0.f);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+    o0.xyz = PostToneMapScale(o0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   o0.w = 1;
   return;

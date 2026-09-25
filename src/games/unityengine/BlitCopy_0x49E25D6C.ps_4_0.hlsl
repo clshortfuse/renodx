@@ -1,4 +1,4 @@
-#include "./tonemap.hlsl"
+#include "./common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -16,20 +16,20 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-    if(injectedData.blitCopyHack >= 1.f){
-      if(injectedData.gammaSpace != 0.f){
+    if(CUSTOM_BLIT_COPY_HACK >= 1.f){
+      if(CUSTOM_GAMMA_SPACE != 0.f){
         r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
       }
-      if (injectedData.blitCopyHack != 2.f && (injectedData.count2Old == injectedData.count2New)) {
-        r0.xyz = applyUserNoTonemap(r0.xyz);
+      if (CUSTOM_BLIT_COPY_HACK != 2.f && (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2)) {
+        r0.xyz = GradeAndDisplayMap(r0.xyz);
       }
-      if(injectedData.gammaSpace != 0.f){
-      if(injectedData.countOld == injectedData.countNew) {
+      if(CUSTOM_GAMMA_SPACE != 0.f){
+      if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
         r0.xyz = PostToneMapScale(r0.xyz, true);
       } else {
         r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
       }
-    } else if(injectedData.countOld == injectedData.countNew) {
+    } else if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
       r0.xyz = PostToneMapScale(r0.xyz);
     }
     }

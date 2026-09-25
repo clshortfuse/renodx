@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -57,10 +57,13 @@ void main(
   }
   r0.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
   r1.xyzw = t0.Sample(s0_s, r1.yz).xyzw;
-  r0.xyz = saturate(r1.xyz * r0.xxx);
+  r0.xyz = r1.xyz * r0.xxx;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.xyz = saturate(r0.xyz);
+  }
   r1.w = saturate(r1.w);
   r0.yzx = lutShaper(r0.xyz, false, 2);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.yzw = cb0[36].zzz * r0.xyz;
   r0.y = floor(r0.y);
   r2.xy = float2(0.5,0.5) * cb0[36].xy;
@@ -78,10 +81,13 @@ void main(
     r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.yzx, cb0[36].z + 1u);
   }
   r1.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
+  }
   if (cb0[42].x > 0.5) {
     r1.w = renodx::color::y::from::BT709(saturate(r1.xyz));
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r1.xyz = PostToneMapScale(r1.xyz);
   }
   o0.xyzw = r1.xyzw;

@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 cbuffer _Globals : register(b0){
   float4 unity_Lightmap_HDR : packoffset(c0);
@@ -61,7 +61,7 @@ void main(
   r0.z = max(0.001, r0.z);
   r0.z = 1 / r0.z;
   r0.z = min(1, r0.z);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r1.xyzw = saturate(r1.xyzw);
   r2.xyzw = saturate(r2.xyzw);
   r1.xyzw = log2(r1.xyzw);
@@ -70,11 +70,11 @@ void main(
   r2.xyzw = exp2(r2.xyzw);
   r1.xyzw = r0.zzzz * r1.xyzw;
   r1.xyzw = exp2(r1.xyzw);
-  } else if(injectedData.toneMapType >= 2.f) {
+  } else if(RENODX_TONE_MAP_TYPE >= 2.f) {
     r1.w = saturate(r1.w);
     r2.w = saturate(r2.w);
-    r1.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r2.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+    r1.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r2.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     r1.xyzw = pow(abs(r1.xyzw), r0.z);
     r2.xyzw = pow(abs(r2.xyzw), r0.z);
   } else {
@@ -90,7 +90,7 @@ void main(
   r3.xyzw = _DkColorPyramid.SampleLevel(_DkColorPyramid_s, r0.xy, 0).xyzw;
   r4.xyzw = _DkColorPyramid.SampleLevel(_DkColorPyramid_s, r2.xy, 0).xyzw;
   r2.xyzw = _DkColorPyramid.SampleLevel(_DkColorPyramid_s, r2.zw, 0).xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r3.xyzw = saturate(r3.xyzw);
   r3.xyzw = log2(r3.xyzw);
   r3.xyzw = r3.xyzw * r0.zzzz;
@@ -103,13 +103,13 @@ void main(
   r4.xyzw = log2(r4.xyzw);
   r0.xyzw = r4.xyzw * r0.zzzz;
   r0.xyzw = exp2(r0.xyzw);
-  } else if(injectedData.toneMapType >= 2.f) {
+  } else if(RENODX_TONE_MAP_TYPE >= 2.f) {
     r3.w = saturate(r3.w);
     r2.w = saturate(r2.w);
     r0.w = saturate(r4.w);
-    r3.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r2.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r4.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+    r3.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r2.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r4.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     r3.xyzw = renodx::math::SignPow(r3.xyzw, r0.z);
     r2.xyzw = pow(abs(r2.xyzw), r0.z);
     r0.xyzw = pow(abs(r4.xyzw), r0.z);
@@ -126,7 +126,7 @@ void main(
   }
   r0.xyzw = r1.xyzw + r0.xyzw;
   r0.xyzw = r0.xyzw + r2.xyzw;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyzw = r3.xyzw * float4(5,5,5,5) + -r0.xyzw;
   } else {
     r0.xyzw = sign(r3.xyzw) * max(0.f, (abs(r3.xyzw) * 5.f - r0.xyzw));
@@ -134,14 +134,14 @@ void main(
   r0.xyzw = r0.xyzw + -r3.xyzw;
   o0.xyzw = _Sharpen * r0.xyzw + r3.xyzw;
   o0.w = saturate(o0.w);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     o0.xyz = saturate(o0.xyz);
-  } else if (injectedData.toneMapType >= 2.f){
-    o0.xyz *= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+  } else if (RENODX_TONE_MAP_TYPE >= 2.f){
+    o0.xyz *= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
   } else {
     o0.xyz *= 50.f;
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz);
   }
   return;

@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -34,9 +34,9 @@ void main(
     return;
   } else {
     r1.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-    if(injectedData.countOld < injectedData.countNew){
-      r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-      r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    if(CUSTOM_COUNT_OLD < CUSTOM_COUNT_NEW){
+      r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+      r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
     }
     if (cb0[3].z == 0) {
       r0.zw = v1.xy / cb0[3].xy;
@@ -100,9 +100,9 @@ void main(
     r0.xyz = r0.xyw * cb0[4].xxx + r1.xyz;
     o0.xyz = r0.xyz / r2.xxx;
     o0.w = r1.w;
-    if (injectedData.countOld <= injectedData.countNew) {
-      o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
-      o0.xyz = PostToneMapScale(o0.xyz, injectedData.gammaSpace != 0.f);
+    if (CUSTOM_COUNT_OLD <= CUSTOM_COUNT_NEW) {
+      o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+      o0.xyz = PostToneMapScale(o0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
     }
     return;
   }

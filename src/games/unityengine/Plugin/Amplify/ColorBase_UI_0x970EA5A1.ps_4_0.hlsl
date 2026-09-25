@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -20,16 +20,16 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v3.xy).xyzw;
-  if(injectedData.countOld < injectedData.countNew){
+  if(CUSTOM_COUNT_OLD < CUSTOM_COUNT_NEW){
     r0.xyz = InvertToneMapScale(r0.xyz);
   }
   o0.w = r0.w;
   r0.xyz = cb0[6].yyy * r0.xyz;
   r0.xyz = handleUserLUT(r0.xyz, t1, s1_s, float3(1 / 1024, 1 / 32, 31), 1, true);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld <= injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD <= CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

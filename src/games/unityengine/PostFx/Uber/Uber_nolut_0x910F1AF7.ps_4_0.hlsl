@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -36,7 +36,7 @@ void main(
   r0.yz = v1.xy * float2(2,2) + float2(-1,-1);
   r0.w = dot(r0.yz, r0.yz);
   r0.yz = r0.yz * r0.ww;
-  r0.yz = cb0[7].xx * r0.yz * injectedData.fxCA;
+  r0.yz = cb0[7].xx * r0.yz * CUSTOM_CHROMATIC_ABERRATION;
   r1.xy = cb0[2].zw * -r0.yz;
   r1.xy = float2(0.5,0.5) * r1.xy;
   r0.w = dot(r1.xy, r1.xy);
@@ -121,27 +121,27 @@ void main(
   r1.xy = r1.xy * cb0[11].xx + w2.xy;
   r1.xyzw = t5.Sample(s6_s, r1.xy).xyzw;
   r1.xyz = r2.xyz + r1.xyz;
-  r1.xyz = cb0[11].yyy * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[11].yyy * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * float3(0.0625,0.0625,0.0625) + r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = v1.xy * cb0[5].xy + cb0[5].zw;
   r1.xyzw = t6.Sample(s1_s, r1.xy).xyzw;
   r0.w = renodx::color::y::from::BT709(saturate(r0.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[4].x * -r0.w + 1;
   r1.xyz = r1.xyz * r0.xyz;
-  r1.xyz = cb0[4].yyy * r1.xyz * injectedData.fxFilmGrain;
+  r1.xyz = cb0[4].yyy * r1.xyz * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.xyz * r0.www + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

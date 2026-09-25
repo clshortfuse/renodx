@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -21,7 +21,7 @@ void main(
   r1.xyzw = t1.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
   r0.w = 1 + -r1.w;
   o0.xyz = r0.xyz * r0.www + r1.xyz;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz, true);
   } else {
     o0.xyz = renodx::color::srgb::EncodeSafe(o0.xyz);

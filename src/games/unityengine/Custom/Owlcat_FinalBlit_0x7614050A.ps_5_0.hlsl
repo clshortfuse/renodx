@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -32,13 +32,13 @@ void main(
   r3.xyz = t0.Load(r3.xyz).xyz;
   r1.zw = float2(0,0);
   r1.xyzw = t0.Load(r1.xyz).xyzw;
-  if(injectedData.toneMapType >= 2.f){
-    r0.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r4.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r2.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r3.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-    r1.xyz /= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r0.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r4.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r2.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r3.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    r1.xyz /= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r0.xyz /= 50.f;
     r4.xyz /= 50.f;
     r2.xyz /= 50.f;
@@ -77,9 +77,9 @@ void main(
   r0.w = -r1.x * r0.w + 2;
   r0.w = r1.x * r0.w;
   r0.xyz = r0.xyz * r0.www;
-  if(injectedData.toneMapType >= 2.f){
-    r0.xyz *= (injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
-  } else if(injectedData.toneMapType == 1.f){
+  if(RENODX_TONE_MAP_TYPE >= 2.f){
+    r0.xyz *= (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  } else if(RENODX_TONE_MAP_TYPE == 1.f){
     r0.xyz *= 50.f;
   }
   r1.xy = v1.xy * cb0[140].xy + cb0[140].zw;
@@ -91,15 +91,15 @@ void main(
   r1.x = 1 + -r1.x;
   r0.w = r1.x * r0.w;
   r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
-  if(injectedData.toneMapType != 0.f){
+  if(RENODX_TONE_MAP_TYPE != 0.f){
     r0.xyz = renodx::color::bt709::clamp::AP1(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   }
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = ((asuint(r0.x) & 0x7FFFFFFF) > 0x7F800000) || ((asuint(r0.y) & 0x7FFFFFFF) > 0x7F800000) || ((asuint(r0.z) & 0x7FFFFFFF) > 0x7F800000) ? float3(0,0,0) : r0.xyz;
   }
   o0.xyz = r0.xyz;

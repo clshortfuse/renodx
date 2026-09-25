@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 // https://github.com/Unity-Technologies/Graphics/blob/e42df452b62857a60944aed34f02efa1bda50018/com.unity.postprocessing/PostProcessing/Shaders/Builtins/Lut3DBaker.compute
 // KGenLUT3D_AcesTonemap
@@ -19,12 +19,12 @@ cbuffer cb0 : register(b0){
 if (float(vThreadID.x) < cb0[0].x && float(vThreadID.y) < cb0[0].x && float(vThreadID.z) < cb0[0].x) {
     r0.xyz = float3(vThreadID) * cb0[0].yyy;
     r0.xyz = lutShaper(r0.xyz, true);
-    float3 preCG = r0.xyz;
     // (start) ColorGrade
     // unity_to_ACES(r0.rgb)
     r1.x = dot(float3(0.4397010, 0.3829780, 0.1773350), r0.xyz);
     r1.y = dot(float3(0.0897923, 0.8134230, 0.0967616), r0.xyz);
     r1.z = dot(float3(0.0175440, 0.1115440, 0.8707040), r0.xyz);
+    float3 preCG = r1.xyz;
   // ACEScc (log) space
     // ACES_to_ACEScc(r1.rgb)
     r0.xyz = acesccEncode(r1.xyz);
@@ -126,11 +126,10 @@ if (float(vThreadID.x) < cb0[0].x && float(vThreadID.y) < cb0[0].x && float(vThr
     r1.y = dot(float3(0.6954522414,0.1406786965,0.1638690622), r0.xyz);
     r1.z = dot(float3(0.0447945634,0.8596711185,0.0955343182), r0.xyz);
     r1.w = dot(float3(-0.0055258826,0.0040252103,1.0015006723), r0.xyz);
-    r0.rgb = mul(ACES_to_SRGB_MAT, r1.gba);
-    r0.rgb = lerp(preCG, r0.rgb, injectedData.colorGradeInternalLUTStrength);
-    r0.rgb = applyUserTonemapACES(r0.rgb, 0);   
-    r0.a = 1;
-    u0[vThreadID.xyz] = r0.rgba;
+    r0.xyz = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+    r0.xyz = Ap1AcesTonemap(r0.xyz, 0);
+    r0.w = 1;
+    u0[vThreadID.xyz] = r0;
   }
 return;
 }

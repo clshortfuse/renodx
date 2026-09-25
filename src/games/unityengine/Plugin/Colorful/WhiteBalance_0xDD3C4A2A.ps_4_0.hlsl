@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -34,7 +34,7 @@ void main(
   o0.x = dot(float3(4.4678998,-3.58730006,0.1193), r0.xyz);
   o0.y = dot(float3(-1.21860003,2.38089991,-0.162400007), r0.xyz);
   o0.z = dot(float3(0.0496999994,-0.243900001,1.20449996), r0.xyz);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
 	o0.xyz = saturate(o0.xyz);
   }
   o0.w = 1;

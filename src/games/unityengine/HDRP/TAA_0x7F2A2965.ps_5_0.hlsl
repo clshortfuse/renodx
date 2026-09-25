@@ -134,7 +134,7 @@ void main(
     r3.w = r7.y * r7.w + r3.w;
     r3.w = rcp(r3.w);
     r3.xyz = r3.xyz * r3.www;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r3.xyz = max(float3(0,0,0), r3.xyz);
     }
     r3.xyz = min(float3(65472,65472,65472), r3.xyz);
@@ -149,7 +149,7 @@ void main(
     r2.w = 1 + r6.x;
     r2.w = rcp(r2.w);
     r3.xyz = r6.xyz * r2.www;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r6.xyz = max(float3(0,0,0), r5.xyz);
     } else {
     r6.xyz = r5.xyz;
@@ -415,12 +415,12 @@ void main(
     r0.z = r4.x * r1.w + -r2.y;
     r6.w = r0.z + -r2.x;
     r2.xyz = -r6.xzw + r3.xzw;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r2.xyz = max(float3(0,0,0), r2.xyz);
     }
     r2.xyz = cb1[69].xxx * r2.xyz;
     r2.xyz = r2.xyz * float3(3,3,3) + r3.xzw;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r2.xyz = max(float3(0,0,0), r2.xyz);
     }
     r2.xyz = min(float3(65472,65472,65472), r2.xyz);
@@ -449,7 +449,7 @@ void main(
     r1.x = r1.y + -r0.y;
     r0.x = r0.x * r0.w + -r0.z;
     r1.w = r0.x + -r0.y;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = max(float3(0,0,0), r1.xzw);
     r5.xyz = min(float3(65472,65472,65472), r0.xyz);
     } else {

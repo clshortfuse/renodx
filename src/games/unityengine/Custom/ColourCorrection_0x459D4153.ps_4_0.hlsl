@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -18,11 +18,11 @@ void main(
   r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
   r0.xyz = float3(-0.5,-0.5,-0.5) + r0.xyz;
   r0.xyz = cb0[2].zzz * r0.xyz + float3(0.5,0.5,0.5);
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
   r0.xyz = cb0[2].yyy * r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = log2(r0.xyz);
   r0.w = 1 / cb0[2].x;
   r0.xyz = r0.www * r0.xyz;
@@ -30,7 +30,7 @@ void main(
   } else {
     r0.xyz = renodx::math::SignPow(r0.xyz, 1 / cb0[2].x);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

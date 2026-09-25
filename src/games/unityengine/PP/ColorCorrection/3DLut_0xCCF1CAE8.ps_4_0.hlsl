@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -21,16 +21,16 @@ void main(
   o0.w = r0.w;
   //r0.xyz = r0.xyz * cb0[6].xxx + cb0[6].yyy;
   //r0.xyzw = t1.Sample(s1_s, r0.xyz).xyzw;
-  if(injectedData.gammaSpace != 0.f){
+  if(CUSTOM_GAMMA_SPACE != 0.f){
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   }
-  r0.xyz = handleUserLUT(r0.xyz, t1, s1_s, 0.5 / cb0[6].y, injectedData.gammaSpace != 0.f ? 0 : 2, true);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  r0.xyz = handleUserLUT(r0.xyz, t1, s1_s, 0.5 / cb0[6].y, CUSTOM_GAMMA_SPACE != 0.f ? 0 : 2, true);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
-    r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-  } else if(injectedData.gammaSpace != 0.f){
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+  } else if(CUSTOM_GAMMA_SPACE != 0.f){
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   }
   o0.xyz = r0.xyz;

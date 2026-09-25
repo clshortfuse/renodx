@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2DArray<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -36,11 +36,11 @@ void main(
   r2.zw = float2(0, 0);
   r2.xyzw = t0.Load(r2.xyzw).xyzw;
   r0.xyz = r2.xyz * r0.xxx;
-  r0.xyz = cb0[0].xxx * r0.xyz * injectedData.fxFilmGrain;
+  r0.xyz = cb0[0].xxx * r0.xyz * CUSTOM_FILM_GRAIN;
   r0.w = renodx::color::y::from::BT709(saturate(r2.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[0].y * -r0.w + 1;
-  if (injectedData.fxFilmGrainType == 0.f) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f) {
     r0.xyz = r0.xyz * r0.www + r2.xyz;
   } else {
     r0.rgb = applyFilmGrain(r2.rgb, v1);
@@ -49,6 +49,8 @@ void main(
   r1.z = 0;
   r1.xyzw = t2.SampleLevel(s0_s, r1.xyz, 0).xyzw;
   o0.xyz = r1.www * r0.xyz + r1.xyz;
-  o0.rgb = PostToneMapScale(o0.rgb);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    o0.xyz = PostToneMapScale(o0.xyz);
+  }
   return;
 }

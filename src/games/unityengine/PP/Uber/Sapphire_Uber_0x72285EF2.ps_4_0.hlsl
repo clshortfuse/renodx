@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -88,34 +88,23 @@ void main(
   r2.xyzw = t6.Sample(s6_s, v1.xy).xyzw;
   r1.xyz = r2.xyz * cb0[9].xxx + r1.xyz;
   r1.xyz = r1.xyz / r0.www;
-  r0.xyz = r1.xyz * cb0[3].xxx * injectedData.fxBloom + r0.xyz;
-  /*r1.xyz = r0.xyz * float3(2.50999999,2.50999999,2.50999999) + float3(0.0299999993,0.0299999993,0.0299999993);
-  r1.xyz = r1.xyz * r0.xyz;
-  r2.xyz = r0.xyz * float3(2.43000007,2.43000007,2.43000007) + float3(0.589999974,0.589999974,0.589999974);
-  r0.xyz = r0.xyz * r2.xyz + float3(0.140000001,0.140000001,0.140000001);
-  r0.xyz = saturate(r1.xyz / r0.xyz);*/
-  r0.xyz = applyUserTonemapSapphire(r0.xyz);
+  r0.xyz = r1.xyz * cb0[3].xxx * CUSTOM_BLOOM + r0.xyz;
+  r0.xyz = Bt709AcesTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r1.xy = v1.xy * cb0[20].xy + cb0[20].zw;
   r1.xyzw = t7.Sample(s7_s, r1.xy).xyzw;
   r0.w = r1.w * 2 + -1;
-  /*r1.x = cmp(0 < r0.w);
-  r1.y = cmp(r0.w < 0);
-  r1.x = (int)-r1.x + (int)r1.y;
-  r1.x = (int)r1.x;*/
   r1.x = sign(r0.w);
   r0.w = 1 + -abs(r0.w);
   r0.w = sqrt(r0.w);
   r0.w = 1 + -r0.w;
   r0.w = r1.x * r0.w;
-  //r0.xyz = saturate(r0.www * float3(0.0013071897,0.0013071897,0.0013071897) + r0.xyz);
   r1.xyz = applyDither(r0.xyz, r0.w * (1.0 / 765.0), 1);
   r1.w = 0;
-  /*r0.w = 1 / cb0[22].z;
-  r1.xyz = log2(r0.xyz);
-  r0.xyzw = r1.xyzw * r0.wwww;
-  o0.xyzw = exp2(r0.xyzw);*/
   r0.xyzw = renodx::math::SignPow(r1.xyzw, 1.0 / cb0[22].z);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

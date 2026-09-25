@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -21,30 +21,30 @@ void main(
 
   r0.xy = v5.xy * cb0[6].xy + cb0[6].zw;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.count2New >= 1.f && injectedData.isClamped != 0.f){
+  if(CUSTOM_COUNT_NEW_2 >= 1.f && CUSTOM_IS_CLAMPED != 0.f){
   r0 = saturate(r0);
   }
   r1.xy = v1.xy * cb0[6].xy + cb0[6].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.count2New >= 1.f && injectedData.isClamped != 0.f){
+  if(CUSTOM_COUNT_NEW_2 >= 1.f && CUSTOM_IS_CLAMPED != 0.f){
   r1 = saturate(r1);
   }
   r0.xyzw = max(r1.xyzw, r0.xyzw);
   r1.xy = v2.xy * cb0[6].xy + cb0[6].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.count2New >= 1.f && injectedData.isClamped != 0.f){
+  if(CUSTOM_COUNT_NEW_2 >= 1.f && CUSTOM_IS_CLAMPED != 0.f){
   r1 = saturate(r1);
   }
   r0.xyzw = max(r1.xyzw, r0.xyzw);
   r1.xy = v3.xy * cb0[6].xy + cb0[6].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.count2New >= 1.f && injectedData.isClamped != 0.f){
+  if(CUSTOM_COUNT_NEW_2 >= 1.f && CUSTOM_IS_CLAMPED != 0.f){
   r1 = saturate(r1);
   }
   r0.xyzw = max(r1.xyzw, r0.xyzw);
   r1.xy = v4.xy * cb0[6].xy + cb0[6].zw;
   r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.count2New >= 1.f && injectedData.isClamped != 0.f){
+  if(CUSTOM_COUNT_NEW_2 >= 1.f && CUSTOM_IS_CLAMPED != 0.f){
   r1 = saturate(r1);
   }
   o0.xyzw = max(r1.xyzw, r0.xyzw);

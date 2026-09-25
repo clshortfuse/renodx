@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -18,10 +18,10 @@ void main(
   r1.xyzw = t1.Sample(s0_s, v1.xy).xyzw;
   o0.xyz = r1.xyz + r0.xyz;
   o0.w = 1;
-  if(injectedData.isClamped == 3.f){
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+  if(CUSTOM_IS_CLAMPED == 3.f){
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
     o0.xyz = rolloff(o0.xyz, 0.8f, true);
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
   }
   return;
 }

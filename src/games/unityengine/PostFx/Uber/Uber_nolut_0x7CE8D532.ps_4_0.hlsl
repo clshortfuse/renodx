@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -32,7 +32,7 @@ void main(
   r0.xy = v1.xy * float2(2,2) + float2(-1,-1);
   r0.z = dot(r0.xy, r0.xy);
   r0.xy = r0.xy * r0.zz;
-  r0.xy = cb0[4].xx * r0.xy * injectedData.fxCA;
+  r0.xy = cb0[4].xx * r0.xy * CUSTOM_CHROMATIC_ABERRATION;
   r0.zw = cb0[2].zw * -r0.xy;
   r0.zw = float2(0.5,0.5) * r0.zw;
   r0.z = dot(r0.zw, r0.zw);
@@ -84,32 +84,32 @@ void main(
   r1.xy = r1.xy * cb0[8].xx + w2.xy;
   r1.xyzw = t2.Sample(s2_s, r1.xy).xyzw;
   r1.xyz = r2.xyz + r1.xyz;
-  r1.xyz = cb0[8].yyy * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[8].yyy * r1.xyz * CUSTOM_BLOOM;
   r2.xyz = float3(0.0625,0.0625,0.0625) * r1.xyz;
   r0.xyz = r1.xyz * float3(0.0625,0.0625,0.0625) + r0.xyz;
   r1.xyzw = t3.Sample(s3_s, v2.xy).xyzw;
-  r1.xyz = cb0[8].zzz * r1.xyz * injectedData.fxLens;
+  r1.xyz = cb0[8].zzz * r1.xyz * CUSTOM_LENS;
   r0.xyz = r2.xyz * r1.xyz + r0.xyz;
   r1.xy = -cb0[14].xy + v1.xy;
-  r1.yz = cb0[15].xx * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+  r1.yz = cb0[15].xx * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
   r0.w = cb1[6].x / cb1[6].y;
   r1.x = r1.y * r0.w;
   r0.w = dot(r1.xz, r1.xz);
   r0.w = 1 + -r0.w;
   r0.w = max(0, r0.w);
   r0.w = log2(r0.w);
-  r0.w = cb0[15].y * r0.w * max(1.f, injectedData.fxVignette);
+  r0.w = cb0[15].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
   r0.w = exp2(r0.w);
   r1.xyz = float3(1,1,1) + -cb0[13].xyz;
   r1.xyz = r0.www * r1.xyz + cb0[13].xyz;
   r0.xyz = r1.xyz * r0.xyz;
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
   }
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if(injectedData.countOld == injectedData.countNew) {
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

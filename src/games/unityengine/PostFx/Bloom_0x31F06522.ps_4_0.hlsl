@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -48,7 +48,7 @@ void main(
   r0.xyz = min(r4.xyz, r0.xyz);
   r0.xyz = r3.xyz + -r0.xyz;
   r0.xyz = r0.xyz + -r1.xyz;
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = InvertToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);

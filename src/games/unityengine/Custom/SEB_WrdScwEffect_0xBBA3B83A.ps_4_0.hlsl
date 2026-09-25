@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -262,10 +262,10 @@ void main(
   r0.xyzw = cb0[8].xxxx * r0.xyzw;
   r0.xyzw = exp2(r0.xyzw);
   o0.xyzw = v1.xyzw * r0.xyzw;
-  if(injectedData.toneMapType >= 2.f){
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+  if(RENODX_TONE_MAP_TYPE >= 2.f){
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
     o0.xyz = rolloff(o0.xyz, 0.85f, true);
-    o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+    o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
   }
   o0.w = saturate(o0.w);
   return;

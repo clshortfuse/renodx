@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -17,15 +17,15 @@ void main(
 
   r0.xy = v1.xy * cb0[45].xy + cb0[45].zw;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r0.xyz = InvertToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-  } else if(injectedData.gammaSpace != 0.f){
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r0.xyz = InvertToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+  } else if(CUSTOM_GAMMA_SPACE != 0.f){
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   }
-  if(injectedData.isClamped != 0.f){
+  if(CUSTOM_IS_CLAMPED != 0.f){
     r0.xyz = rolloffSdr(r0.xyz);
   }
-  if(injectedData.gammaSpace != 0.f){
+  if(CUSTOM_GAMMA_SPACE != 0.f){
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   }
   r0.xyzw = -cb0[49].yyyy + r0.xyzw;

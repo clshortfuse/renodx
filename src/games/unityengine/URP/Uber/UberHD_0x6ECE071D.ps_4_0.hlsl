@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture2D<float4> t3 : register(t3);
@@ -61,17 +61,17 @@ void main(
     r3.xyz = r2.xyz * r2.www;
     r2.xyz = float3(8,8,8) * r3.xyz;
   }
-  r2.xyz = cb0[132].xxx * r2.xyz * injectedData.fxBloom;
+  r2.xyz = cb0[132].xxx * r2.xyz * CUSTOM_BLOOM;
   r0.xyz = r2.xyz * cb0[132].yzw + r0.xyz;
   if (cb0[140].z > 0) {
     r1.xy = -cb0[140].xy + r1.yz;
-    r1.yz = cb0[140].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[140].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[139].w * r1.y;
     r1.x = dot(r1.xz, r1.xz);
     r1.x = 1 + -r1.x;
     r1.x = max(0, r1.x);
     r1.x = log2(r1.x);
-    r1.x = cb0[140].w * r1.x * max(1.f, injectedData.fxVignette);
+    r1.x = cb0[140].w * r1.x * max(1.f, CUSTOM_VIGNETTE);
     r1.x = exp2(r1.x);
     r1.yzw = float3(1,1,1) + -cb0[139].xyz;
     r1.xyz = r1.xxx * r1.yzw + cb0[139].xyz;
@@ -79,7 +79,7 @@ void main(
   }
   r0.xyz = cb0[130].www * r0.zxy;
   r0.yzx = lutShaper(r0.yzx);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r1.xyz = cb0[130].zzz * r0.xyz;
   r0.y = floor(r1.x);
   r1.xw = float2(0.5,0.5) * cb0[130].xy;
@@ -103,7 +103,10 @@ void main(
     r1.xyz = cb0[131].www * r2.xyz + r1.xyz;
     r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = v1.xy * cb0[142].xy + cb0[142].zw;
   r1.xyzw = t2.SampleBias(s1_s, r1.xy, cb0[21].x).xyzw;
   r1.x = -0.5 + r1.w;
@@ -112,7 +115,7 @@ void main(
   r1.y = sqrt(r1.y);
   r1.y = cb0[141].y * -r1.y + 1;
   r1.xzw = r1.xxx * r0.xyz;
-  r1.xzw = cb0[141].xxx * r1.xzw * injectedData.fxFilmGrain;
+  r1.xzw = cb0[141].xxx * r1.xzw * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.xzw * r1.yyy + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
@@ -121,7 +124,7 @@ void main(
   r1.x = r1.x + r0.z;
   r1.x = 0.333333343 * r1.x;
   o0.w = max(r1.x, r0.w);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

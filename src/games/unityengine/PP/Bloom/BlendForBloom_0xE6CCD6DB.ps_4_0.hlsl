@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -22,19 +22,19 @@ void main(
   r0.xyzw = t0.Sample(s1_s, r0.xy).xyzw;
   r1.xy = v2.xy * cb0[4].xy + cb0[4].zw;
   r1.xyzw = t1.Sample(s0_s, r1.xy).xyzw;
-  if(injectedData.toneMapType == 0.f){
-  r0.xyzw = -r0.xyzw * cb0[2].xxxx * injectedData.fxBloom + float4(1,1,1,1);
+  if(RENODX_TONE_MAP_TYPE == 0.f){
+  r0.xyzw = -r0.xyzw * cb0[2].xxxx * CUSTOM_BLOOM + float4(1,1,1,1);
   r1.xyzw = float4(1,1,1,1) + -r1.xyzw;
   r0.xyzw = -r0.xyzw * r1.xyzw + float4(1,1,1,1);
   } else {
-  r0.w = -r0.w * cb0[2].x * injectedData.fxBloom + 1.f;
+  r0.w = -r0.w * cb0[2].x * CUSTOM_BLOOM + 1.f;
   r1.w = 1.f + -r1.w;
   r0.w = -r0.w * r1.w + 1.f;
-  r0.xyz = r1.xyz + ((r0.xyz * cb0[2].x * injectedData.fxBloom) / (1.f + r1.xyz));
+  r0.xyz = r1.xyz + ((r0.xyz * cb0[2].x * CUSTOM_BLOOM) / (1.f + r1.xyz));
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
-    r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
+    r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
   }
   o0.xyzw = r0.xyzw;
   o0.w = saturate(o0.w);

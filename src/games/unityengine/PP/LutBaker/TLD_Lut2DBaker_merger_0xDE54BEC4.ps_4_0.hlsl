@@ -1,5 +1,3 @@
-#include "../../tonemap.hlsl"
-
 Texture2D<float4> t10 : register(t10);
 Texture2D<float4> t9 : register(t9);
 Texture2D<float4> t8 : register(t8);
@@ -79,7 +77,7 @@ void main(
     r1.xyz = r1.xyz + -r0.xyz;
     r0.xyz = cb0[48].yyy * r1.xyz + r0.xyz;
   }
-  r0.xyz = applyUserNoTonemap(r0.xyz);
+  //r0.xyz = GradeAndDisplayMap(r0.xyz);
   o0.xyz = r0.xyz;
   o0.w = 1;
   return;

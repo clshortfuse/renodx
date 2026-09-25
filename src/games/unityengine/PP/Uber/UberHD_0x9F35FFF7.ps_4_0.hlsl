@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture3D<float4> t3 : register(t3);
@@ -65,7 +65,7 @@ void main(
   r0.yz = v1.xy * float2(2,2) + float2(-1,-1);
   r0.w = dot(r0.yz, r0.yz);
   r0.yz = r0.yz * r0.ww;
-  r0.yz = cb0[35].ww * r0.yz * injectedData.fxCA;
+  r0.yz = cb0[35].ww * r0.yz * CUSTOM_CHROMATIC_ABERRATION;
   r2.xy = cb0[31].zw * -r0.yz;
   r2.xy = float2(0.5,0.5) * r2.xy;
   r0.w = dot(r2.xy, r2.xy);
@@ -136,7 +136,7 @@ void main(
   r0.xyz = r2.xyz * r0.xxx;
   if (cb0[40].y < 0.5) {
     r1.xy = -cb0[38].xy + r1.zw;
-    r2.yz = cb0[39].xx * abs(r1.yx) * min(1.f, injectedData.fxVignette);
+    r2.yz = cb0[39].xx * abs(r1.yx) * min(1.f, CUSTOM_VIGNETTE);
     r0.w = cb0[22].x / cb0[22].y;
     r0.w = -1 + r0.w;
     r0.w = cb0[39].w * r0.w + 1;
@@ -149,7 +149,7 @@ void main(
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[39].y * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[39].y * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r2.xyz = float3(1,1,1) + -cb0[37].xyz;
     r2.xyz = r0.www * r2.xyz + cb0[37].xyz;
@@ -168,7 +168,7 @@ void main(
   }
   r0.xyzw = cb0[36].zzzz * r3.xyzw;
   r0.xyz = lutShaper(r0.xyz);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyz = cb0[36].yyy * r0.xyz;
   r1.x = 0.5 * cb0[36].x;
   r0.xyz = r0.xyz * cb0[36].xxx + r1.xxx;
@@ -176,12 +176,15 @@ void main(
   } else {
     r1.yzw = renodx::lut::SampleTetrahedral(t3, r0.xyz, 1 / cb0[36].x);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.yzw = GradeAndDisplayMap(r1.yzw);
+  }
   if (cb0[42].x > 0.5) {
     r1.x = renodx::color::y::from::BT709(saturate(r1.yzw));
   } else {
     r1.x = r0.w;
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r1.yzw = PostToneMapScale(r1.yzw);
   }
   o0.xyzw = r1.yzwx;

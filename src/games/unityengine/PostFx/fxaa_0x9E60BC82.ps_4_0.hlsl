@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -377,15 +377,15 @@ void main(
     r3.y = isHorizontal ? r2.y : r0.y;
     r1.xyzw = t0.SampleLevel(s0_s, r3.xy, 0).xyzw;
   }
-  if (injectedData.gammaSpace != 0.f) {
+  if (CUSTOM_GAMMA_SPACE != 0.f) {
     r1.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r1.xyz = applyUserNoTonemap(r1.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r1.xyz = GradeAndDisplayMap(r1.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
-    r1.xyz = PostToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-  } else if (injectedData.gammaSpace != 0.f) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r1.xyz = PostToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+  } else if (CUSTOM_GAMMA_SPACE != 0.f) {
     r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
   }
   o0.xyz = r1.xyz;

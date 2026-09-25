@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -379,19 +379,19 @@ void main(
     r3.y = isHorizontal ? r2.y : r0.y;
     r1.xyzw = t0.SampleLevel(s0_s, r3.xy, 0).xyzw;
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r0.xy = v1.xy * cb0[5].xy + cb0[5].zw;
   r0.xyzw = t1.Sample(s1_s, r0.xy).xyzw;
   r0.w = renodx::color::y::from::BT709(saturate(r1.xyz));
   r0.w = sqrt(r0.w);
   r0.w = cb0[4].x * -r0.w + 1;
   r0.xyz = r1.xyz * r0.xyz;
-  r0.xyz = cb0[4].yyy * r0.xyz * injectedData.fxFilmGrain;
+  r0.xyz = cb0[4].yyy * r0.xyz * CUSTOM_FILM_GRAIN;
   r0.xyz = r0.xyz * r0.www + r1.xyz;
   } else {
     r0.xyz = applyFilmGrain(r1.xyz, v1);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

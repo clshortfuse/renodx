@@ -1,4 +1,4 @@
-#include "../tonemap.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture3D<float4> t4 : register(t4);
@@ -212,7 +212,7 @@ void main(
     r2.xyz = r2.xyz + -r1.www;
     r1.x = r1.x + -r1.w;
     r0.xyz = r2.xyz / r1.xxx;
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
       r0.xyz = saturate(r0.xyz);
     }
   }
@@ -247,7 +247,7 @@ void main(
     r0.xyz = cb0[50].www * r2.xyz + r0.xyz;
   }
   if (cb0[63].x > 0) {
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
     }
     r1.x = dot(r0.xyz, float3(0.2558,0.6511,0.0931));
@@ -280,10 +280,10 @@ void main(
     r2.xyz = min(cb0[32].yyy, r2.xyz);
     r0.xyz = r1.xyz * r2.xyz + r0.xyz;
   }
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-  r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+  r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
   r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyzw = r0.xyzw;

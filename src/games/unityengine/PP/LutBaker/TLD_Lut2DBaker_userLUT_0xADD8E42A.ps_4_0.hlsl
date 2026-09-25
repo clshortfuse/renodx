@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -27,24 +27,25 @@ void main(
   r2.xyz = cb0[28].www * r1.xzw;
   r0.yw = float2(0,0.25);
   float3 preCG = r2.xyz;
-  float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(preCG);
-  float3 userLutInput = injectedData.toneMapType == 0.f ? saturate(preCG) : sdrColor;
+  /*float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(preCG);
+  float3 userLutInput = RENODX_TONE_MAP_TYPE == 0.f ? saturate(preCG) : sdrColor;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.lut_sampler = s0_s;
-  lut_config.strength = injectedData.colorGradeUserLUTStrength;
-  lut_config.scaling = injectedData.colorGradeUserLUTScaling;
+  lut_config.strength = CUSTOM_USER_LUT_STRENGTH;
+  lut_config.scaling = CUSTOM_USER_LUT_SCALING;
   lut_config.type_input = renodx::lut::config::type::LINEAR;
   lut_config.type_input = renodx::lut::config::type::LINEAR;
   lut_config.precompute = cb0[29].xyz;
   lut_config.recolor = 0.f;
-  lut_config.max_channel = injectedData.toneMapType == 0.f ? 0.f : 1.f;
-  lut_config.gamut_compress = injectedData.toneMapType == 0.f ? 0.f : 1.f;
+  lut_config.max_channel = RENODX_TONE_MAP_TYPE == 0.f ? 0.f : 1.f;
+  lut_config.gamut_compress = RENODX_TONE_MAP_TYPE == 0.f ? 0.f : 1.f;
   lut_config.tetrahedral = false;
   r3.xyz = renodx::lut::Sample(userLutInput, lut_config, t0);
-  if (injectedData.toneMapType != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     lut_config.strength = 1.f;
-    r3.xyz = renodx::tonemap::UpgradeToneMap(preCG, userLutInput, r3.xyz, injectedData.colorGradeUserLUTStrength);
-  }
+    r3.xyz = renodx::tonemap::UpgradeToneMap(preCG, userLutInput, r3.xyz, CUSTOM_USER_LUT_STRENGTH);
+  }*/
+  r3.xyz = handleUserLUT(preCG, t0, s0_s, cb0[29].xyz, 2, true, true);
   r1.xyz = -r2.xyz + r3.xyz;
   r1.xyz = cb0[29].www * r1.xyz + r2.xyz;
   preCG = r1.xyz;
@@ -70,10 +71,12 @@ void main(
   r2.xyz = exp2(r2.xyz);
   r1.xyz = r2.xyz * r1.xyz;
   r1.xyz = liftGammaGainScaling(r1.xyz, preLGG, cb0[36].xyz, cb0[37].xyz, cb0[38].xyz);
-  bool isWCG = r1.x < 0.0 || r1.y < 0.0 || r1.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
+  /*bool isWCG = r1.x < 0.0 || r1.y < 0.0 || r1.z < 0.0;
+  if(RENODX_TONE_MAP_TYPE != 0.f){
     r1.xyz = isWCG ? renodx::color::bt2020::from::BT709(r1.xyz) : r1.xyz;
-  }
+  }*/
+  float compression_scale;
+  GamutCompression(r1.xyz, compression_scale);
   r1.xyz = max(float3(0,0,0), r1.xyz);
   r0.x = step(r1.z, r1.y);
   r2.xy = r1.zy;
@@ -130,19 +133,21 @@ void main(
   r0.y = dot(r2.xyz, float3(0.212672904,0.715152204,0.0721750036));
   r1.xyz = r0.www * r1.xyz + -r0.yyy;
   r0.xyz = r0.xxx * r1.xyz + r0.yyy;
-  if(injectedData.toneMapType == 0.f){
+  GamutDecompression(r0.xyz, compression_scale);
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = saturate(r0.xyz);
-  } else {
-    r0.xyz = isWCG ? renodx::color::bt709::from::BT2020(r0.xyz) : r0.xyz;
   }
-  float3 hdrColor = r0.xyz;
+  /*float3 hdrColor = r0.xyz;
   sdrColor = renodx::tonemap::renodrt::NeutralSDR(hdrColor);
-  float3 curvesInput = injectedData.toneMapType <= 1.f ? hdrColor : sdrColor;
+  float3 curvesInput = RENODX_TONE_MAP_TYPE <= 1.f ? hdrColor : sdrColor;
   r0.xyz = curvesInput;
   isWCG = r0.x < 0.0 || r0.y < 0.0 || r0.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
+  if(RENODX_TONE_MAP_TYPE != 0.f){
     r0.xyz = isWCG ? renodx::color::bt2020::from::BT709(r0.xyz) : r0.xyz;
-  }
+  }*/
+  float max_channel_scale;
+  GamutCompression(r0.xyz, compression_scale);
+  NeutwoMaxCh(r0.xyz, max_channel_scale);
   r0.xyz = float3(0.00390625,0.00390625,0.00390625) + r0.xyz;
   r0.w = 0.75;
   r1.xyzw = t1.Sample(s1_s, r0.xw).wxyz;
@@ -160,10 +165,12 @@ void main(
   o0.z = saturate(r0.z);
   o0.y = saturate(r1.y);
   o0.w = 1;
-  if (injectedData.toneMapType != 0.f) {
+  /*if (RENODX_TONE_MAP_TYPE != 0.f) {
     o0.xyz = isWCG ? renodx::color::bt709::from::BT2020(o0.xyz) : o0.xyz;
     o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, 1.f);
-  }
-  o0.xyz = lerp(preCG, o0.xyz, injectedData.colorGradeInternalLUTStrength);
+  }*/
+  NeutwoMaxChInverse(o0.xyz, max_channel_scale);
+  GamutCompression(r0.xyz, compression_scale);
+  o0.xyz = lerp(preCG, o0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   return;
 }

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -21,10 +21,11 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float4 fDest;
 
   r0.xyz = (uint3)vThreadID.xyz;
+  float compression_scale;
   if (cb0[17].x > 0) {
     r1.xyz = r0.xyz * cb0[0].yyy;
-    r1.rgb = lutShaper(r1.rgb, true);
-    float3 preCG = r1.rgb;
+    r1.xyz = lutShaper(r1.xyz, true);
+    float3 preCG = r1.xyz;
     r2.x = dot(float3(0.390405,0.549941,0.00892632), r1.xyz);
     r2.y = dot(float3(0.0708416,0.963172,0.00135775), r1.xyz);
     r2.z = dot(float3(0.0231082,0.128021,0.936245), r1.xyz);
@@ -32,14 +33,13 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.x = dot(float3(2.85847,-1.62879,-0.0248910), r1.xyz);
     r2.y = dot(float3(-0.210182,1.15820,0.000324281), r1.xyz);
     r2.z = dot(float3(-0.0418120,-0.118169,1.06867), r1.xyz);
+    GamutCompression(r2.xyz, compression_scale);
     r1.xyz = renodx::color::arri::logc::c1000::Encode(r2.xyz, false);
     r1.xyz = float3(-0.4135884, -0.4135884, -0.4135884) + r1.xyz;
     r1.xyz = r1.xyz * cb0[7].zzz + float3(0.4135884, 0.4135884, 0.4135884);
     r1.xyz = renodx::color::arri::logc::c1000::Decode(r1.xyz, false);
-    bool isWCG = r1.x < 0.0 || r1.y < 0.0 || r1.z < 0.0;
-    if(injectedData.toneMapType != 0.f){
-      r1.xyz = isWCG ? renodx::color::bt2020::from::BT709(r1.xyz) : r1.xyz;
-    }
+    GamutDecompression(r1.xyz, compression_scale);
+    GamutCompression(r1.xyz, compression_scale);
     r1.xyz = max(float3(0,0,0), r1.xyz);
     r1.xyz = pow(r1.xyz, 1.f / 2.2f);
     r2.xyz = min(float3(1,1,1), r1.xyz);
@@ -79,9 +79,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.xyz = r2.xyz * r4.xyz;
     r1.xyz = r1.xyz * r3.xyz + r2.xyz;
     r1.xyz = pow(abs(r1.xyz), 2.2f);
-    if(injectedData.toneMapType != 0.f){
-      r1.xyz = isWCG ? renodx::color::bt709::from::BT2020(r1.xyz) : r1.xyz;
-    }
+    GamutDecompression(r1.xyz, compression_scale);
     r2.x = dot(r1.xyz, cb0[4].xyz);
     r2.y = dot(r1.xyz, cb0[5].xyz);
     r2.z = dot(r1.xyz, cb0[6].xyz);
@@ -106,10 +104,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.xyz = r1.xyz * cb0[10].xyz + cb0[8].xyz;
     r3.xyz = sign(r1.xyz) * pow(abs(r1.xyz), cb0[9].xyz);
     r3.xyz = liftGammaGainScaling(r3.xyz, preLGG, cb0[8].xyz, cb0[9].xyz, cb0[10].xyz);
-    isWCG = r3.x < 0.0 || r3.y < 0.0 || r3.z < 0.0;
-    if(injectedData.toneMapType != 0.f){
-      r3.xyz = isWCG ? renodx::color::bt2020::from::BT709(r3.xyz) : r3.xyz;
-    }
+    GamutCompression(r3.xyz, compression_scale);
     r0.w = step(r3.z, r3.y);
     r4.xy = r3.zy;
     r4.zw = float2(-1.0, 2.0 / 3.0);
@@ -187,15 +182,13 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.w = 1 + -r0.w;
     r0.w = rcp(r0.w);
     r1.xyz = r2.xyz * r0.www;
-    if(injectedData.toneMapType != 0.f){
-      r1.xyz = isWCG ? renodx::color::bt709::from::BT2020(r1.xyz) : r1.xyz;
-    }
-    r1.rgb = lerp(preCG, r1.rgb, injectedData.colorGradeInternalLUTStrength);
+    GamutDecompression(r1.xyz, compression_scale);
+    r1.xyz = lerp(preCG, r1.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   } else {
     r0.xyz = r0.xyz * cb0[0].yyy;
-    r1.rgb = lutShaper(r0.rgb, true);
+    r1.xyz = lutShaper(r0.xyz, true);
   }
-  r0.rgb = applyUserTonemapNeutral(r1.rgb);
+  r0.xyz = NeutralTonemap(r1.xyz);
   r0.w = 1;
   u0[vThreadID] = r0;
   return;

@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -41,9 +41,11 @@ void main(
   r1.x = dot(float3(2.858470,-1.628790,-0.024891), r0.xyz);
   r1.y = dot(float3(-0.210182,1.158200,0.000324281), r0.xyz);
   r1.z = dot(float3(-0.041812,-0.118169,1.068670), r0.xyz);
+  r1.xyz = lerp(preCG, r1.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
   r0.x = dot(float3(0.4397010, 0.3829780, 0.1773350), r1.xyz);
   r0.y = dot(float3(0.0897923, 0.8134230, 0.0967616), r1.xyz);
   r0.z = dot(float3(0.0175440, 0.1115440, 0.8707040), r1.xyz);
+  preCG = r0.xyz;
   r0.xyz = acesccEncode(r0.xyz);
   r0.xyz = float3(-0.4135884,-0.4135884,-0.4135884) + r0.xyz;
   r0.xyz = r0.xyz * cb0[142].zzz + float3(0.4135884,0.4135884,0.4135884);
@@ -196,9 +198,8 @@ void main(
   r1.y = dot(float3(0.695452213,0.140678704,0.163869068), r0.xyz);
   r1.z = dot(float3(0.0447945632,0.859671116,0.0955343172), r0.xyz);
   r1.w = dot(float3(-0.00552588282,0.00402521016,1.00150073), r0.xyz);
-  r0.xyz = mul(ACES_to_SRGB_MAT, r1.yzw);
-  r0.xyz = lerp(preCG, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-  r0.xyz = applyUserTonemapACES(r0.xyz, 2);
+  r0.xyz = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+  r0.xyz = Ap1AcesTonemap(r0.xyz, 2);
   o0.xyz = r0.xyz;
   o0.w = 1;
   return;

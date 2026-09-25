@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t3 : register(t3);
 Texture2D<float4> t2 : register(t2);
@@ -126,7 +126,7 @@ void main(
   r0.xyz = r2.xxx * r0.xyz + r1.yzw;
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   r2.xyzw = t3.Sample(s2_s, v1.xy).xyzw;
-  r2.xyz = cb0[13].xxx * r2.xyz * injectedData.fxBloom;
+  r2.xyz = cb0[13].xxx * r2.xyz * CUSTOM_BLOOM;
   r0.xyz = r0.xyz + r2.xyz;
   r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   r1.x = max(r0.y, r0.z);
@@ -147,10 +147,10 @@ void main(
   o0.xyz = cb0[6].xxx * r0.xyz;
   o0.w = r0.w;
   o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    o0.xyz = applyUserNoTonemap(o0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    o0.xyz = GradeAndDisplayMap(o0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz, true);
   } else {
     o0.xyz = renodx::color::srgb::EncodeSafe(o0.xyz);

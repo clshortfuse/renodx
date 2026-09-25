@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2DArray<float4> t1 : register(t1);
 Texture2DArray<float4> t0 : register(t0);

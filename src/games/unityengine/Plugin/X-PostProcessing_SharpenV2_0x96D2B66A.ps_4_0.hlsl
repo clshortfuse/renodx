@@ -33,7 +33,7 @@ void main(
   r0.xyzw = -r0.xyzw * float4(0.25,0.25,0.25,0.25) + r1.xyzw;
   o0.xyzw = r0.xyzw * cb0[30].xxxx + r1.xyzw;
   o0.w = saturate(o0.w);
-  if(injectedData.toneMapType != 0.f){
+  if(RENODX_TONE_MAP_TYPE != 0.f){
   o0.xyz = renodx::color::bt709::clamp::AP1(o0.xyz);
   }
   return;

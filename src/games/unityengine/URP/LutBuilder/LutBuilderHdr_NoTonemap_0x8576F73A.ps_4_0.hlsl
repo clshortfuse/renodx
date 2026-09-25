@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -37,15 +37,15 @@ void main(
   r1.x = dot(float3(2.858470,-1.628790,-0.024891), r0.xyz);
   r1.y = dot(float3(-0.210182,1.158200,0.000324281), r0.xyz);
   r1.z = dot(float3(-0.041812,-0.118169,1.068670), r0.xyz);
-  r0.xyz = renodx::color::arri::logc::c1000::Encode(r1.xyz, true);
+  float compression_scale;
+  GamutCompression(r1.xyz, compression_scale);
+  r0.xyz = renodx::color::arri::logc::c1000::Encode(r1.xyz, false);
   r0.xyz = r0.xyz + float3(-0.4135884,-0.4135884,-0.4135884);
   r0.xyz = r0.xyz * cb0[136].zzz + float3(0.4135884,0.4135884,0.4135884);
-  r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, true);
+  r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, false);
+  GamutDecompression(r0.xyz, compression_scale);
   r0.xyz = cb0[132].xyz * r0.xyz;
-  bool isWCG = r0.x < 0.0 || r0.y < 0.0 || r0.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = isWCG ? renodx::color::bt2020::from::BT709(r0.xyz) : r0.xyz;
-  }
+  GamutCompression(r0.xyz, compression_scale);
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = pow(r0.xyz, 1.f / 2.2f);
   r1.xyz = r0.xyz + r0.xyz;
@@ -85,9 +85,7 @@ void main(
   r0.xyz = r0.xyz * r3.xyz + r1.xyz;
   r0.xyz = r0.xyz * r4.xyz + r2.xyz;
   r0.xyz = pow(abs(r0.xyz), 2.2f);
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = isWCG ? renodx::color::bt709::from::BT2020(r0.xyz) : r0.xyz;
-  }
+  GamutDecompression(r0.xyz, compression_scale);
   r1.x = dot(r0.xyz, cb0[133].xyz);
   r1.y = dot(r0.xyz, cb0[134].xyz);
   r1.z = dot(r0.xyz, cb0[135].xyz);
@@ -112,10 +110,7 @@ void main(
   r0.xyz = r0.xyz * cb0[139].xyz + cb0[137].xyz;
   r2.xyz = sign(r0.xyz) * pow(abs(r0.xyz), cb0[138].xyz);
   r2.xyz = liftGammaGainScaling(r2.xyz, preLGG, cb0[137].xyz, cb0[138].xyz, cb0[139].xyz);
-  isWCG = r2.x < 0.0 || r2.y < 0.0 || r2.z < 0.0;
-  if(injectedData.toneMapType != 0.f){
-    r2.xyz = isWCG ? renodx::color::bt2020::from::BT709(r2.xyz) : r2.xyz;
-  }
+  GamutCompression(r2.xyz, compression_scale);
   r3.xy = r2.zy;
   r0.xy = r2.yz + -r3.xy;
   r1.x = step(r2.z, r3.y);
@@ -192,13 +187,11 @@ void main(
   r0.x = 1 + -r0.x;
   r0.x = 1 / r0.x;
   r0.xyz = r1.xyz * r0.xxx;
-  if(injectedData.toneMapType != 0.f){
-    r0.xyz = isWCG ? renodx::color::bt709::from::BT2020(r0.xyz) : r0.xyz;
-  }
-  r0.xyz = lerp(preCG, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
-  }
+  GamutDecompression(r0.xyz, compression_scale);
+  r0.xyz = lerp(preCG, r0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
+  /*if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }*/
   o0.xyz = r0.xyz;
   o0.w = 1;
   return;

@@ -1,19 +1,10 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
 cbuffer cb0 : register(b0){
   float4 cb0[134];
-}
-
-float getNewPeak(float oldPeak){
-  float maxBrightness = max(cb0[133].z, max(cb0[133].x, cb0[133].y));
-  float maxContrast = max(cb0[132].z, max(cb0[132].x, cb0[132].y));
-  if(maxBrightness <= 1.f && maxContrast <= 1.f){return oldPeak;}
-  else {
-    return (oldPeak - 0.5f + 0.5f * maxContrast) / (maxContrast * maxBrightness);
-  }
 }
 
 void main(
@@ -33,12 +24,15 @@ void main(
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8,8,8) * r2.xyz;
   }
-  r1.xyz = cb0[119].xxx * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[119].xxx * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * cb0[119].yzw + r0.xyz;
-  r0.xyz = applyUserTonemapNeutral(r0.xyz, getNewPeak(injectedData.toneMapPeakNits));
+  r0.xyz = NeutralTonemap(r0.xyz);
   r0.xyz = r0.xyz * cb0[133].xyz + float3(-0.5,-0.5,-0.5);
   r0.xyz = r0.xyz * cb0[132].xyz + float3(0.5,0.5,0.5);
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

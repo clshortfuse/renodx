@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -20,21 +20,21 @@ void main(
   r0.xyz = cb0[108].xyx * float3(-1,-1,1) + v3.xyx;
   r1.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r0.xyzw = t0.Sample(s0_s, r0.zy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-    r0.xyz = InvertToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
-    r0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r0.xyz = InvertToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   } 
   r0.xyzw = r1.xyzw + r0.xyzw;
   r1.xyz = cb0[108].xyx * float3(-1,1,1) + v3.xyx;
   r2.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
   r1.xyzw = t0.Sample(s0_s, r1.zy).xyzw;
-  if(injectedData.countOld == injectedData.countNew){
-    r2.xyz = InvertToneMapScale(r2.xyz, injectedData.gammaSpace != 0.f);
-    r1.xyz = InvertToneMapScale(r1.xyz, injectedData.gammaSpace != 0.f);
-    r2.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r2.xyz) : r2.xyz;
-    r1.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
+  if(CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW){
+    r2.xyz = InvertToneMapScale(r2.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r1.xyz = InvertToneMapScale(r1.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+    r2.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r2.xyz) : r2.xyz;
+    r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   } 
   r0.xyzw = r2.xyzw + r0.xyzw;
   r0.xyzw = r0.xyzw + r1.xyzw;

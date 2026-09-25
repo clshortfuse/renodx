@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t4 : register(t4);
 Texture3D<float4> t3 : register(t3);
@@ -82,17 +82,17 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r3.xyz = -r2.xyz * r0.www + r2.xyz;
     r3.xyz = r0.xyz * cb1[9].xyz + r3.xyz;
     r3.xyz = r3.xyz + -r2.xyz;
-    r2.xyz = cb1[7].xxx * r3.xyz * injectedData.fxBloom + r2.xyz;
+    r2.xyz = cb1[7].xxx * r3.xyz * CUSTOM_BLOOM + r2.xyz;
     if (cb1[7].w != 0) {
       r3.xy = r1.zw * cb1[10].xy + cb1[10].zw;
       r3.xyz = t2.SampleLevel(s0_s, r3.xy, 0).xyz;
       r0.xyz = r3.xyz * r0.xyz;
-      r2.xyz = r0.xyz * cb1[7].yyy * injectedData.fxLens + r2.xyz;
+      r2.xyz = r0.xyz * cb1[7].yyy * CUSTOM_LENS + r2.xyz;
     }
   }
   if ((uint)cb1[1].z == 0) {
     r0.xy = r1.xy * cb0[51].zw + -cb1[1].xy;
-    r0.yz = cb1[2].xx * abs(r0.yx) * min(1.f, injectedData.fxVignette);
+    r0.yz = cb1[2].xx * abs(r0.yx) * min(1.f, CUSTOM_VIGNETTE);
     r0.w = cb0[51].x / cb0[51].y;
     r0.w = -1 + r0.w;
     r0.w = cb1[2].w * r0.w + 1;
@@ -105,7 +105,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.x = 1 + -r0.x;
     r0.x = max(0, r0.x);
     r0.x = log2(r0.x);
-    r0.x = cb1[2].y * r0.x * max(1.f, injectedData.fxVignette);
+    r0.x = cb1[2].y * r0.x * max(1.f, CUSTOM_VIGNETTE);
     r0.x = exp2(r0.x);
     r0.yzw = float3(1,1,1) + -cb1[3].xyz;
     r0.xyz = r0.xxx * r0.yzw + cb1[3].xyz;
@@ -126,7 +126,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     if (cb1[6].w != 0) {
       r1.xyz = cb1[6].zzz * r0.xyz;
       r1.rgb = lutShaper(r1.rgb);
-      if (injectedData.colorGradeLUTSampling == 0.f) {
+      if (CUSTOM_LUT_SAMPLE == 0.f) {
       r1.xyz = cb1[6].yyy * r1.xyz;
       r0.w = 0.5 * cb1[6].x;
       r1.xyz = r1.xyz * cb1[6].xxx + r0.www;
@@ -135,6 +135,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
         r0.xyz = renodx::lut::SampleTetrahedral(t3, r1.xyz, 1 / cb1[6].x);
       }
     }
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
   r0.xyzw = renodx::math::SignSqrt(r0.xyzx);
   u0[vThreadID] = r0;

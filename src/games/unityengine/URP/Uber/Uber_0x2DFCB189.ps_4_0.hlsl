@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t5 : register(t5);
 Texture2D<float4> t4 : register(t4);
@@ -24,7 +24,7 @@ void main(
   r0.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
   r1.x = dot(r0.zw, r0.zw);
   r0.xyzw = r1.xxxx * r0.xyzw;
-  r0.xyzw = cb0[134].xxxx * r0.xyzw * injectedData.fxBloom;
+  r0.xyzw = cb0[134].xxxx * r0.xyzw * CUSTOM_BLOOM;
   r1.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   r0.xyzw = r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
   r2.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
@@ -38,21 +38,21 @@ void main(
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8,8,8) * r2.xyz;
   }
-  r1.xyz = cb0[128].xxx * r1.xyz * injectedData.fxBloom;
+  r1.xyz = cb0[128].xxx * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * cb0[128].yzw + r0.xyz;
   r2.xy = v1.xy * cb0[130].xy + cb0[130].zw;
   r2.xyzw = t2.Sample(s0_s, r2.xy).xyzw;
-  r2.xyz = cb0[131].xxx * r2.xyz * injectedData.fxLens;
+  r2.xyz = cb0[131].xxx * r2.xyz * CUSTOM_LENS;
   r0.xyz = r2.xyz * r1.xyz + r0.xyz;
   if (cb0[136].z > 0) {
     r1.xy = -cb0[136].xy + v1.xy;
-    r1.yz = cb0[136].zz * abs(r1.xy) * min(1.f, injectedData.fxVignette);
+    r1.yz = cb0[136].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[135].w * r1.y;
     r0.w = dot(r1.xz, r1.xz);
     r0.w = 1 + -r0.w;
     r0.w = max(0, r0.w);
     r0.w = log2(r0.w);
-    r0.w = cb0[136].w * r0.w * max(1.f, injectedData.fxVignette);
+    r0.w = cb0[136].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
     r0.w = exp2(r0.w);
     r1.xyz = float3(1,1,1) + -cb0[135].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[135].xyz;
@@ -67,7 +67,7 @@ void main(
     r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
   r0.xyz = lutShaper(r0.xyz, false, 1);
-  if(injectedData.colorGradeLUTSampling == 0.f){
+  if(CUSTOM_LUT_SAMPLE == 0.f){
   r0.xyw = cb0[126].zzz * r0.xyz;
   r0.w = floor(r0.w);
   r1.xy = float2(0.5,0.5) * cb0[126].xy;
@@ -84,7 +84,10 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t4, r0.xyz, cb0[126].z + 1u);
   }
-  if(injectedData.fxFilmGrainType == 0.f){
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  if(CUSTOM_FILM_GRAIN_TYPE == 0.f){
   r1.xy = v1.xy * cb0[138].xy + cb0[138].zw;
   r1.xyzw = t3.Sample(s1_s, r1.xy).xyzw;
   r0.w = -0.5 + r1.w;
@@ -93,12 +96,12 @@ void main(
   r1.x = sqrt(r1.x);
   r1.x = cb0[137].y * -r1.x + 1;
   r1.yzw = r0.xyz * r0.www;
-  r1.yzw = cb0[137].xxx * r1.yzw * injectedData.fxFilmGrain;
+  r1.yzw = cb0[137].xxx * r1.yzw * CUSTOM_FILM_GRAIN;
   r0.xyz = r1.yzw * r1.xxx + r0.xyz;
   } else {
     r0.xyz = applyFilmGrain(r0.xyz, v1);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);

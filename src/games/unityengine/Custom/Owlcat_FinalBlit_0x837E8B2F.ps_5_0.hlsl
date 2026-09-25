@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -17,17 +17,17 @@ void main(
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[29].x).xyzw;
   o0.w = r0.w;
-  if(injectedData.countOld < injectedData.countNew){
+  if(CUSTOM_COUNT_OLD < CUSTOM_COUNT_NEW){
     r0.xyz = InvertToneMapScale(r0.xyz, true);
   } else {
     r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
   }
-  if(injectedData.toneMapType == 0.f){
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = ((asuint(r0.x) & 0x7FFFFFFF) > 0x7F800000) || ((asuint(r0.y) & 0x7FFFFFFF) > 0x7F800000) || ((asuint(r0.z) & 0x7FFFFFFF) > 0x7F800000) ? float3(0,0,0) : r0.xyz;
   } else {
     r0.xyz = renodx::color::bt709::clamp::AP1(r0.xyz);
   }
-  if (injectedData.countOld <= injectedData.countNew) {
+  if (CUSTOM_COUNT_OLD <= CUSTOM_COUNT_NEW) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;

@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2DArray<float4> t2 : register(t2);
 Texture2DArray<float4> t1 : register(t1);
@@ -105,7 +105,9 @@ void main(
   r5.z = 0;
   r1.xyzw = t1.SampleLevel(s0_s, r5.xyz, 0).xyzw;
   o0.xyz = r1.www * r0.yzw + r1.xyz;
-  o0.rgb = PostToneMapScale(o0.rgb);
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    o0.rgb = PostToneMapScale(o0.rgb);
+  }
   o0.w = (cb0[5].x == 1.0) ? r0.x : 1;
   return;
 }

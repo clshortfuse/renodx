@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture3D<float4> t1 : register(t1);
 Texture2D<float4> t0 : register(t0);
@@ -48,9 +48,9 @@ void main(
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   o0.w = r0.w;
   renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.strength = injectedData.colorGradeUserLUTStrength;
-  lut_config.scaling = injectedData.colorGradeUserLUTScaling;
-  if(injectedData.gammaSpace != 0.f){
+  lut_config.strength = CUSTOM_USER_LUT_STRENGTH;
+  lut_config.scaling = CUSTOM_USER_LUT_SCALING;
+  if(CUSTOM_GAMMA_SPACE != 0.f){
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   r0.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
@@ -59,16 +59,16 @@ void main(
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   }
   lut_config.recolor = 0.f;
-  lut_config.max_channel = injectedData.toneMapType == 0.f ? 0.f : 1.f;
-  lut_config.gamut_compress = injectedData.toneMapType == 0.f ? 0.f : 1.f;
-  int encoding = injectedData.gammaSpace != 0.f ? 0 : 2;
+  lut_config.max_channel = RENODX_TONE_MAP_TYPE == 0.f ? 0.f : 1.f;
+  lut_config.gamut_compress = RENODX_TONE_MAP_TYPE == 0.f ? 0.f : 1.f;
+  int encoding = CUSTOM_GAMMA_SPACE != 0.f ? 0 : 2;
     float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(r0.xyz);
-    float3 lutLinearInput = injectedData.toneMapType == 0.f ? saturate(r0.xyz) : sdrColor;
+    float3 lutLinearInput = RENODX_TONE_MAP_TYPE == 0.f ? saturate(r0.xyz) : sdrColor;
     float3 lutInputColor = ConvertInput(lutLinearInput, encoding);
     float3 lutOutputColor = weirdLutSample(lutInputColor, lut_config);
     float3 color_output = LinearOutput(lutOutputColor, encoding);
     [branch]
-    if (injectedData.colorGradeUserLUTScaling != 0.f) {
+    if (CUSTOM_USER_LUT_SCALING != 0.f) {
       float3 lutBlack = weirdLutSample(ConvertInput(0, encoding), lut_config);
       float3 lutMid = weirdLutSample(ConvertInput(0.18f, encoding), lut_config);
       float3 lutWhite = weirdLutSample(ConvertInput(1.f, encoding), lut_config);
@@ -87,17 +87,17 @@ void main(
       color_output = renodx::lut::RestoreSaturationLoss(lutLinearInput, color_output, lut_config);
     }
     [branch]
-    if(injectedData.toneMapType == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = lerp(r0.xyz, color_output, lut_config.strength);
     } else {
-    r0.xyz = renodx::tonemap::UpgradeToneMap(r0.xyz, lutLinearInput, color_output, injectedData.colorGradeUserLUTStrength);
+    r0.xyz = renodx::tonemap::UpgradeToneMap(r0.xyz, lutLinearInput, color_output, CUSTOM_USER_LUT_STRENGTH);
     }
-  if (injectedData.tonemapCheck == 1.f && (injectedData.count2Old == injectedData.count2New)) {
-    r0.xyz = applyUserNoTonemap(r0.xyz);
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
   }
-  if (injectedData.countOld == injectedData.countNew) {
-    r0.xyz = PostToneMapScale(r0.xyz, injectedData.gammaSpace != 0.f);
-  } else if(injectedData.gammaSpace != 0.f){
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = PostToneMapScale(r0.xyz, CUSTOM_GAMMA_SPACE != 0.f);
+  } else if(CUSTOM_GAMMA_SPACE != 0.f){
     r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   }
   o0.xyz = r0.xyz;

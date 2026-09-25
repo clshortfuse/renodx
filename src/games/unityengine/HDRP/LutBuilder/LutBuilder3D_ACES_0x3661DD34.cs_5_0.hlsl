@@ -1,4 +1,4 @@
-#include "../../tonemap.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
@@ -33,11 +33,11 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float4 fDest;
 
   r0.xyz = (uint3)vThreadID.xyz;
-  float3 ungraded;
+  float3 preCG;
   if (cb0[17].x > 0) {
     r1.xyz = r0.xyz * cb0[0].yyy;
     r1.xyz = lutShaper(r1.xyz, true);
-    ungraded = r1.xyz;
+    preCG = r1.xyz;
     r2.x = dot(float3(0.390405,0.549941,0.00892632), r1.xyz);
     r2.y = dot(float3(0.0708416,0.963172,0.00135775), r1.xyz);
     r2.z = dot(float3(0.0231082,0.128021,0.936245), r1.xyz);
@@ -45,17 +45,19 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r2.x = dot(float3(2.85847,-1.62879,-0.0248910), r1.xyz);
     r2.y = dot(float3(-0.210182,1.15820,0.000324281), r1.xyz);
     r2.z = dot(float3(-0.0418120,-0.118169,1.06867), r1.xyz);
+    r2.xyz = lerp(preCG, r2.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
     // uni to aces
     r1.x = dot(float3(0.4397010, 0.3829780, 0.1773350), r2.xyz);
     r1.y = dot(float3(0.0897923, 0.8134230, 0.0967616), r2.xyz);
     r1.z = dot(float3(0.0175440, 0.1115440, 0.8707040), r2.xyz);
+    preCG = r1.xyz;
     r1.xyz = acesccEncode(r1.xyz);
     // contrast
     r1.xyz = float3(-0.4135884, -0.4135884, -0.4135884) + r1.xyz;
     r1.xyz = r1.xyz * cb0[7].zzz + float3(0.4135884, 0.4135884, 0.4135884);
-    r4.rgb = acescc::Decode(r1.rgb);
+    r4.xyz = acescc::Decode(r1.xyz);
     // ap0 to ap1
-    r1.rgb = mul(ACES_to_ACEScg_MAT, r4.rgb);
+    r1.xyz = mul(ACES_to_ACEScg_MAT, r4.xyz);
     r1.xyz = cb0[3].xyz * r1.xyz;
     r1.xyz = max(float3(0,0,0), r1.xyz);
     r1.xyz = pow(r1.xyz, 1.f / 2.2f);
@@ -202,20 +204,15 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.xyz = max(float3(0,0,0), r1.xyz);
   } else {
     r0.xyz = r0.xyz * cb0[0].yyy;
-    r1.rgb = lutShaper(r0.rgb, true);
+    r1.xyz = lutShaper(r0.xyz, true);
   }
   r0.xyz = max(float3(0,0,0), r1.xyz);
   r1.y = dot(float3(0.695452213,0.140678704,0.163869068), r0.xyz);
   r1.z = dot(float3(0.0447945632,0.859671116,0.0955343172), r0.xyz);
-  r1.w = dot(float3(-0.00552588282,0.00402521016,1.00150073), r0.xyz);
-  r0.x = dot(float3(2.52169, -1.13413, -0.38756), r1.yzw);
-  r0.y = dot(float3(-0.27648, 1.37272, -0.09624), r1.yzw);
-  r0.z = dot(float3(-0.01538, -0.15298, 1.16835), r1.yzw);
-  r0.xyz = lerp(ungraded, r0.xyz, injectedData.colorGradeInternalLUTStrength);
-  if(injectedData.toneMapType == 0.f){
-    r1.y = dot(float3(0.4397010,0.3829780,0.1773350), r0.xyz);
-    r1.z = dot(float3(0.0897923,0.8134230,0.0967616), r0.xyz);
-    r1.w = dot(float3(0.0175440,0.1115440,0.8707040), r0.xyz);
+  r1.w = dot(float3(-0.00552588282, 0.00402521016, 1.00150073), r0.xyz);
+  float3 ap0_untonemapped = r1.yzw;
+  r1.yzw = lerp(preCG, r1.yzw, CUSTOM_INTERNAL_LUT_STRENGTH);
+  if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.x = min(r1.y, r1.z);
   r0.x = min(r0.x, r1.w);
   r0.y = max(r1.y, r1.z);
@@ -648,9 +645,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r1.y = saturate(dot(float3(-0.969243646,1.8759675,0.0415550582), r0.xyz));
   r1.z = saturate(dot(float3(0.0556300804,-0.203976959,1.05697155), r0.xyz));
   } else {
-    r1.xyz = r0.xyz;
+    r1.xyz = r1.yzw;
   }
-  r1.xyz = applyUserTonemapACES(r1.xyz, 3);
+  r1.xyz = Ap1AcesTonemap(ap0_untonemapped, r1.xyz);
   r1.w = 1;
   u0[vThreadID] = r1;
   return;

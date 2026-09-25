@@ -26,7 +26,7 @@ void main(
   r0.w = v1.w * r1.w;
   o0.w = r0.w;
   o0.xyz = r0.xyz / r1.xyz;
-  if(injectedData.isClamped > 1.f){
+  if(CUSTOM_IS_CLAMPED > 1.f){
     o0 = saturate(o0);
   }
   return;

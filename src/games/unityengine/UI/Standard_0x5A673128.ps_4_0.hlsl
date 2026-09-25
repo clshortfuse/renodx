@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 Texture3D<float4> t7 : register(t7);
 TextureCube<float4> t6 : register(t6);
@@ -275,12 +275,12 @@ void main(
   r1.xyzw = t4.Sample(s6_s, v1.xy).xyzw;
   o0.xyz = r1.xyz * cb0[10].xyz + r0.xyz;
   o0.w = 1;
-  if (injectedData.countOld == injectedData.countNew) {
-    if(injectedData.rolloffUI == 1.f){
-      o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    if(CUSTOM_ROLLOFF_UI == 1.f){
+      o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
       o0.xyz = rolloff(o0.xyz, 0.85f, true);
-      o0.xyz = injectedData.gammaSpace != 0.f ? renodx::color::srgb::EncodeSafe(o0.xyz) : o0.xyz;
-    } else if(injectedData.rolloffUI == 2.f){
+      o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(o0.xyz) : o0.xyz;
+    } else if(CUSTOM_ROLLOFF_UI == 2.f){
       o0.xyz = saturate(o0.xyz);
     }
   }

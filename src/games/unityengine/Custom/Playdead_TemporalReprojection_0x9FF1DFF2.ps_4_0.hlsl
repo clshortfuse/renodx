@@ -178,8 +178,8 @@ void main(
   r1.xyzw = float4(43758.5469,28001.8379,50849.4141,12996.8896) * r1.xxxx;
   r1.xyzw = frac(r1.xyzw);
   r1.xyzw = r1.xyzw * float4(2,2,2,2) + float4(-1,-1,-1,-1);
-  r0.xyzw = r1.xyzw * (1.0 / 510.0) * injectedData.fxNoise + r0.xyzw;
-  if(injectedData.toneMapType == 0.f){
+  r0.xyzw = r1.xyzw * (1.0 / 510.0) * CUSTOM_NOISE + r0.xyzw;
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyzw = saturate(r0.xyzw);
   }
   o0.xyzw = r0.xyzw;
