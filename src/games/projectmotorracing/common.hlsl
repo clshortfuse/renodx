@@ -71,11 +71,3 @@ float3 N2PerChannelLMS(float3 color) {
 
   return renodx::color::bt709::from::LMS(lms_displaymapped_normalized * lms_white);
 }
-
-float3 ApplyGammaCorrectionLMS(float3 color_bt709, bool inverse) {
-  const float3 lms_white = renodx::color::lms::from::BT709(1.f);
-
-  float3 color_lms_normalized = renodx::color::lms::from::BT709(color_bt709) / lms_white;
-  return renodx::color::bt709::from::LMS(
-      renodx::color::correct::GammaSafe(color_lms_normalized, inverse) * lms_white);
-}
