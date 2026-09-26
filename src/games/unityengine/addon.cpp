@@ -1519,7 +1519,9 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0xC4B616D2, &CountLinear),    // ShaderGraphs_MetaSourceCombine
     CustomShaderEntryCallback(0xB0E8F20C, &CountLinearTonemap1),    // ShaderGraphs_FullScreenLUT
     UberHDGammaOnDraw(0x3875CEA0),
+    UberHDGammaOnDraw(0xE375BBC4),
     UberHDGammaOnDraw(0x5FE56D00),
+    UberHDGammaOnDraw(0x2F096075),
     SneakyBuilderTonemapOnDraw(0x5B3A6D48),
     SneakyBuilderTonemapOnDraw(0x3B50094B),
     UberHDLinearOnDraw(0x99B7B0BF), // SadCatStudios_FinalBlit
