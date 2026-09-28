@@ -1604,6 +1604,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x3BB46D74, &CountTonemap1),  // MK Glow SM40
     CustomShaderEntryCallback(0x2749CA46, &CountTonemap1),   // Bloom
     CustomShaderEntryCallback(0xE0FF806B, &CountLinearTonemap1Clamped), // LUT2DStrip
+    CustomShaderEntryCallback(0xB7461FF9, &Count), // Texture Overlay
     /*CustomShaderEntry(0x6CA6AD34),  // FinalVisualAdjustments
     CustomShaderEntry(0x3D4B34E8),*/
     //CustomShaderEntry(0x25AD4F0D),
@@ -2421,6 +2422,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x04960CEC, &CountLinear),
     CustomShaderEntryCallback(0xFC5C534E, &CountLinear),
     CustomShaderEntryCallback(0x1EE4CF1C, &CountLinear),
+    CustomShaderEntryCallback(0x49B47E38, &CountLinear),
     CustomShaderEntryCallback(0xD90A4513, &CountGamma),
     CustomShaderEntryCallback(0x780BC110, &CountGamma),
     CustomShaderEntryCallback(0x685DF333, &CountLinear),
