@@ -261,6 +261,9 @@ void main(
   float _442 = ((_331 * (((_ColorGradingCB_336.x + _ColorGradingCB_096.x) + _233) + (((_ColorGradingCB_320.x * _ColorGradingCB_080.x) * _242) * exp2(log2(exp2(((_ColorGradingCB_288.x * _ColorGradingCB_048.x) * _260) * log2(max(0.0f, (((_158 * _ColorGradingCB_272.x) * _266) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_304.x * _ColorGradingCB_064.x) * _251)))))) + (_224 * (((_ColorGradingCB_096.x + _ColorGradingCB_176.x) + _101) + (((_ColorGradingCB_080.x * _ColorGradingCB_160.x) * _115) * exp2(log2(exp2(((_ColorGradingCB_048.x * _ColorGradingCB_128.x) * _143) * log2(max(0.0f, (((_158 * _ColorGradingCB_112.x) * _154) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_064.x * _ColorGradingCB_144.x) * _129))))))) + ((((_ColorGradingCB_256.x + _ColorGradingCB_096.x) + _340) + (((_ColorGradingCB_240.x * _ColorGradingCB_080.x) * _349) * exp2(log2(exp2(((_ColorGradingCB_208.x * _ColorGradingCB_048.x) * _367) * log2(max(0.0f, (((_158 * _ColorGradingCB_192.x) * _373) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_224.x * _ColorGradingCB_064.x) * _358))))) * _431);
   float _444 = ((_331 * (((_ColorGradingCB_336.y + _ColorGradingCB_096.y) + _233) + (((_ColorGradingCB_320.y * _ColorGradingCB_080.y) * _242) * exp2(log2(exp2(((_ColorGradingCB_288.y * _ColorGradingCB_048.y) * _260) * log2(max(0.0f, (((_161 * _ColorGradingCB_272.y) * _266) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_304.y * _ColorGradingCB_064.y) * _251)))))) + (_224 * (((_ColorGradingCB_096.y + _ColorGradingCB_176.y) + _101) + (((_ColorGradingCB_080.y * _ColorGradingCB_160.y) * _115) * exp2(log2(exp2(((_ColorGradingCB_048.y * _ColorGradingCB_128.y) * _143) * log2(max(0.0f, (((_161 * _ColorGradingCB_112.y) * _154) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_064.y * _ColorGradingCB_144.y) * _129))))))) + ((((_ColorGradingCB_256.y + _ColorGradingCB_096.y) + _340) + (((_ColorGradingCB_240.y * _ColorGradingCB_080.y) * _349) * exp2(log2(exp2(((_ColorGradingCB_208.y * _ColorGradingCB_048.y) * _367) * log2(max(0.0f, (((_161 * _ColorGradingCB_192.y) * _373) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_224.y * _ColorGradingCB_064.y) * _358))))) * _431);
   float _446 = ((_331 * (((_ColorGradingCB_336.z + _ColorGradingCB_096.z) + _233) + (((_ColorGradingCB_320.z * _ColorGradingCB_080.z) * _242) * exp2(log2(exp2(((_ColorGradingCB_288.z * _ColorGradingCB_048.z) * _260) * log2(max(0.0f, (((_164 * _ColorGradingCB_272.z) * _266) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_304.z * _ColorGradingCB_064.z) * _251)))))) + (_224 * (((_ColorGradingCB_096.z + _ColorGradingCB_176.z) + _101) + (((_ColorGradingCB_080.z * _ColorGradingCB_160.z) * _115) * exp2(log2(exp2(((_ColorGradingCB_048.z * _ColorGradingCB_128.z) * _143) * log2(max(0.0f, (((_164 * _ColorGradingCB_112.z) * _154) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_064.z * _ColorGradingCB_144.z) * _129))))))) + ((((_ColorGradingCB_256.z + _ColorGradingCB_096.z) + _340) + (((_ColorGradingCB_240.z * _ColorGradingCB_080.z) * _349) * exp2(log2(exp2(((_ColorGradingCB_208.z * _ColorGradingCB_048.z) * _367) * log2(max(0.0f, (((_164 * _ColorGradingCB_192.z) * _373) + _87)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((_ColorGradingCB_224.z * _ColorGradingCB_064.z) * _358))))) * _431);
+  _442 = lerp(_41, _442, CUSTOM_INTERNAL_LUT_STRENGTH);
+  _444 = lerp(_44, _444, CUSTOM_INTERNAL_LUT_STRENGTH);
+  _446 = lerp(_47, _446, CUSTOM_INTERNAL_LUT_STRENGTH);
   float _460 = ((mad(0.06136061251163483f, _446, mad(-4.540197551250458e-09f, _444, (_442 * 0.9386393427848816f))) - _442) * _ColorGradingCB_016.y) + _442;
   float _461 = ((mad(0.169205904006958f, _446, mad(0.8307941555976868f, _444, (_442 * 6.984919309616089e-10f))) - _444) * _ColorGradingCB_016.y) + _444;
   float _462 = (mad(2.3283064365386963e-10f, _444, (_442 * -9.313225746154785e-10f)) * _ColorGradingCB_016.y) + _446;
@@ -381,27 +384,24 @@ void main(
   float3 sdrTonemappedBt709 = float3(_809, _810, _811);
   if (RENODX_TONE_MAP_TYPE == 0.f) {
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {
-    _776 = _460;
-    _777 = _461;
-    _778 = _462;
-    _794 = ((mad(-0.06537103652954102f, _778, mad(1.4667166396975517e-06f, _777, (_776 * 1.0653746128082275f))) - _776) * _ColorGradingCB_016.y) + _776;
-    _795 = ((mad(-0.20366773009300232f, _778, mad(1.2036634683609009f, _777, (_776 * -3.3905962482094765e-07f))) - _777) * _ColorGradingCB_016.y) + _777;
-    _796 = ((mad(0.9999996423721313f, _778, mad(2.1886080503463745e-08f, _777, (_776 * 1.862645149230957e-08f))) - _778) * _ColorGradingCB_016.y) + _778;
+    _794 = _442;
+    _795 = _444;
+    _796 = _446;
     _809 = mad(-0.08325886726379395f, _796, mad(-0.6217920184135437f, _795, (_794 * 1.7050509452819824f)));
     _810 = mad(-0.010548318736255169f, _796, mad(1.140804648399353f, _795, (_794 * -0.13025641441345215f)));
     _811 = mad(1.1529723405838013f, _796, mad(-0.1289689689874649f, _795, (_794 * -0.024003352969884872f)));
   } else {
     float3 extendedTonemapAp1 = unrealengine::filmtonemap::extended::ApplyToneCurveExtended(RRTresult, sdrTonemappedAp1, _FilmTonemappingCB_000, _FilmTonemappingCB_004, _FilmTonemappingCB_008, _FilmTonemappingCB_012, _FilmTonemappingCB_016);
-    float _754 = extendedTonemapAp1.x;
-    float _755 = extendedTonemapAp1.y;
-    float _756 = extendedTonemapAp1.z;
-    float _757 = dot(float3(_754, _755, _756), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
-    float _776 = ((max(0.0f, (lerp(_757, _754, 0.9300000071525574f))) - _460) * _ColorGradingCB_016.w) + _460;
-    float _777 = ((max(0.0f, (lerp(_757, _755, 0.9300000071525574f))) - _461) * _ColorGradingCB_016.w) + _461;
-    float _778 = ((max(0.0f, (lerp(_757, _756, 0.9300000071525574f))) - _462) * _ColorGradingCB_016.w) + _462;
-    float _794 = ((mad(-0.06537103652954102f, _778, mad(1.4667166396975517e-06f, _777, (_776 * 1.0653746128082275f))) - _776) * _ColorGradingCB_016.y) + _776;
-    float _795 = ((mad(-0.20366773009300232f, _778, mad(1.2036634683609009f, _777, (_776 * -3.3905962482094765e-07f))) - _777) * _ColorGradingCB_016.y) + _777;
-    float _796 = ((mad(0.9999996423721313f, _778, mad(2.1886080503463745e-08f, _777, (_776 * 1.862645149230957e-08f))) - _778) * _ColorGradingCB_016.y) + _778;
+    _754 = extendedTonemapAp1.x;
+    _755 = extendedTonemapAp1.y;
+    _756 = extendedTonemapAp1.z;
+    _757 = dot(float3(_754, _755, _756), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+    _776 = ((max(0.0f, (lerp(_757, _754, 0.9300000071525574f))) - _460) * _ColorGradingCB_016.w) + _460;
+    _777 = ((max(0.0f, (lerp(_757, _755, 0.9300000071525574f))) - _461) * _ColorGradingCB_016.w) + _461;
+    _778 = ((max(0.0f, (lerp(_757, _756, 0.9300000071525574f))) - _462) * _ColorGradingCB_016.w) + _462;
+    _794 = ((mad(-0.06537103652954102f, _778, mad(1.4667166396975517e-06f, _777, (_776 * 1.0653746128082275f))) - _776) * _ColorGradingCB_016.y) + _776;
+    _795 = ((mad(-0.20366773009300232f, _778, mad(1.2036634683609009f, _777, (_776 * -3.3905962482094765e-07f))) - _777) * _ColorGradingCB_016.y) + _777;
+    _796 = ((mad(0.9999996423721313f, _778, mad(2.1886080503463745e-08f, _777, (_776 * 1.862645149230957e-08f))) - _778) * _ColorGradingCB_016.y) + _778;
     _809 = mad(-0.08325886726379395f, _796, mad(-0.6217920184135437f, _795, (_794 * 1.7050509452819824f)));
     _810 = mad(-0.010548318736255169f, _796, mad(1.140804648399353f, _795, (_794 * -0.13025641441345215f)));
     _811 = mad(1.1529723405838013f, _796, mad(-0.1289689689874649f, _795, (_794 * -0.024003352969884872f)));

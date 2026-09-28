@@ -38,10 +38,10 @@ void main(
   r0.xy = r0.zw + -r0.xy;
   r0.xy = r0.xy * cb0[2].xy + cb0[2].zw;
   r0.xyzw = t1.Sample(s0_s, r0.xy).xyzw;
-  float3 hdrColor = r0.xyz;
-  float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(hdrColor);
-  float3 curvesInput = RENODX_TONE_MAP_TYPE <= 1.f ? hdrColor : sdrColor;
-  r0.xyz = curvesInput;
+  float compression_scale;
+  float max_channel_scale;
+  GamutCompression(r0.xyz, compression_scale);
+  NeutwoMaxCh(r0.xyz, max_channel_scale);
   r0.xyzw = log2(r0.xyzw);
   r0.xyzw = float4(0.474000007,0.474000007,0.474000007,0.474000007) * r0.xyzw;
   r0.xyzw = exp2(r0.xyzw);
@@ -71,10 +71,8 @@ void main(
   r0.xyz = float3(2.10970473,2.10970473,2.10970473) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
   o0.xyz = float3(0.962813556,0.962813556,0.962813556) * r0.xyz;
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    o0.xyz = RestoreSaturationLoss(curvesInput, o0.xyz);
-    o0.xyz = renodx::tonemap::UpgradeToneMap(hdrColor, min(1.f, curvesInput), o0.xyz, 1.f);
-  }
+  NeutwoMaxChInverse(o0.xyz, max_channel_scale);
+  GamutDecompression(o0.xyz, compression_scale);
   o0.w = saturate(o0.w);
   return;
 }

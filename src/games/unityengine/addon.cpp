@@ -5,7 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+//#define DEBUG_LEVEL_0
 //#define DEBUG_LEVEL_1
 //#define DEBUG_LEVEL_2
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
@@ -1093,6 +1093,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberLinearOnDraw(0xC10C418B),
     UberLinearOnDraw(0xF7A11F36),
     UberLinearOnDraw(0xF0D08659),
+    UberLinearOnDraw(0x345DC370),
     UberGammaOnDraw(0x6A501208),
     UberGammaOnDraw(0xE3B6F1F7),
     UberGammaOnDraw(0xA6918C83),
@@ -1522,8 +1523,12 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDGammaOnDraw(0xE375BBC4),
     UberHDGammaOnDraw(0x5FE56D00),
     UberHDGammaOnDraw(0x2F096075),
+    UberHDGammaOnDraw(0x6F8C4866),
+    UberHDGammaOnDraw(0xAE34D6E4),
     SneakyBuilderTonemapOnDraw(0x5B3A6D48),
     SneakyBuilderTonemapOnDraw(0x3B50094B),
+    LutBuilderTonemapOnDraw(0xF3CE6DDA),
+    LutBuilderTonemapOnDraw(0x32767461),
     UberHDLinearOnDraw(0x99B7B0BF), // SadCatStudios_FinalBlit
     CustomShaderEntryCallback(0x459D4153, &CountLinear),    // Colour Correction
     CustomShaderEntryCallback(0xB0826385, &CountLinear),
@@ -2002,6 +2007,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberGammaOnDraw(0x6CEA644C),
     UberLinearOnDraw(0x8CBAADE3),
     UberGammaOnDraw(0x8ED94D63),
+    UberGammaOnDraw(0x08F451E8),
     UberGammaOnDraw(0x9C2BCF45),
     UberGammaOnDraw(0x9DBAA4C3),
     UberGammaOnDraw(0x9DC0BD71),
@@ -2085,6 +2091,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDGammaOnDraw(0x03CBA401),
     UberHDLinearOnDraw(0x3D7D2ACF),
     UberHDLinearOnDraw(0x4A872453),
+    UberHDLinearOnDraw(0x4AED34C9),
     UberHDLinearOnDraw(0x4B3A4726),
     UberHDLinearOnDraw(0x4C89E2E6),
     UberHDLinearOnDraw(0x5D0FF321),
@@ -2206,15 +2213,18 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDGammaOnDraw(0xB4FCC459),
     UberHDLinearOnDraw(0xB05DD1FC),
     UberHDLinearOnDraw(0xB94F0EC5),
+    UberHDLinearOnDraw(0xB27721A3),
     UberHDLinearOnDraw(0xB8308863),
     UberHDLinearOnDraw(0xBCA28AB5),
     UberHDLinearOnDraw(0xBD3E0603),
     UberHDLinearOnDraw(0xBE55DA79),
     UberHDLinearOnDraw(0xBE655D3E),
+    UberHDLinearOnDraw(0xBEDC3844),
     UberHDGammaOnDraw(0xBEDE7F5E),
     UberHDLinearOnDraw(0xC1D1E672),
     UberHDGammaOnDraw(0xC3DC274E),
     UberHDLinearOnDraw(0xC05FCCFB),
+    UberHDLinearOnDraw(0xC7ED980A),
     UberHDGammaOnDraw(0xC8C2F1A0),
     UberHDLinearOnDraw(0xC9C3209E),
     UberHDLinearOnDraw(0xC13DFB36),
@@ -2223,6 +2233,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDLinearOnDraw(0xC783A02A),
     UberHDLinearOnDraw(0xC7555B4A),
     UberHDLinearOnDraw(0xC59328DA),
+    UberHDLinearOnDraw(0xCB9F17CC),
     UberHDLinearOnDraw(0xCF7B19D4),
     UberHDLinearOnDraw(0xCFEEF3DE),
     UberHDGammaOnDraw(0xD0CC549E),
@@ -4170,10 +4181,11 @@ void AddAdvancedSettings() {
 }
 
 void OnInitDevice(reshade::api::device* device) {
-  if (device->get_api() == reshade::api::device_api::d3d12) {
-    isD3D12 = true;   
+    isD3D12 = isD3D12 || device->get_api() == reshade::api::device_api::d3d12;
+  if (isD3D12) {
+    isD3D12 = true;
     reshade::log::message(reshade::log::level::info, "d3d12 detected");
-    reshade::set_config_value(nullptr, "renodx", "Use_Swapchain_Proxy", "2");
+    reshade::set_config_value(nullptr, "renodx", "Use_Swapchain_Proxy", "1");
     reshade::set_config_value(nullptr, "renodx", "Force_Pipeline_Cloning", "1");
     renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
@@ -4300,8 +4312,8 @@ void OnPresent(
         if(shader_injection.gammaSpace != gammaSpace){
             shader_injection.gammaSpace = gammaSpace;
             renodx::utils::settings::UpdateSetting("Swapchain_Encoding", shader_injection.gammaSpace);
-            //renodx::utils::settings::SaveGlobalSettings();
-            reshade::set_config_value(nullptr, "renodx", "Swapchain_Encoding", "shader_injection.gammaSpace");
+            renodx::utils::settings::SaveGlobalSettings();
+            //reshade::set_config_value(nullptr, "renodx", "Swapchain_Encoding", "shader_injection.gammaSpace");
         }
         if(blitCopyHack >= 2.f){
           shader_injection.blitCopyHack = blitCopyHack - 1.f;

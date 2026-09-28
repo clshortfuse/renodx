@@ -10,6 +10,7 @@ float3 arriDecode(float3 color) {
   return (pow(10.f, (color - arri_d) / arri_c) - arri_b) / arri_a;
 }
 
+// 0 = arri, 1 = linear, 2 = srgb
 float3 lutShaper(float3 color, bool builder = false, int type = 0) {
   if (type == 0) {
     [branch]
@@ -95,15 +96,6 @@ float3 liftGammaGainScaling(float3 lifted, float3 original, float3 lift, float3 
   } else if (encoding == 0) {}
   return output;
 }
-}
-
-float3 RestoreSaturationLoss(float3 color_input, float3 color_output) {
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.strength = 0.f;
-  lut_config.scaling = 0.f;
-  lut_config.type_input = renodx::lut::config::type::SRGB;
-  lut_config.recolor = RENODX_TONE_MAP_TYPE != 0.f ? 1.f : 0.f;
-  return renodx::lut::RestoreSaturationLoss(min(1.f, color_input), color_output, lut_config);
 }
 
 float3 ConvertInput(float3 color, int encoding) {

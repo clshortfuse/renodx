@@ -1,0 +1,125 @@
+#include "../../common.hlsli"
+
+Texture2D<float4> t4 : register(t4);
+Texture2D<float4> t3 : register(t3);
+Texture2D<float4> t2 : register(t2);
+Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t0 : register(t0);
+SamplerState s1_s : register(s1);
+SamplerState s0_s : register(s0);
+cbuffer cb0 : register(b0){
+  float4 cb0[151];
+}
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float2 v1 : TEXCOORD0,
+  out float4 o0 : SV_Target0)
+{
+  float4 r0,r1,r2,r3,r4;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.xy = float2(-0.5,-0.5) + v1.xy;
+  r0.zw = r0.xy * cb0[143].zz + float2(0.5,0.5);
+  r0.xy = r0.xy * cb0[143].zz + -cb0[142].xy;
+  r0.xy = cb0[142].zw * r0.xy;
+  r1.x = dot(r0.xy, r0.xy);
+  r1.x = sqrt(r1.x);
+  if (cb0[143].w > 0) {
+    r1.y = cb0[143].x * r1.x;
+    sincos(r1.y, r2.x, r3.x);
+    r1.y = r2.x / r3.x;
+    r1.z = r1.x * cb0[143].y + 6.10351563e-005;
+    r1.z = 1 / r1.z;
+    r1.y = r1.y * r1.z + -1;
+    r1.yz = r0.xy * r1.yy + r0.zw;
+  } else {
+    r1.w = 1 / r1.x;
+    r1.w = cb0[143].x * r1.w;
+    r1.x = cb0[143].y * r1.x;
+    r2.x = min(1, abs(r1.x));
+    r2.y = max(1, abs(r1.x));
+    r2.y = 1 / r2.y;
+    r2.x = r2.x * r2.y;
+    r2.y = r2.x * r2.x;
+    r2.z = r2.y * 0.0208350997 + -0.0851330012;
+    r2.z = r2.y * r2.z + 0.180141002;
+    r2.z = r2.y * r2.z + -0.330299497;
+    r2.y = r2.y * r2.z + 0.999866009;
+    r2.z = r2.x * r2.y;
+    r2.z = r2.z * -2 + 1.57079637;
+    r2.z = abs(r1.x) > 1 ? r2.z : 0;
+    r2.x = r2.x * r2.y + r2.z;
+    r1.x = min(1, r1.x);
+    r1.x = r1.x < -r1.x ? -r2.x : r2.x;
+    r1.x = r1.w * r1.x + -1;
+    r1.yz = r0.xy * r1.xx + r0.zw;
+  }
+  r0.xy = -cb0[132].xy * float2(0.5,0.5) + cb0[28].xy;
+  r0.xy = min(r1.yz, r0.xy);
+  r0.xyzw = t0.SampleBias(s0_s, r0.xy, cb0[4].x).xyzw;
+  r1.xw = -cb0[136].xy * float2(0.5,0.5) + cb0[28].xy;
+  r1.xw = min(r1.yz, r1.xw);
+  r2.xyzw = t1.SampleBias(s0_s, r1.xw, cb0[4].x).xyzw;
+  r2.xyz = cb0[139].xxx * r2.xyz * CUSTOM_BLOOM;
+  r0.xyz = r2.xyz * cb0[139].yzw + r0.xyz;
+  if (cb0[146].z > 0) {
+    r1.xy = -cb0[146].xy + r1.yz;
+    r1.yz = cb0[146].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
+    r1.x = cb0[145].w * r1.y;
+    r0.w = dot(r1.xz, r1.xz);
+    r0.w = 1 + -r0.w;
+    r0.w = max(0, r0.w);
+    r0.w = log2(r0.w);
+    r0.w = cb0[146].w * r0.w * max(1.f, CUSTOM_VIGNETTE);
+    r0.w = exp2(r0.w);
+    r1.xyz = float3(1,1,1) + -cb0[145].xyz;
+    r1.xyz = r0.www * r1.xyz + cb0[145].xyz;
+    r0.xyz = r1.xyz * r0.xyz;
+  }
+  r0.xyz = cb0[137].www * r0.xyz;
+  if (cb0[138].w > 0) {
+    r1.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
+    r2.xyz = handleUserLUT(r0.xyz, t3, s0_s, cb0[138].xyz);
+    r2.xyz = r2.xyz + -r1.xyz;
+    r1.xyz = cb0[138].www * r2.xyz + r1.xyz;
+    r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
+  }
+  r0.xyz = lutShaper(r0.xyz, false, 1);
+  if(CUSTOM_LUT_SAMPLE == 0.f){
+  r0.xyw = cb0[137].zzz * r0.xyz;
+  r0.w = floor(r0.w);
+  r1.xy = float2(0.5,0.5) * cb0[137].xy;
+  r1.yz = r0.xy * cb0[137].xy + r1.xy;
+  r1.x = r0.w * cb0[137].y + r1.y;
+  r2.xyzw = t2.SampleLevel(s0_s, r1.xz, 0).xyzw;
+  r0.x = cb0[137].y;
+  r0.y = 0;
+  r0.xy = r1.xz + r0.xy;
+  r1.xyzw = t2.SampleLevel(s0_s, r0.xy, 0).xyzw;
+  r0.x = r0.z * cb0[137].z + -r0.w;
+  r0.yzw = r1.xyz + -r2.xyz;
+  r0.xyz = r0.xxx * r0.yzw + r2.xyz;
+  } else {
+    r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.xyz, cb0[137].z + 1u);
+  }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
+  r1.xy = v1.xy * cb0[150].xy + cb0[150].zw;
+  r1.xyzw = t4.SampleBias(s1_s, r1.xy, cb0[4].x).xyzw;
+  r0.w = r1.w * 2 + -1;
+  r1.x = r0.w >= 0 ? 1 : -1;
+  r0.w = 1 + -abs(r0.w);
+  r0.w = sqrt(r0.w);
+  r0.w = 1 + -r0.w;
+  r0.w = r1.x * r0.w;
+  r0.xyz = applyDither(r0.xyz, r0.w * (1.0 / 255.0));
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = PostToneMapScale(r0.xyz);
+  }
+  o0.xyz = r0.xyz;
+  o0.w = 1;
+  return;
+}

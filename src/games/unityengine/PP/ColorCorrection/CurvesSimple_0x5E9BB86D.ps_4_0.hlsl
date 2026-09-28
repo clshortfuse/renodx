@@ -19,11 +19,12 @@ void main(
 
   r0.yw = float2(0.125,0.375);
   r1.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  float3 source = r1.xyz;
-  float3 preCG = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
-  float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(preCG);
-  float3 lutInput = RENODX_TONE_MAP_TYPE <= 1.f ? preCG : sdrColor;
-    r1.xyz = lutInput;
+  r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
+  float3 preCG = r1.xyz;
+  float compression_scale;
+  float max_channel_scale;
+  GamutCompression(r1.xyz, compression_scale);
+  NeutwoMaxCh(r1.xyz, max_channel_scale);
   r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
   r0.xz = r1.xy;
   r2.xyzw = t1.Sample(s1_s, r0.zw).xyzw;
@@ -34,17 +35,9 @@ void main(
   r2.x = r1.z;
   r2.xyzw = t1.Sample(s1_s, r2.xy).xyzw;
   r0.xyz = r2.xyz * float3(0,0,1) + r0.xyz;
-  if(RENODX_TONE_MAP_TYPE != 0.f){
-    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
-    r0.xyz = RestoreSaturationLoss(lutInput, r0.xyz);
-    r0.xyz = renodx::tonemap::UpgradeToneMap(preCG, lutInput, r0.xyz, 1.f);
-    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
-  }
   r0.w = dot(r0.xyz, float3(0.0396819152,0.45802179,0.00609653955));
-  //r2.xyz = r1.yxx + r1.zzy;
-  r2.xyz = source.yxx + source.zzy;
-  //r1.xyz = -r2.xyz * cb0[4].xxx + r1.xyz;
-  r1.xyz = -r2.xyz * cb0[4].xxx + source.xyz;
+  r2.xyz = r1.yxx + r1.zzy;
+  r1.xyz = -r2.xyz * cb0[4].xxx + r1.xyz;
   o0.w = r1.w;
   r1.xyz = r1.xyz * cb0[3].xyz + r0.www;
   r0.xyz = -r1.xyz + r0.xyz;
@@ -52,6 +45,8 @@ void main(
   if(CUSTOM_GAMMA_SPACE != 0.f){
     o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
   }
+  NeutwoMaxChInverse(r0.xyz, max_channel_scale);
+  GamutDecompression(r0.xyz, compression_scale);
   o0.xyz = lerp(preCG, o0.xyz, CUSTOM_USER_LUT_STRENGTH);
   if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
     o0.xyz = GradeAndDisplayMap(o0.xyz);

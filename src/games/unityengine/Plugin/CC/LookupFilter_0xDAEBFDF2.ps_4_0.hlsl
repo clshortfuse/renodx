@@ -18,11 +18,12 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
-  float3 preCG = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
-  float3 sdrColor = renodx::tonemap::renodrt::NeutralSDR(preCG);
-  if(RENODX_TONE_MAP_TYPE != 0.f){
-    r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(sdrColor) : sdrColor;
-  }
+  r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r0.xyz) : r0.xyz;
+  float compression_scale;
+  float max_channel_scale;
+  GamutCompression(r0.xyz, compression_scale);
+  NeutwoMaxCh(r0.xyz, max_channel_scale);
+  r0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r0.xyz) : r0.xyz;
   r0.xyzw = saturate(r0.xyzw);
   r1.x = 63 * r0.z;
   r1.y = ceil(r1.x);
@@ -46,20 +47,12 @@ void main(
   r1.yzw = r3.xyz + -r2.xyz;
   r1.xyz = r1.xxx * r1.yzw + r2.xyz;
   r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r1.xyz) : r1.xyz;
-  if(RENODX_TONE_MAP_TYPE == 0.f){
-    r1.xyz = lerp(preCG, r1.xyz, CUSTOM_USER_LUT_STRENGTH);
-  } else {
-    r1.xyz = RestoreSaturationLoss(sdrColor, r1.xyz);
-    r1.xyz = renodx::tonemap::UpgradeToneMap(preCG, sdrColor, r1.xyz, CUSTOM_USER_LUT_STRENGTH);
-  }
+  NeutwoMaxChInverse(r1.xyz, max_channel_scale);
+  GamutDecompression(r1.xyz, compression_scale);
   r1.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::EncodeSafe(r1.xyz) : r1.xyz;
-  /*r1.xyz = r1.xyz + -r0.xyz;
-  r1.w = 0;
-  o0.xyzw = cb0[2].xxxx * r1.xyzw + r0.xyzw;*/
-  r0.xyz = preCG;
   r1.xyz = r1.xyz + -r0.xyz;
   r1.w = 0;
-  o0.xyzw = cb0[2].xxxx * r1.xyzw + r0.xyzw;
+  o0.xyzw = cb0[2].xxxx * r1.xyzw * CUSTOM_USER_LUT_STRENGTH + r0.xyzw;
   o0.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(o0.xyz) : o0.xyz;
   if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
     o0.xyz = GradeAndDisplayMap(o0.xyz);
