@@ -495,8 +495,9 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   cmd_list->end_render_pass();
 
   cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
+}
 
-  // reset the copy tracker, entirely unrelated to the final shader above
+void OnPresentStateReset(reshade::api::command_queue*, reshade::api::swapchain*, const reshade::api::rect*, const reshade::api::rect*, uint32_t, const reshade::api::rect*) {
   track_next_copy = false;
   shader_injection.copyTracker = 0;
 }
@@ -543,6 +544,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
         reshade::register_event<reshade::addon_event::present>(OnPresent);
       }
+      reshade::register_event<reshade::addon_event::present>(OnPresentStateReset);
 
       break;
     }
@@ -554,6 +556,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
         reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       }
+      reshade::unregister_event<reshade::addon_event::present>(OnPresentStateReset);
 
       reshade::unregister_addon(h_module);
       break;
