@@ -35,6 +35,9 @@ bool copy_on_replace(reshade::api::command_list* cmd_list) {
 
 namespace {
 
+renodx::utils::settings::Setting* output_mode_setting = nullptr;
+float active_output_mode = 0.f;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x27EBC404),
     CustomShaderEntry(0x1F264D17), //new LUT permutation, added with 7.2
@@ -50,6 +53,25 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xF6E81A1B)};                           // FullscreenGammaCorrection
 
 renodx::utils::settings::Settings settings = {
+    output_mode_setting = new renodx::utils::settings::Setting{
+        .key = "outputMode",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Presentation Output",
+        .section = "Tone Mapping",
+        .tooltip = "Selects the presentation format used after restarting the game.",
+        .labels = {"scRGB (FP16)", "HDR10 (10-bit PQ)"},
+        .parse = [](float value) { return value >= 0.5f ? 1.f : 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Restart the game to apply the presentation output change.",
+        .section = "Tone Mapping",
+        .tint = 0xFF5F5F,
+        .is_visible = []() { return output_mode_setting->GetValue() != active_output_mode; },
+        .is_sticky = true,
+    },
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
@@ -487,7 +509,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
 
       renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-      renodx::mods::swapchain::Use(fdw_reason);
+
+      active_output_mode = output_mode_setting->GetValue();
+      const bool use_hdr10 = active_output_mode >= 0.5f;
+      shader_injection.swapChainOutputPreset = use_hdr10 ? 1.f : 2.f;
+
+      renodx::mods::swapchain::SetUseHDR10(use_hdr10);
+      if (use_hdr10) {
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+        renodx::mods::swapchain::expected_constant_buffer_index = 13;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __final_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __final_pixel_shader;
+      }
+      renodx::mods::swapchain::Use(fdw_reason, use_hdr10 ? &shader_injection : nullptr);
       renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -501,20 +536,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
 
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
+      if (!use_hdr10) {
+        reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+        reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+        reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+        reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+        reshade::register_event<reshade::addon_event::present>(OnPresent);
+      }
 
       break;
     }
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      if (active_output_mode < 0.5f) {
+        reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+        reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+        reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+        reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+        reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      }
 
       reshade::unregister_addon(h_module);
       break;
