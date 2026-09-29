@@ -1,0 +1,37 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "controlresonant",
+  "title": "CONTROL Resonant",
+  "maintainers": [
+    "Musa"
+  ],
+  "support": "bespoke",
+  "summary": "RenoDX addon metadata for CONTROL Resonant.",
+  "tags": [
+    "hdr",
+    "tone-mapping",
+    "color-grading"
+  ],
+  "status": "stable",
+  "compatibility": "unknown",
+  "header": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3669870/1e0c76e4253d347bb1304c3f213570251d924edf/header.jpg",
+  "urls": [
+    {
+      "url": "https://store.steampowered.com/app/3669870/CONTROL_Resonant/",
+      "kind": "steam_store"
+    },
+    {
+      "url": "https://store.epicgames.com/p/control-resonant-control-resonant-deluxe-edition-7b8068",
+      "kind": "epic_store"
+    },
+    {
+      "url": "https://www.xbox.com/en-US/games/store/-/9nj07vwb9bvk",
+      "kind": "xbox_store"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 3669870,
+    "microsoft_store_id": "9NJ07VWB9BVK",
+    "xbox_game": true
+  }
+}
