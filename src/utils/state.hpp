@@ -1608,41 +1608,107 @@ decltype(auto) WithCommandListState(const CommandListStateHandle* handle, F&& ca
 
 }  // namespace internal
 
-// Deprecated compatibility storage; GetCurrentState materializes these fields on demand.
-struct __declspec(uuid("af31d422-c256-4c91-b589-4c9c294f336c")) CommandListState : internal::CommandListSnapshotData {
-  cross_addon::unordered_map<reshade::api::pipeline_stage, reshade::api::pipeline> pipelines;
-  cross_addon::unordered_map<reshade::api::shader_stage, std::pair<reshade::api::pipeline_layout, cross_addon::vector<reshade::api::descriptor_table>>> descriptor_tables;
+// Module-local legacy view: preserve the pre-rewrite field types and order.
+// Modern tracking and replay metadata belong to CommandListSnapshot, not this ABI.
+struct CommandListState {
+  std::vector<reshade::api::resource_view> render_targets;
+  reshade::api::resource_view depth_stencil = {0};
+  std::unordered_map<reshade::api::pipeline_stage, reshade::api::pipeline> pipelines;
+  reshade::api::primitive_topology primitive_topology = reshade::api::primitive_topology::undefined;
+  uint32_t blend_constant = 0;
+  uint32_t sample_mask = 0xFFFFFFFF;
+  uint32_t front_stencil_reference_value = 0;
+  uint32_t back_stencil_reference_value = 0;
+  std::vector<reshade::api::viewport> viewports;
+  std::vector<reshade::api::rect> scissor_rects;
+  reshade::api::pipeline_layout graphics_pipeline_layout = {0};
+  std::vector<reshade::api::descriptor_table> graphics_descriptor_tables;
+  reshade::api::pipeline_layout compute_pipeline_layout = {0};
+  std::vector<reshade::api::descriptor_table> compute_descriptor_tables;
+  std::unordered_map<reshade::api::shader_stage, std::pair<reshade::api::pipeline_layout, std::vector<reshade::api::descriptor_table>>> descriptor_tables;
 
-  void BindPipeline(reshade::api::pipeline_stage stages, reshade::api::pipeline pipeline, PipelineBindPoint bind_point) {
-    const auto canonicalize = [&]<reshade::api::device_api Api>() {
-      internal::CommandListState<Api> typed_state;
-      for (const auto& bind : pipeline_binds) {
-        typed_state.BindPipeline(bind.stages, bind.pipeline, bind.bind_point);
-      }
-      typed_state.BindPipeline(stages, pipeline, bind_point);
-      typed_state.CopyPipelineBinds(&pipeline_binds);
-    };
-    switch (device_api) {
-      case reshade::api::device_api::d3d9:   canonicalize.template operator()<reshade::api::device_api::d3d9>(); break;
-      case reshade::api::device_api::d3d10:  canonicalize.template operator()<reshade::api::device_api::d3d10>(); break;
-      case reshade::api::device_api::d3d11:  canonicalize.template operator()<reshade::api::device_api::d3d11>(); break;
-      case reshade::api::device_api::d3d12:  canonicalize.template operator()<reshade::api::device_api::d3d12>(); break;
-      case reshade::api::device_api::opengl: canonicalize.template operator()<reshade::api::device_api::opengl>(); break;
-      case reshade::api::device_api::vulkan: canonicalize.template operator()<reshade::api::device_api::vulkan>(); break;
-      default:
-        if (stages == reshade::api::pipeline_stage::all && pipeline.handle == 0u) {
-          pipeline_binds.clear();
-        } else {
-          pipeline_binds.push_back({
-              .stages = stages,
-              .pipeline = pipeline,
-              .bind_point = bind_point,
-              .sequence = pipeline_binds.empty() ? 1u : pipeline_binds.back().sequence + 1u,
-          });
+  void Apply(reshade::api::command_list* cmd_list) const {
+    if (!render_targets.empty() || depth_stencil.handle != 0u) {
+      // Destroyed RTVs are not removed.
+      std::vector<reshade::api::resource_view> new_rtvs = render_targets;
+      for (size_t index = 0u; index < render_targets.size(); ++index) {
+        if (!renodx::utils::resource::IsKnownResourceView(render_targets[index])) {
+          new_rtvs[index] = {0};
         }
-        break;
+      }
+      cmd_list->bind_render_targets_and_depth_stencil(
+          static_cast<uint32_t>(new_rtvs.size()), new_rtvs.data(), depth_stencil);
     }
-    bound_pipeline_infos = {};
+    for (const auto& [stages, pipeline] : pipelines) {
+      cmd_list->bind_pipeline(stages, pipeline);
+    }
+    if (primitive_topology != reshade::api::primitive_topology::undefined) {
+      cmd_list->bind_pipeline_state(reshade::api::dynamic_state::primitive_topology, static_cast<uint32_t>(primitive_topology));
+    }
+    if (blend_constant != 0u) {
+      cmd_list->bind_pipeline_state(reshade::api::dynamic_state::blend_constant, blend_constant);
+    }
+    if (sample_mask != 0xFFFFFFFFu) {
+      cmd_list->bind_pipeline_state(reshade::api::dynamic_state::sample_mask, sample_mask);
+    }
+    if (front_stencil_reference_value != 0u) {
+      cmd_list->bind_pipeline_state(reshade::api::dynamic_state::front_stencil_reference_value, front_stencil_reference_value);
+    }
+    if (back_stencil_reference_value != 0u) {
+      cmd_list->bind_pipeline_state(reshade::api::dynamic_state::back_stencil_reference_value, back_stencil_reference_value);
+    }
+    if (!viewports.empty()) {
+      cmd_list->bind_viewports(0u, static_cast<uint32_t>(viewports.size()), viewports.data());
+    }
+    if (!scissor_rects.empty()) {
+      cmd_list->bind_scissor_rects(0u, static_cast<uint32_t>(scissor_rects.size()), scissor_rects.data());
+    }
+    const bool is_d3d12 = cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12;
+    const auto bind_descriptor_tables = [&](reshade::api::shader_stage stages,
+                                             reshade::api::pipeline_layout layout,
+                                             const std::vector<reshade::api::descriptor_table>& tables) {
+      if (layout.handle == 0u) return;
+      if (is_d3d12) {
+        bool bound_table = false;
+        for (uint32_t index = 0u; index < tables.size(); ++index) {
+          if (tables[index].handle == 0u) continue;
+          cmd_list->bind_descriptor_tables(stages, layout, index, 1u, &tables[index]);
+          bound_table = true;
+        }
+        if (!bound_table) {
+          cmd_list->bind_descriptor_tables(stages, layout, 0u, 0u, nullptr);
+        }
+        return;
+      }
+      size_t index = 0u;
+      while (index < tables.size()) {
+        while (index < tables.size() && tables[index].handle == 0u) ++index;
+        if (index == tables.size()) break;
+        const size_t first = index;
+        while (index < tables.size() && tables[index].handle != 0u) ++index;
+        cmd_list->bind_descriptor_tables(stages, layout, static_cast<uint32_t>(first),
+                                         static_cast<uint32_t>(index - first), tables.data() + first);
+      }
+    };
+    bind_descriptor_tables(reshade::api::shader_stage::all_graphics, graphics_pipeline_layout, graphics_descriptor_tables);
+    bind_descriptor_tables(reshade::api::shader_stage::all_compute, compute_pipeline_layout, compute_descriptor_tables);
+  }
+
+  void Clear() {
+    render_targets.clear();
+    depth_stencil = {0};
+    pipelines.clear();
+    primitive_topology = reshade::api::primitive_topology::undefined;
+    blend_constant = 0;
+    sample_mask = 0xFFFFFFFF;
+    front_stencil_reference_value = 0;
+    back_stencil_reference_value = 0;
+    viewports.clear();
+    scissor_rects.clear();
+    graphics_pipeline_layout = {0};
+    graphics_descriptor_tables.clear();
+    compute_pipeline_layout = {0};
+    compute_descriptor_tables.clear();
   }
 };
 
@@ -1807,7 +1873,6 @@ static void OnInitCommandList(reshade::api::command_list* cmd_list) {
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
-  renodx::utils::data::Delete<CommandListState>(cmd_list);
   const auto* handle = internal::GetCommandListStateHandle(cmd_list);
   if (handle == nullptr) return;
   internal::WithCommandListState(handle, [](auto& state) {
@@ -3320,89 +3385,100 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
   return snapshot;
 }
 
-// Deprecated compatibility view. Prefer GetSnapshot when state must be inspected,
-// retained, or replayed.
+// Module-local borrowed compatibility view, overwritten by the next call on this
+// thread (including calls for other command lists). Copy before retaining it.
+// Prefer GetSnapshot for modern tracking metadata and complete replay.
 [[deprecated("Use GetSnapshot().")]]
 inline CommandListState* GetCurrentState(reshade::api::command_list* cmd_list) {
   auto snapshot = GetSnapshot(cmd_list);
   if (!snapshot.has_value()) return nullptr;
 
-  CommandListState* compatibility_state = nullptr;
-  renodx::utils::data::CreateOrGet<CommandListState>(cmd_list, compatibility_state);
-  static_cast<internal::CommandListSnapshotData&>(*compatibility_state) = snapshot->state;
-  if (const auto found = compatibility_state->dynamic_states.find(
-          reshade::api::dynamic_state::primitive_topology);
-      found != compatibility_state->dynamic_states.end()) {
-    compatibility_state->primitive_topology = static_cast<reshade::api::primitive_topology>(found->second);
-    compatibility_state->primitive_topology_known = true;
+  thread_local CommandListState compatibility_state;
+  const auto& state = snapshot->state;
+  compatibility_state.render_targets.assign(state.render_targets.begin(), state.render_targets.end());
+  compatibility_state.depth_stencil = state.depth_stencil;
+  if (state.UsesFixedRasterLists()) {
+    compatibility_state.viewports.clear();
+    for (const auto& viewport : state.fixed_viewports.values()) {
+      compatibility_state.viewports.push_back(viewport);
+    }
+    compatibility_state.scissor_rects.clear();
+    for (const auto& rect : state.fixed_scissor_rects.values()) {
+      compatibility_state.scissor_rects.push_back(rect);
+    }
   } else {
-    compatibility_state->primitive_topology = reshade::api::primitive_topology::undefined;
-    compatibility_state->primitive_topology_known = false;
+    compatibility_state.viewports.assign(state.viewports.begin(), state.viewports.end());
+    compatibility_state.scissor_rects.assign(state.scissor_rects.begin(), state.scissor_rects.end());
   }
-  const auto materialize_dynamic_state = [&](reshade::api::dynamic_state state,
+  compatibility_state.graphics_pipeline_layout = state.graphics_pipeline_layout;
+  compatibility_state.compute_pipeline_layout = state.compute_pipeline_layout;
+  if (const auto found = state.dynamic_states.find(
+          reshade::api::dynamic_state::primitive_topology);
+      found != state.dynamic_states.end()) {
+    compatibility_state.primitive_topology = static_cast<reshade::api::primitive_topology>(found->second);
+  } else {
+    compatibility_state.primitive_topology = reshade::api::primitive_topology::undefined;
+  }
+  const auto materialize_dynamic_state = [&](reshade::api::dynamic_state dynamic_state,
                                              uint32_t default_value,
-                                             uint32_t* value,
-                                             bool* known) {
-    const auto found = compatibility_state->dynamic_states.find(state);
-    *known = found != compatibility_state->dynamic_states.end();
-    *value = *known ? found->second : default_value;
+                                             uint32_t* value) {
+    const auto found = state.dynamic_states.find(dynamic_state);
+    *value = (found != state.dynamic_states.end() ? found->second : default_value);
   };
   materialize_dynamic_state(
       reshade::api::dynamic_state::blend_constant,
       0u,
-      &compatibility_state->blend_constant,
-      &compatibility_state->blend_constant_known);
+      &compatibility_state.blend_constant);
   materialize_dynamic_state(
       reshade::api::dynamic_state::sample_mask,
       0xFFFFFFFFu,
-      &compatibility_state->sample_mask,
-      &compatibility_state->sample_mask_known);
+      &compatibility_state.sample_mask);
   materialize_dynamic_state(
       reshade::api::dynamic_state::front_stencil_reference_value,
       0u,
-      &compatibility_state->front_stencil_reference_value,
-      &compatibility_state->front_stencil_reference_value_known);
+      &compatibility_state.front_stencil_reference_value);
   materialize_dynamic_state(
       reshade::api::dynamic_state::back_stencil_reference_value,
       0u,
-      &compatibility_state->back_stencil_reference_value,
-      &compatibility_state->back_stencil_reference_value_known);
-  compatibility_state->pipelines.clear();
-  compatibility_state->ForEachPipelineBind(PipelineBindPoint::UNKNOWN, [&](const PipelineBind& bind) {
-    compatibility_state->pipelines.insert_or_assign(bind.stages, bind.pipeline);
+      &compatibility_state.back_stencil_reference_value);
+  compatibility_state.pipelines.clear();
+  state.ForEachPipelineBind(PipelineBindPoint::UNKNOWN, [&](const PipelineBind& bind) {
+    compatibility_state.pipelines.insert_or_assign(bind.stages, bind.pipeline);
   });
-  compatibility_state->descriptor_tables.clear();
+  compatibility_state.descriptor_tables.clear();
   const auto materialize_descriptor_tables = [&](reshade::api::shader_stage stages,
                                                  reshade::api::pipeline_layout layout,
                                                  const DescriptorTableSlots& tables,
-                                                 bool known) {
-    if (!known) return;
-    cross_addon::vector<reshade::api::descriptor_table> compatibility_tables(tables.size());
-    for (size_t index = 0u; index < tables.size(); ++index) {
-      if (tables.has(index)) {
-        compatibility_tables[index] = tables.get(index);
-      }
+                                                 bool known,
+                                                 std::vector<reshade::api::descriptor_table>* output) {
+    std::vector<reshade::api::descriptor_table> compatibility_tables(tables.begin(), tables.end());
+    if (output != nullptr) {
+      *output = compatibility_tables;
     }
-    compatibility_state->descriptor_tables.insert_or_assign(
+    if (!known) return;
+    compatibility_state.descriptor_tables.insert_or_assign(
         stages,
         std::pair{layout, std::move(compatibility_tables)});
   };
   materialize_descriptor_tables(
       reshade::api::shader_stage::all_graphics,
-      compatibility_state->graphics_pipeline_layout,
-      compatibility_state->graphics_descriptor_tables,
-      compatibility_state->graphics_descriptor_tables_known);
+      state.graphics_pipeline_layout,
+      state.graphics_descriptor_tables,
+      state.graphics_descriptor_tables_known,
+      &compatibility_state.graphics_descriptor_tables);
   materialize_descriptor_tables(
       reshade::api::shader_stage::all_compute,
-      compatibility_state->compute_pipeline_layout,
-      compatibility_state->compute_descriptor_tables,
-      compatibility_state->compute_descriptor_tables_known);
+      state.compute_pipeline_layout,
+      state.compute_descriptor_tables,
+      state.compute_descriptor_tables_known,
+      &compatibility_state.compute_descriptor_tables);
   materialize_descriptor_tables(
       reshade::api::shader_stage::all_ray_tracing,
-      compatibility_state->ray_tracing_pipeline_layout,
-      compatibility_state->ray_tracing_descriptor_tables,
-      compatibility_state->ray_tracing_descriptor_tables_known);
-  return compatibility_state;
+      state.ray_tracing_pipeline_layout,
+      state.ray_tracing_descriptor_tables,
+      state.ray_tracing_descriptor_tables_known,
+      nullptr);
+  return &compatibility_state;
 }
 
 static bool attached = false;
