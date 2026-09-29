@@ -53,6 +53,7 @@
 #include "../../utils/icons.hpp"
 #include "../../utils/mcp/server.hpp"
 #include "../../utils/path.hpp"
+#include "../../utils/pipeline.hpp"
 #include "../../utils/pipeline_layout.hpp"
 #include "../../utils/png.hpp"
 #include "../../utils/resource_replace.hpp"
@@ -436,13 +437,10 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
 [[nodiscard]] std::vector<uint8_t> LoadShaderDataForShaderHash(reshade::api::device* device, uint32_t shader_hash) {
   reshade::api::pipeline pipeline = {0};
 
-  auto* shader_shared_data = renodx::utils::shader::shared.data;
-  shader_shared_data->shader_pipeline_handles.if_contains(
-      {device, shader_hash},
-      [&pipeline](const auto& pair) {
-        if (pair.second.empty()) return;
-        auto handle = *pair.second.begin();
-        pipeline = {handle};
+  renodx::utils::shader::GetShaderPipelineHandles(
+      device, shader_hash, [&](const auto& pipeline_handles) {
+        if (pipeline_handles.empty()) return;
+        pipeline = {*pipeline_handles.begin()};
       });
   if (pipeline.handle == 0u) {
     throw std::runtime_error("Shader data not found.");
@@ -4491,16 +4489,11 @@ void OnInitPipelineTrackAddons(
   if (data == nullptr) return;
   if (data->has_synced_addon_shaders) return;
 
-  auto* shader_data = renodx::utils::shader::shared.data;
   bool found_replacement = false;
-  // std::shared_lock shader_data_lock(shader_device_data->mutex);
-  shader_data->runtime_replacements.for_each(
-      [&](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::span<const uint8_t>>& pair) {
-        const auto& [pair_device, shader_hash] = pair.first;
-        if (pair_device != device) return;
+  renodx::utils::shader::ForEachRuntimeReplacement(device, [&](uint32_t shader_hash, std::span<const uint8_t> bytecode) {
         found_replacement = true;
         auto* shader_details = data->GetShaderDetails(shader_hash);
-        shader_details->addon_shader = pair.second;
+        shader_details->addon_shader = bytecode;
         if (shader_details->shader_source != ShaderDetails::ShaderSource::DISK_SHADER) {
           shader_details->shader_source = ShaderDetails::ShaderSource::ADDON_SHADER;
         }
@@ -4563,16 +4556,17 @@ void OnBindPipeline(
   auto* device_data = renodx::utils::data::Get<DeviceData>(device);
   if (device_data == nullptr) return;
 
+  std::vector<renodx::utils::pipeline::PipelineShaderHashEntry> shader_details;
+  renodx::utils::pipeline::GetPipelineInfo(pipeline, [&](const auto& info) {
+    shader_details.assign(info.shader_details.begin(), info.shader_details.end());
+  });
   std::unique_lock lock(device_data->mutex);
 
   std::set<uint32_t> added_shaders;
-  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-  for (auto compatible_stage : renodx::utils::shader::COMPATIBLE_STAGES) {
-    if (!renodx::utils::bitwise::HasFlag(stage, compatible_stage)) continue;
+  for (const auto& identity : shader_details) {
+    if (!renodx::utils::bitwise::HasFlag(stage, identity.stage)) continue;
 
-    if (pipeline.handle == 0u) continue;
-
-    auto shader_hash = GetCurrentShaderHash(shader_state, compatible_stage);
+    const auto shader_hash = identity.shader_hash;
     if (shader_hash == 0u) continue;
 
     auto [it, inserted] = added_shaders.emplace(shader_hash);
@@ -4604,6 +4598,7 @@ void OnBindPipeline(
     }
 
     if (shader_details->program_version.has_value()) {
+      shader_details->shader_type = identity.stage;
       switch (shader_details->program_version->GetKind()) {
         case D3D11_SHVER_VERTEX_SHADER:
           shader_details->shader_type = reshade::api::pipeline_stage::vertex_shader;
@@ -4618,7 +4613,7 @@ void OnBindPipeline(
           break;
       }
     } else {
-      shader_details->shader_type = compatible_stage;
+      shader_details->shader_type = identity.stage;
     }
   }
 
@@ -4742,6 +4737,32 @@ void OnPushDescriptors(
   if (data == nullptr) return;
 
   auto* device = cmd_list->get_device();
+  const auto resolve_directx_slot = [=](reshade::api::descriptor_type type,
+                                        uint32_t binding,
+                                        uint32_t* dx_register_index,
+                                        uint32_t* dx_register_space) {
+    bool resolved = false;
+    const bool found_layout =
+        renodx::utils::pipeline_layout::GetPipelineLayoutData(
+            layout,
+            [&](const auto* layout_data) {
+              if (layout_param >= layout_data->params.size()) return;
+              const auto register_info = renodx::utils::pipeline_layout::FindDescriptorLocation(
+                  layout_data->params[layout_param], device->get_api(),
+                  {.binding = binding, .type = type}, 0u);
+              if (register_info) {
+                *dx_register_index = register_info->register_slot;
+                *dx_register_space = register_info->register_space;
+                resolved = true;
+              }
+            });
+    if (!found_layout) {
+      reshade::log::message(
+          reshade::log::level::error,
+          "Could not find pushed-descriptor pipeline layout.");
+    }
+    return resolved;
+  };
 
   bool is_uav = false;
   switch (update.type) {
@@ -4764,51 +4785,6 @@ void OnPushDescriptors(
         return;
       }
 
-      bool has_directx_slot_info = false;
-      bool failed_directx_offset_lookup = false;
-      uint32_t dx_register_index = 0;
-      uint32_t dx_register_space = 0;
-      auto populate_directx_offsets = [&]() {
-        if (has_directx_slot_info) return true;
-        if (failed_directx_offset_lookup) return false;
-
-        bool found_directx_offsets = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& local_layout_data) {
-          const auto& layout_data = *local_layout_data;
-          if (layout_param >= layout_data.params.size()) {
-            reshade::log::message(reshade::log::level::error, "Layout param out of range.");
-            return;
-          }
-
-          const auto& param = layout_data.params[layout_param];
-          switch (param.type) {
-            case reshade::api::pipeline_layout_param_type::descriptor_table: {
-              if (param.descriptor_table.count != 1) {
-                reshade::log::message(reshade::log::level::error, "Wrong count.");
-                return;
-              }
-              dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
-              dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
-              has_directx_slot_info = true;
-              break;
-            }
-            case reshade::api::pipeline_layout_param_type::push_descriptors:
-              dx_register_index = param.push_descriptors.dx_register_index;
-              dx_register_space = param.push_descriptors.dx_register_space;
-              has_directx_slot_info = true;
-              break;
-            default:
-              reshade::log::message(reshade::log::level::error, "Not descriptor table.");
-              break;
-          }
-        });
-
-        if (!found_directx_offsets) {
-          failed_directx_offset_lookup = true;
-          reshade::log::message(reshade::log::level::error, "Could not find handle.");
-        }
-        return has_directx_slot_info;
-      };
-
       for (uint32_t i = 0; i < update.count; i++) {
         reshade::api::resource_view view = {0u};
         if (update.type == reshade::api::descriptor_type::sampler_with_resource_view) {
@@ -4824,9 +4800,13 @@ void OnPushDescriptors(
           case reshade::api::device_api::d3d10:
           case reshade::api::device_api::d3d11:
           case reshade::api::device_api::d3d12:
-            if (!populate_directx_offsets()) return;
-            pair_a = dx_register_index + update.binding + i;
-            pair_b = dx_register_space;
+            if (!resolve_directx_slot(
+                    update.type,
+                    update.binding + i,
+                    &pair_a,
+                    &pair_b)) {
+              return;
+            }
             break;
           case reshade::api::device_api::opengl:
           case reshade::api::device_api::vulkan:
@@ -4851,100 +4831,56 @@ void OnPushDescriptors(
     }
 
     case reshade::api::descriptor_type::constant_buffer: {
-      bool found_descriptor_layout = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& local_layout_data) {
-        const auto& layout_data = *local_layout_data;
-        if (layout_param >= layout_data.params.size()) {
-          reshade::log::message(reshade::log::level::error, "Layout param out of range.");
-          return;
-        }
-
-        const auto& param = layout_data.params[layout_param];
-        for (uint32_t i = 0; i < update.count; i++) {
-          uint32_t pair_a = 0;
-          uint32_t pair_b = 0;
-          if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
-            assert(param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer);
-            switch (device->get_api()) {
-              case reshade::api::device_api::d3d9:
-              case reshade::api::device_api::d3d10:
-              case reshade::api::device_api::d3d11:
-              case reshade::api::device_api::d3d12:
-                pair_a = param.push_descriptors.dx_register_index + update.binding + i;
-                pair_b = param.push_descriptors.dx_register_space;
-                break;
-
-              case reshade::api::device_api::opengl:
-                pair_a = update.binding;
-                pair_b = update.array_offset + i;
-                break;
-
-              case reshade::api::device_api::vulkan:
-                pair_a = param.push_descriptors.binding + update.array_offset + i;
-                pair_b = layout_param;
-                break;
-              default:
-                assert(false);
-            }
-            auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
-            auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
-            data->constants[slot] = buffer_range;
-          } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges
-                     || param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers) {
-            const auto descriptor_table_count =
-                param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges
-                    ? param.descriptor_table.count
-                    : param.descriptor_table_with_static_samplers.count;
-            const auto* descriptor_table_ranges =
-                param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges
-                    ? param.descriptor_table.ranges
-                    : param.descriptor_table_with_static_samplers.ranges;
-            const reshade::api::descriptor_range* matching_range = nullptr;
-            const bool is_vulkan = device->get_api() == reshade::api::device_api::vulkan;
-            if (is_vulkan) {
-              for (uint32_t range_index = 0; range_index < descriptor_table_count; ++range_index) {
-                if (descriptor_table_ranges[range_index].binding == update.binding) {
-                  matching_range = &descriptor_table_ranges[range_index];
-                  break;
-                }
-              }
-            } else if (update.binding < descriptor_table_count) {
-              matching_range = &descriptor_table_ranges[update.binding];
-            }
-            if (matching_range == nullptr) {
-              reshade::log::message(reshade::log::level::error, "Push descriptor binding out of range.");
+      for (uint32_t i = 0; i < update.count; i++) {
+        uint32_t pair_a = 0u;
+        uint32_t pair_b = 0u;
+        switch (device->get_api()) {
+          case reshade::api::device_api::d3d9:
+          case reshade::api::device_api::d3d10:
+          case reshade::api::device_api::d3d11:
+          case reshade::api::device_api::d3d12:
+            if (!resolve_directx_slot(
+                    update.type,
+                    update.binding + i,
+                    &pair_a,
+                    &pair_b)) {
               return;
             }
-            switch (device->get_api()) {
-              case reshade::api::device_api::d3d9:
-              case reshade::api::device_api::d3d10:
-              case reshade::api::device_api::d3d11:
-              case reshade::api::device_api::d3d12:
-                assert(false);
-                break;
-              case reshade::api::device_api::opengl:
-                pair_a = update.binding;
-                pair_b = update.array_offset + i;
-                break;
-
-              case reshade::api::device_api::vulkan:
-                pair_a = matching_range->binding + update.array_offset + i;
+            break;
+          case reshade::api::device_api::opengl:
+            pair_a = update.binding;
+            pair_b = update.array_offset + i;
+            break;
+          case reshade::api::device_api::vulkan: {
+            bool resolved = false;
+            renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto* layout_data) {
+              if (layout_param >= layout_data->params.size()) return;
+              if (const auto location = renodx::utils::pipeline_layout::FindDescriptorLocation(
+                      layout_data->params[layout_param], device->get_api(), update, i);
+                  location.has_value()) {
+                pair_a = location->binding + location->array_offset;
                 pair_b = layout_param;
-                break;
-              default:
-                assert(false);
-            }
-            auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
-            auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
-            data->constants[slot] = buffer_range;
-
-          } else {
-            assert(false);
+                resolved = true;
+              }
+            });
+            if (!resolved) return;
+            break;
+          }
+          default:
+            return;
+        }
+        const auto buffer_range =
+            static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
+        data->constants[{pair_a, pair_b}] = buffer_range;
+        for (const auto stage : {
+                 reshade::api::shader_stage::vertex,
+                 reshade::api::shader_stage::pixel,
+                 reshade::api::shader_stage::compute,
+             }) {
+          if (renodx::utils::bitwise::HasFlag(stages, stage)) {
+            data->probe_constant_buffers[{pair_a, pair_b, stage}] = buffer_range;
           }
         }
-      });
-
-      if (!found_descriptor_layout) {
-        reshade::log::message(reshade::log::level::error, "Could not find handle.");
       }
       return;
     }
@@ -4962,8 +4898,91 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
   auto* device_data = renodx::utils::data::Get<DeviceData>(device);
   if (device_data == nullptr) return false;
 
+  struct BoundShader {
+    reshade::api::pipeline_stage stage;
+    uint32_t shader_hash;
+  };
+  struct BoundShaders {
+    std::vector<BoundShader> shaders;
+    std::vector<PipelineBindDetails> pipelines;
+  };
+  std::optional<BoundShaders> bound_shaders;
+  const auto& get_bound_shaders = [&]() -> const BoundShaders& {
+    if (bound_shaders.has_value()) return *bound_shaders;
+
+    bound_shaders.emplace();
+    renodx::utils::state::CommandListStateCache state_cache = std::nullopt;
+    std::unordered_map<uint64_t, const renodx::utils::pipeline::PipelineInfo*> pipeline_infos;
+    for (const auto stage : renodx::utils::pipeline::SHADER_STAGES) {
+      if (draw_method == DrawDetails::DrawMethods::DISPATCH) {
+        if (stage != reshade::api::pipeline_stage::compute_shader) continue;
+      } else if (stage == reshade::api::pipeline_stage::compute_shader) {
+        continue;
+      }
+
+      const auto pipeline = renodx::utils::state::GetBoundShaderPipeline(cmd_list, stage, &state_cache);
+      if (pipeline.handle == 0u) {
+#ifndef NDEBUG
+        if (device == snapshot_device
+            && (stage == reshade::api::pipeline_stage::vertex_shader
+                || stage == reshade::api::pipeline_stage::pixel_shader)) {
+          switch (device->get_api()) {
+            case reshade::api::device_api::opengl:
+              // sometimes opengl can call glEnd without having drawn anything
+              break;
+            case reshade::api::device_api::d3d9:
+              // Pixel shaders on DX9 don't need Vertex shaders because of FVF
+              if (stage == reshade::api::pipeline_stage::vertex_shader) continue;
+            default:
+              // Must have pixel shader
+              assert(stage == reshade::api::pipeline_stage::pixel_shader);
+              break;
+          }
+        }
+#endif
+        continue;
+      }
+
+      const auto [it, inserted] = pipeline_infos.try_emplace(pipeline.handle, nullptr);
+      if (inserted) {
+        renodx::utils::pipeline::GetPipelineInfo(pipeline, [&](const auto& info) {
+          it->second = &info;
+        });
+      }
+      const auto* info = it->second;
+      if (info == nullptr) continue;
+
+      uint32_t shader_hash = 0u;
+      const auto index = renodx::utils::pipeline::GetShaderStageIndex(stage);
+      if (info->shader_detail_index_ready) {
+        if (const auto& detail_index = info->shader_detail_by_stage[index]; detail_index.has_value()) {
+          shader_hash = info->shader_details[*detail_index].shader_hash;
+        }
+      } else {
+        for (const auto& identity : info->shader_details) {
+          if (identity.stage == stage) shader_hash = identity.shader_hash;
+        }
+      }
+      if (shader_hash == 0u) continue;
+
+      bound_shaders->shaders.push_back({.stage = stage, .shader_hash = shader_hash});
+      if (std::ranges::any_of(bound_shaders->pipelines, [&](const auto& bind) { return bind.pipeline == pipeline; })) continue;
+
+      auto& bind = bound_shaders->pipelines.emplace_back(PipelineBindDetails{
+          .pipeline = pipeline,
+          .pipeline_stage = stage,
+      });
+      for (const auto& identity : info->shader_details) {
+        if (identity.shader_hash == 0u) continue;
+        if (std::ranges::find(bind.shader_hashes, identity.shader_hash) == bind.shader_hashes.end()) {
+          bind.shader_hashes.push_back(identity.shader_hash);
+        }
+      }
+    }
+    return *bound_shaders;
+  };
+
   if (device == snapshot_device) {
-    auto* state = renodx::utils::shader::GetCurrentState(cmd_list);
 
     auto* command_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
     if (command_list_data == nullptr) return false;
@@ -5012,36 +5031,8 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
       return cached.is_empty;
     };
 
-    reshade::api::pipeline descriptor_pipeline = {0u};
-    std::set<reshade::api::pipeline> added_pipelines;
-    for (auto stage_state : state->stage_states) {
-      if (draw_method == DrawDetails::DrawMethods::DISPATCH) {
-        if (stage_state.stage != reshade::api::pipeline_stage::compute_shader) continue;
-      } else {
-        if (stage_state.stage == reshade::api::pipeline_stage::compute_shader) continue;
-      }
-
-      if (stage_state.pipeline.handle == 0u) {
-#ifndef NDEBUG
-        switch (device->get_api()) {
-          case reshade::api::device_api::opengl:
-            // sometimes opengl can call glEnd without having drawn anything
-            break;
-          case reshade::api::device_api::d3d9:
-            // Pixel shaders on DX9 don't need Vertex shaders because of FVF
-            if (stage_state.stage == reshade::api::pipeline_stage::vertex_shader) continue;
-          default:
-            // Must have pixel shader
-            assert(stage_state.stage == reshade::api::pipeline_stage::pixel_shader);
-            break;
-        }
-#endif
-        continue;
-      }
-
-      renodx::utils::shader::PopulateStageState(&stage_state);
-      auto shader_hash = renodx::utils::shader::GetCurrentShaderHash(&stage_state);
-
+    const auto& active_shaders = get_bound_shaders();
+    for (const auto& [stage, shader_hash] : active_shaders.shaders) {
       ShaderDetails* shader_details = nullptr;
 
       if (skip_draw_count != 0) {
@@ -5054,19 +5045,8 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
         }
       }
 
-      auto pipeline_details = PipelineBindDetails{
-          .pipeline = stage_state.pipeline,
-          .pipeline_stage = stage_state.stage,
-      };
-      if (stage_state.pipeline_details != nullptr) {
-        pipeline_details.shader_hashes = {
-            stage_state.pipeline_details->shader_hashes.begin(),
-            stage_state.pipeline_details->shader_hashes.end()};
-      }
-
-      if ((draw_method == DrawDetails::DrawMethods::DISPATCH && stage_state.stage == reshade::api::pipeline_stage::compute_shader)
-          || (draw_details.draw_method != DrawDetails::DrawMethods::DISPATCH && stage_state.stage == reshade::api::pipeline_stage::pixel_shader)) {
-        descriptor_pipeline = stage_state.pipeline;
+      if ((draw_method == DrawDetails::DrawMethods::DISPATCH && stage == reshade::api::pipeline_stage::compute_shader)
+          || (draw_details.draw_method != DrawDetails::DrawMethods::DISPATCH && stage == reshade::api::pipeline_stage::pixel_shader)) {
         if (shader_details == nullptr) {
           shader_details = device_data->GetShaderDetails(shader_hash);
         }
@@ -5078,23 +5058,27 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
         }
       }
 
-      if (!added_pipelines.contains(pipeline_details.pipeline)) {
-        added_pipelines.emplace(pipeline_details.pipeline);
-        draw_details.pipeline_binds.push_back(pipeline_details);
-      }
+    }
+    for (const auto& pipeline_details : active_shaders.pipelines) {
+      draw_details.pipeline_binds.push_back(pipeline_details);
     }
 
-    if (descriptor_pipeline != 0u) {
-      auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(descriptor_pipeline);
+    const auto bound_pipeline = renodx::utils::state::GetBoundShaderPipeline(
+        cmd_list,
+        draw_method == DrawDetails::DrawMethods::DISPATCH
+            ? reshade::api::pipeline_stage::compute_shader
+            : reshade::api::pipeline_stage::pixel_shader);
+    if (bound_pipeline.handle != 0u) {
+      auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(bound_pipeline);
       if (pipeline_shader_details != nullptr) {
-        const auto* command_list_state = renodx::utils::state::GetCurrentState(cmd_list);
-        if (command_list_state == nullptr) return false;
-        const auto& bound_pipeline_layout = draw_method == DrawDetails::DrawMethods::DISPATCH
-                                                ? command_list_state->compute_pipeline_layout
-                                                : command_list_state->graphics_pipeline_layout;
-        const auto& bound_descriptor_tables = draw_method == DrawDetails::DrawMethods::DISPATCH
-                                                  ? command_list_state->compute_descriptor_tables
-                                                  : command_list_state->graphics_descriptor_tables;
+        const auto descriptor_table_state = renodx::utils::state::CopyBoundDescriptorTables(
+            cmd_list,
+            draw_method == DrawDetails::DrawMethods::DISPATCH
+                ? renodx::utils::state::PipelineBindPoint::COMPUTE
+                : renodx::utils::state::PipelineBindPoint::GRAPHICS);
+        if (!descriptor_table_state.has_value()) return false;
+        const auto& bound_pipeline_layout = descriptor_table_state->layout;
+        const auto& bound_descriptor_tables = descriptor_table_state->tables;
         if (bound_pipeline_layout == pipeline_shader_details->layout) {
           const bool has_reflected_resource_binds = draw_details.resource_binds.has_value() && !draw_details.resource_binds->empty();
           auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
@@ -5314,24 +5298,34 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
   } else if (snapshot_device != nullptr) {
     reshade::log::message(reshade::log::level::debug, "Foreign Draw.");
   } else if (skip_draw_count != 0) {
-    auto* state = renodx::utils::shader::GetCurrentState(cmd_list);
     std::shared_lock lock(device_data->mutex);
-    for (auto& stage_state : state->stage_states) {
-      if (draw_method == DrawDetails::DrawMethods::DISPATCH) {
-        if (stage_state.stage != reshade::api::pipeline_stage::compute_shader) continue;
-      } else {
-        if (stage_state.stage == reshade::api::pipeline_stage::compute_shader) continue;
-      }
-
-      renodx::utils::shader::PopulateStageState(&stage_state);
-      auto shader_hash = renodx::utils::shader::GetCurrentShaderHash(&stage_state);
-
+    for (const auto& shader : get_bound_shaders().shaders) {
+      const auto shader_hash = shader.shader_hash;
       if (auto pair = device_data->shader_details.find(shader_hash);
           pair != device_data->shader_details.end()) {
         auto* shader_details = &pair->second;
         if (shader_details->bypass_draw) {
           bypass_draw = true;
         }
+      }
+    }
+  }
+
+  if (!bypass_draw && renodx::utils::shader::GetReplaceOnBindPolicy() == false) {
+    for (const auto& [stage, shader_hash] : get_bound_shaders().shaders) {
+      bool use_file_replacement = false;
+      {
+        std::shared_lock lock(device_data->mutex);
+        if (auto pair = device_data->shader_details.find(shader_hash);
+            pair != device_data->shader_details.end()) {
+          const auto& shader_details = pair->second;
+          use_file_replacement = shader_details.shader_source == ShaderDetails::ShaderSource::DISK_SHADER
+                                 && shader_details.addon_shader.empty();
+        }
+      }
+
+      if (use_file_replacement) {
+        renodx::utils::shader::ApplyBoundReplacement(cmd_list, stage);
       }
     }
   }
@@ -5372,11 +5366,8 @@ bool OnDrawOrDispatchIndirect(
   bool is_dispatch = false;
   switch (type) {
     case reshade::api::indirect_command::unknown: {
-      {
-        auto* cmd_list_data = renodx::utils::shader::GetCurrentState(cmd_list);
-        auto shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(cmd_list_data);
-        is_dispatch = (shader_hash != 0u);
-      }
+      is_dispatch = renodx::utils::state::GetCurrentShaderHash(
+                        cmd_list, reshade::api::pipeline_stage::compute_shader) != 0u;
       break;
     }
     case reshade::api::indirect_command::dispatch:
@@ -5671,7 +5662,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         if (pipeline_details.tag.has_value() && !pipeline_details.tag->empty()) {
           pipeline_tag.emplace(pipeline_details.tag->begin(), pipeline_details.tag->end());
         }
-      });
+  });
 
       SettingSelection search = {.shader_hash = row.shader_hash};
       auto& selection = GetSelection(search);

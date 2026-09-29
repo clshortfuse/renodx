@@ -981,11 +981,17 @@ bool OnDispatch(
     uint32_t group_count_z) {
   if (g_dump_shaders == 0.f) return false;
 
-  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-
-  auto* compute_state = renodx::utils::shader::GetCurrentComputeState(shader_state);
-
-  auto compute_shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(compute_state);
+  const auto compute_pipeline = renodx::utils::state::GetBoundShaderPipeline(
+      cmd_list, reshade::api::pipeline_stage::compute_shader);
+  uint32_t compute_shader_hash = 0u;
+  renodx::utils::pipeline::GetPipelineInfo(compute_pipeline, [&](const auto& info) {
+    for (const auto& identity : info.shader_details) {
+      if (identity.stage == reshade::api::pipeline_stage::compute_shader) {
+        compute_shader_hash = identity.shader_hash;
+        break;
+      }
+    }
+  });
   if (compute_shader_hash == 0u) return false;
   if (g_dumped_shaders.contains(compute_shader_hash)) return false;
 
@@ -995,15 +1001,16 @@ bool OnDispatch(
 
   auto* device = cmd_list->get_device();
 
-  if (shader_state->last_pipeline != 0u) {
-    auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(shader_state->last_pipeline);
-    if (pipeline_shader_details != nullptr) {
-      renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout, [&](const auto& layout_data) {
-        const auto* command_list_state = renodx::utils::state::GetCurrentState(cmd_list);
-        if (command_list_state == nullptr) return;
-        if (command_list_state->compute_pipeline_layout == pipeline_shader_details->layout) {
+  if (compute_pipeline.handle != 0u) {
+    renodx::utils::shader::GetPipelineShaderDetails(compute_pipeline, [&](const auto& pipeline_shader_details) {
+      renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details.layout, [&](const auto& layout_data) {
+        const auto descriptor_table_state = renodx::utils::state::CopyBoundDescriptorTables(
+            cmd_list,
+            renodx::utils::state::PipelineBindPoint::COMPUTE);
+        if (!descriptor_table_state.has_value()) return;
+        if (descriptor_table_state->layout == pipeline_shader_details.layout) {
           const auto& info = *layout_data;
-          const auto& bound_descriptor_tables = command_list_state->compute_descriptor_tables;
+          const auto& bound_descriptor_tables = descriptor_table_state->tables;
           auto param_count = info.params.size();
           auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
           if (descriptor_data == nullptr) return;
@@ -1014,29 +1021,17 @@ bool OnDispatch(
             const auto& param = info.params.at(param_index);
             const auto& table = bound_descriptor_tables[param_index];
 
-            uint32_t descriptor_table_count;
-            const reshade::api::descriptor_range* descriptor_table_ranges;
             switch (param.type) {
               case reshade::api::pipeline_layout_param_type::descriptor_table:
-                if (table.handle == 0u) continue;
-                descriptor_table_count = param.descriptor_table.count;
-                descriptor_table_ranges = param.descriptor_table.ranges;
-                break;
               case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-                if (table.handle == 0u) continue;
-                descriptor_table_count = param.descriptor_table_with_static_samplers.count;
-                descriptor_table_ranges = param.descriptor_table_with_static_samplers.ranges;
                 break;
-              case reshade::api::pipeline_layout_param_type::push_constants:
-              case reshade::api::pipeline_layout_param_type::push_descriptors:
-              case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
-              case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
+              default:
                 continue;
             }
+            if (table.handle == 0u) continue;
 
-            for (uint32_t j = 0; j < descriptor_table_count; ++j) {
-              const auto& range = descriptor_table_ranges[j];
-
+            const auto& descriptor_table_ranges = info.ranges[param_index];
+            for (const auto& range : descriptor_table_ranges) {
               // Skip empty and unbounded ranges
               if (range.count == 0u || range.count == UINT32_MAX) continue;
 
@@ -1059,7 +1054,7 @@ bool OnDispatch(
 
               uint32_t base_offset = 0;
               reshade::api::descriptor_heap heap = {0};
-              device->get_descriptor_heap_offset(table, range.binding, 0, &heap, &base_offset);
+              if (!renodx::utils::descriptor::TryGetDescriptorHeapOffset(device, table, range.binding, 0, &heap, &base_offset)) continue;
               const std::shared_lock descriptor_lock(descriptor_data->mutex);
 
               auto heap_pair = descriptor_data->heaps.find(heap.handle);
@@ -1132,7 +1127,7 @@ bool OnDispatch(
           }
         }
       });
-    }
+    });
   }
 
   if (compute_uav_binds.empty()) return false;
@@ -1161,7 +1156,7 @@ bool OnDispatch(
   renodx::utils::shader::dump::default_dump_folder = ".";
   bool found = false;
   try {
-    auto shader_data = renodx::utils::shader::GetShaderData(compute_state);
+    auto shader_data = renodx::utils::shader::GetShaderData(compute_pipeline, compute_shader_hash);
     if (!shader_data.has_value()) {
       std::stringstream s;
       s << "utils::shader::dump(Failed to retreive shader data: ";

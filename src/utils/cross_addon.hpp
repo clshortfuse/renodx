@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -22,6 +24,18 @@
 #include "./platform.hpp"
 
 namespace renodx::utils::cross_addon {
+
+template <typename T>
+using allocator = platform::ProcessAllocator<T>;
+
+inline void* Allocate(std::size_t size) {
+  return allocator<std::byte>().allocate(size);
+}
+
+inline void Free(void* data) {
+  if (data == nullptr) return;
+  allocator<std::byte>().deallocate(static_cast<std::byte*>(data), 0u);
+}
 
 template <typename T>
 using vector = std::vector<T, platform::ProcessAllocator<T>>;
@@ -346,6 +360,36 @@ class Shared {
     }
     event->active = false;
     internal::SyncReshadeEvents(*control);
+  }
+
+  template <typename CallbackList>
+  void RegisterCallback(
+      CallbackList Data::* callbacks,
+      typename CallbackList::value_type callback,
+      bool active = true) {
+    RegisterModule();
+    if (data == nullptr) return;
+    assert(callback != nullptr);
+    if (callback == nullptr) return;
+
+    auto& registrations = data->*callbacks;
+    if (active) {
+      if (std::find(registrations.begin(), registrations.end(), callback) == registrations.end()) {
+        registrations.push_back(callback);
+      }
+    } else {
+      std::erase(registrations, callback);
+    }
+  }
+
+  template <typename CallbackList>
+  void UnregisterCallback(
+      CallbackList Data::* callbacks,
+      typename CallbackList::value_type callback) {
+    if (data == nullptr) return;
+    assert(callback != nullptr);
+    if (callback == nullptr) return;
+    std::erase(data->*callbacks, callback);
   }
 
  private:

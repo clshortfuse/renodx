@@ -705,12 +705,9 @@ class RenderPass {
       }
     }
 
-    std::optional<utils::state::CommandListState> previous_state;
+    std::optional<utils::state::CommandListSnapshot> previous_state;
     if (this->revert_state_after_render) {
-      auto* current_state = utils::state::GetCurrentState(cmd_list);
-      if (current_state != nullptr) {
-        previous_state.emplace(*current_state);
-      }
+      previous_state = utils::state::GetSnapshot(cmd_list);
     }
 
     const auto update_descriptor_tables = [&]() -> bool {
@@ -896,7 +893,8 @@ class RenderPass {
 
     // Restore previous state
     if (previous_state.has_value()) {
-      previous_state->Apply(cmd_list);
+      // The caller may use a different pipeline domain than the inserted pass.
+      previous_state->Apply();
     }
     return true;
   }
