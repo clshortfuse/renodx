@@ -4872,15 +4872,6 @@ void OnPushDescriptors(
         const auto buffer_range =
             static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
         data->constants[{pair_a, pair_b}] = buffer_range;
-        for (const auto stage : {
-                 reshade::api::shader_stage::vertex,
-                 reshade::api::shader_stage::pixel,
-                 reshade::api::shader_stage::compute,
-             }) {
-          if (renodx::utils::bitwise::HasFlag(stages, stage)) {
-            data->probe_constant_buffers[{pair_a, pair_b, stage}] = buffer_range;
-          }
-        }
       }
       return;
     }
