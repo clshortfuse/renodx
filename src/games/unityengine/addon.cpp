@@ -1531,6 +1531,8 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDGammaOnDraw(0x7325AAEB),
     SneakyBuilderTonemapOnDraw(0x5B3A6D48),
     SneakyBuilderTonemapOnDraw(0x3B50094B),
+    SneakyBuilderTonemapOnDraw(0x86920855),
+    SneakyBuilderTonemapOnDraw(0x2D96DDD6),
     LutBuilderTonemapOnDraw(0xF3CE6DDA),
     LutBuilderTonemapOnDraw(0x32767461),
     UberHDLinearOnDraw(0x99B7B0BF), // SadCatStudios_FinalBlit

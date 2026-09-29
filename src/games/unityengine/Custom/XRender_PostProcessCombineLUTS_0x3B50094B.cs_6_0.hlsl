@@ -437,24 +437,11 @@ void main(
     float _884 = ((lerp(_863.x, _868.x, _858)) * _LUTBlendCB_000.y) + (_845 * _LUTBlendCB_000.x);
     float _885 = ((lerp(_863.y, _868.y, _858)) * _LUTBlendCB_000.y) + (_846 * _LUTBlendCB_000.x);
     float _886 = ((lerp(_863.z, _868.z, _858)) * _LUTBlendCB_000.y) + (_847 * _LUTBlendCB_000.x);
-    /*float _905 = exp2(log2(abs((_884 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f);
-    float _906 = exp2(log2(abs((_885 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f);
-    float _907 = exp2(log2(abs((_886 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f);
-    float _920 = (float((bool)(bool)(_884 <= 0.040449999272823334f)) * ((_884 * 0.07739938050508499f) - _905)) + _905;
-    float _921 = (((_885 * 0.07739938050508499f) - _906) * float((bool)(bool)(_885 <= 0.040449999272823334f))) + _906;
-    float _922 = (((_886 * 0.07739938050508499f) - _907) * float((bool)(bool)(_886 <= 0.040449999272823334f))) + _907;*/
-
     float3 postLUT = renodx::color::srgb::DecodeSafe(float3(_884, _885, _886));
     NeutwoMaxChInverse(postLUT, max_channel_scale);
     GamutDecompression(postLUT, compression_scale);
-    //float3(_920, _921, _922) = lerp(preLUT, float3(_920, _921, _922), CUSTOM_USER_LUT_STRENGTH);
     float _920 = lerp(preLUT.x, postLUT.x, CUSTOM_USER_LUT_STRENGTH);
     float _921 = lerp(preLUT.y, postLUT.y, CUSTOM_USER_LUT_STRENGTH);
     float _922 = lerp(preLUT.z, postLUT.z, CUSTOM_USER_LUT_STRENGTH);
-    /*float3 signs = sign(float3(_920, _921, _922));
-    float _941 = (exp2(log2(abs(_920)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f;
-    float _942 = (exp2(log2(abs(_921)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f;
-    float _943 = (exp2(log2(abs(_922)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f;*/
-    //u7[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = signs * float3((((((_920 * 12.920000076293945f) - _941) * float((bool)(bool)(_920 <= 0.0031308000907301903f))) + _941) * 0.9523810148239136f), (((((_921 * 12.920000076293945f) - _942) * float((bool)(bool)(_921 <= 0.0031308000907301903f))) + _942) * 0.9523810148239136f), (((((_922 * 12.920000076293945f) - _943) * float((bool)(bool)(_922 <= 0.0031308000907301903f))) + _943) * 0.9523810148239136f));
     u7[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = renodx::color::srgb::EncodeSafe(float3(_920, _921, _922)) * 0.9523810148239136f;
 }
