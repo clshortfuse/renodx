@@ -97,12 +97,15 @@ cbuffer postprocess : register(b7) {
 SamplerState g_sLinearClamp_internal : register(s6, space1);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
   float4 SV_Target;
   float _19;
   float _20;
@@ -409,13 +412,13 @@ float4 main(
   }
   _343 = (g_bEnableHDRLUT == 0);
   if (!(_343 || (!_269))) {
-  #if 1
+#if 1
     float3 graded_color = ApplyVanillaPQLUT(
-      float3(_338, _339, _340), g_tBaseColorCorrectionMap, g_sLinearClamp_internal, g_fTonemapSaturation);
+        float3(_338, _339, _340), g_tBaseColorCorrectionMap, g_sLinearClamp_internal, g_fTonemapSaturation);
     _426 = graded_color.x;
     _427 = graded_color.y;
     _428 = graded_color.z;
-  #else
+#else
     _359 = exp2(log2(saturate(_338 * 0.00800000037997961f)) * 0.1593017578125f);
     _360 = exp2(log2(saturate(_339 * 0.00800000037997961f)) * 0.1593017578125f);
     _361 = exp2(log2(saturate(_340 * 0.00800000037997961f)) * 0.1593017578125f);
@@ -433,7 +436,7 @@ float4 main(
     _426 = (lerp(_415, _411, g_fTonemapSaturation));
     _427 = (lerp(_415, _412, g_fTonemapSaturation));
     _428 = (lerp(_415, _413, g_fTonemapSaturation));
-  #endif
+#endif
   } else {
     _426 = _338;
     _427 = _339;
@@ -452,7 +455,7 @@ float4 main(
 #if 1
           float3 agx_color = ApplyRemedyAgX(
               _434, _435, _436, _278,
-              g_fAgxMinEV, g_fAgxMaxEV,
+              g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
               g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
               g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
               g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,

@@ -97,12 +97,15 @@ cbuffer postprocess : register(b7) {
 SamplerState g_sLinearClamp_internal : register(s6, space1);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
   float4 SV_Target;
   float _19;
   float _20;
@@ -326,14 +329,14 @@ float4 main(
   _83 = 0.0f;
   _84 = -1;
   bool _loop_break_0 = false;
-  while(true) {
+  while (true) {
     _86 = _80;
     _87 = _81;
     _88 = _82;
     _89 = _83;
     _90 = -1;
     bool _loop_break_1 = false;
-    while(true) {
+    while (true) {
       _93 = (floor(_67 * g_vSourceRes.x) + 0.5f) + float((int)(_90));
       _94 = (floor(_68 * g_vSourceRes.y) + 0.5f) + float((int)(_84));
       _102 = (_67 - (_93 / g_vSourceRes.x)) * g_vSourceRes.x;
@@ -419,13 +422,13 @@ float4 main(
       }
       _237 = (g_bEnableHDRLUT == 0);
       if (!(_237 || (!_163))) {
-      #if 1
+#if 1
         float3 graded_color = ApplyVanillaPQLUT(
             float3(_232, _233, _234), g_tBaseColorCorrectionMap, g_sLinearClamp_internal, g_fTonemapSaturation);
         _320 = graded_color.x;
         _321 = graded_color.y;
         _322 = graded_color.z;
-      #else
+#else
         _253 = exp2(log2(saturate(_232 * 0.00800000037997961f)) * 0.1593017578125f);
         _254 = exp2(log2(saturate(_233 * 0.00800000037997961f)) * 0.1593017578125f);
         _255 = exp2(log2(saturate(_234 * 0.00800000037997961f)) * 0.1593017578125f);
@@ -443,7 +446,7 @@ float4 main(
         _320 = (lerp(_309, _305, g_fTonemapSaturation));
         _321 = (lerp(_309, _306, g_fTonemapSaturation));
         _322 = (lerp(_309, _307, g_fTonemapSaturation));
-      #endif
+#endif
       } else {
         _320 = _232;
         _321 = _233;
@@ -462,7 +465,7 @@ float4 main(
 #if 1
               float3 agx_color = ApplyRemedyAgX(
                   _328, _329, _330, _172,
-                  g_fAgxMinEV, g_fAgxMaxEV,
+                  g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
                   g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
                   g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
                   g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
@@ -646,7 +649,10 @@ float4 main(
           _956 = (_945 * g_fTonemapBrightness);
           _957 = (_946 * g_fTonemapBrightness);
         } while (false);
-        if (_loop_break_1 && !_loop_break_0) { _loop_break_1 = false; continue; }
+        if (_loop_break_1 && !_loop_break_0) {
+          _loop_break_1 = false;
+          continue;
+        }
       } else {
         _955 = (_320 * _172);
         _956 = (_321 * _172);
@@ -713,7 +719,10 @@ float4 main(
             _1111 = _1093;
           }
         } while (false);
-        if (_loop_break_1 && !_loop_break_0) { _loop_break_1 = false; continue; }
+        if (_loop_break_1 && !_loop_break_0) {
+          _loop_break_1 = false;
+          continue;
+        }
       } else {
         _1109 = _1055;
         _1110 = _1056;
@@ -725,7 +734,10 @@ float4 main(
       SV_Target.w = 1.0f;
       break;
     }
-    if (_loop_break_0) { _loop_break_0 = false; continue; }
+    if (_loop_break_0) {
+      _loop_break_0 = false;
+      continue;
+    }
     break;
   }
   return SV_Target;

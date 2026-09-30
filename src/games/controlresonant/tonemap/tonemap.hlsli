@@ -1,6 +1,12 @@
 #include "../common.hlsli"
 #include "remedy_agx.hlsli"
 
+float ConditionalOverrideGameBrightness(float original_paper_white, int hdr_enabled) {
+  return (hdr_enabled == 0 || TONE_MAP_TYPE == 0.f)
+             ? original_paper_white
+             : shader_injection.diffuse_white_nits / 80.f;
+}
+
 float3 ApplyEnhancedMeanA2Hue(
     float3 source_bt709,
     float3 pre_shoulder_bt2020,
@@ -201,33 +207,86 @@ float3 RejectNonPositiveBT709Luminance(float3 color) {
              : color;
 }
 
-// Shared RenoDX AgX toe + tangent formation.
-// linear_input must already contain positive magnitudes.
-float3 ApplyShoulderlessAgXFormation(float3 linear_input, RemedyAgXParameters params, float shoulder_blend_strength) {
+// Shared Remedy AgX toe + tangent formation used by Vanilla+, Enhanced, and PsychoV.
+struct RemedyExtendedAgXParameters {
+  float min_log2_linear;
+  float inverse_ev_range;
+  float input_pivot_linear;
+  float output_pivot;
+  float output_pivot_linear;
+  float linear_tangent_slope;
+  float toe_power;
+  float contrast_slope;
+  float toe_scale;
+};
+
+RemedyExtendedAgXParameters CreateRemedyExtendedAgXParameters(
+    float min_log2_linear,
+    float max_log2_linear,
+    float toe_power,
+    float contrast_slope,
+    float toe_scale) {
+  RemedyExtendedAgXParameters params;
+  const float ev_range = max_log2_linear - min_log2_linear;
+
+  params.min_log2_linear = min_log2_linear;
+  params.inverse_ev_range = rcp(ev_range);
+  params.input_pivot_linear = exp2(min_log2_linear + REMEDY_AGX_LOG_PIVOT * ev_range);
+  params.output_pivot = pow(REMEDY_AGX_MID_GRAY, 1.f / REMEDY_AGX_OUTPUT_GAMMA);
+  params.output_pivot_linear = REMEDY_AGX_MID_GRAY;
+  params.linear_tangent_slope = REMEDY_AGX_OUTPUT_GAMMA * pow(params.output_pivot, REMEDY_AGX_OUTPUT_GAMMA - 1.f) * contrast_slope
+                                * params.inverse_ev_range / (log(2.f) * params.input_pivot_linear);
+  params.toe_power = toe_power;
+  params.contrast_slope = contrast_slope;
+  params.toe_scale = toe_scale;
+
+  return params;
+}
+
+RemedyExtendedAgXParameters CreateRemedyExtendedAgXParameters(RemedyAgXParameters params) {
+  RemedyExtendedAgXParameters extended_params;
   const renodx::tonemap::agx::ToneScale tone_scale = params.tone_scale;
   const renodx::tonemap::agx::ToneScaleParameters parameters = tone_scale.parameters;
 
-  // Preserve Remedy's original unclamped normalized-log evaluation.
-  const float3 log_color =
-      (log2(max(linear_input, 1e-10f) / parameters.input_mid_gray) - parameters.min_ev)
-      * tone_scale.inverse_ev_range;
+  extended_params.min_log2_linear = parameters.min_ev + log2(parameters.input_mid_gray);
+  extended_params.inverse_ev_range = tone_scale.inverse_ev_range;
+  extended_params.input_pivot_linear = params.input_pivot_linear;
+  extended_params.output_pivot = parameters.output_pivot;
+  extended_params.output_pivot_linear = params.output_pivot_linear;
+  extended_params.linear_tangent_slope = params.linear_tangent_slope;
+  extended_params.toe_power = parameters.toe_power;
+  extended_params.contrast_slope = parameters.slope;
+  extended_params.toe_scale = tone_scale.toe_scale;
 
-  float3 color = ApplyRemedyAgXSigmoidShoulderless(
-      log_color,
-      tone_scale.input_pivot,
-      parameters.output_pivot,
-      parameters.slope,
-      parameters.toe_power,
-      tone_scale.toe_scale);
+  return extended_params;
+}
 
-  const float3 shoulderless_agx_linear = pow(max(color, 0.f), parameters.output_power);
+// Preserve Remedy's AgX toe, then extend the upper range without the original finite shoulder.
+// linear_input must contain positive magnitudes.
+float3 ApplyRemedyExtendedAgXCurve(float3 linear_input, RemedyExtendedAgXParameters params, float shoulder_blend_strength) {
+  const float3 log_color = (log2(max(linear_input, 1e-10f)) - params.min_log2_linear) * params.inverse_ev_range;
+
+  const float3 toe = (params.contrast_slope / params.toe_scale) * max(REMEDY_AGX_LOG_PIVOT - log_color, 0.f);
+
+  float3 color =
+      select(
+          log_color >= REMEDY_AGX_LOG_PIVOT,
+          params.contrast_slope * (log_color - REMEDY_AGX_LOG_PIVOT),
+          (toe / pow(pow(toe, params.toe_power) + 1.f, 1.f / params.toe_power)) * -params.toe_scale)
+      + params.output_pivot;
+
+  const float3 shoulderless_agx_linear = pow(max(color, 0.f), REMEDY_AGX_OUTPUT_GAMMA);
 
   color = select(
       linear_input > params.input_pivot_linear,
       params.output_pivot_linear + params.linear_tangent_slope * (linear_input - params.input_pivot_linear),
       shoulderless_agx_linear);
 
-  color = lerp(color, shoulderless_agx_linear, shoulder_blend_strength * 0.792f);
+  return lerp(color, shoulderless_agx_linear, shoulder_blend_strength * 0.75f);
+}
+
+float3 ApplyShoulderlessAgXFormation(float3 linear_input, RemedyAgXParameters params, float shoulder_blend_strength) {
+  float3 color = ApplyRemedyExtendedAgXCurve(linear_input, CreateRemedyExtendedAgXParameters(params), shoulder_blend_strength);
 
   return ApplyAnchoredTonalGrading(
       color,
@@ -347,40 +406,83 @@ float3 ApplyRenoDXEnhancedToneMap(float3 untonemapped, RemedyAgXParameters param
   return renodx::color::bt709::from::BT2020(color);
 }
 
-float3 ApplyRenoDXPsychoVToneMap(float3 untonemapped, float hdr_ratio, float input_pivot_linear, float output_pivot_linear) {
+float3 ApplyRenoDXPsychoVToneMap(
+    float3 untonemapped,
+    float hdr_ratio,
+    float min_log2_linear,
+    float max_log2_linear,
+    float toe_power,
+    float contrast_slope,
+    float toe_scale) {
   untonemapped = RejectNonPositiveBT709Luminance(untonemapped);
 
-  static const float CONTRAST = 0.8575016f;
-  static const float FLARE = 0.00149469f;
-  static const float HIGHLIGHT_CONTRAST = 0.82f;
-  static const float SHADOW_CONTRAST = 1.4234278f;
+  const RemedyExtendedAgXParameters remedy_curve =
+      CreateRemedyExtendedAgXParameters(min_log2_linear, max_log2_linear, toe_power, contrast_slope, toe_scale);
+
+  const float3 input_lms = mul(renodx::tonemap::psychov::PSYCHO30_BT709_TO_LMS_MAT, untonemapped);
+  const float3 source_anchor_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS * remedy_curve.input_pivot_linear;
+  const float3 grade_anchor_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS * remedy_curve.output_pivot_linear;
+  const float3 target_peak_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS * hdr_ratio;
+
+  // Apply the live Remedy toe/tangent curve in D65-normalized LMS before PsychoV grading.
+  const float3 normalized_input_lms = input_lms / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
+  const float3 extended_lms = renodx::math::CopySign(
+                                  ApplyRemedyExtendedAgXCurve(
+                                      abs(normalized_input_lms), remedy_curve, TONE_MAP_HIGHLIGHT_COMPRESSION),
+                                  normalized_input_lms)
+                              * renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
+
+  static const float HIGHLIGHT_CONTRAST = 1.f;
   static const float SATURATION = 57.f / 50.f;
   static const float DECHROMA = 25.f / 100.f;
 
-  return renodx::tonemap::psychov::custom_psychotm_test31(
-      untonemapped,
-      hdr_ratio,
-      1.f,
+  float3 tonal_input_lms;
+  const float3 pre_shoulder_lms = renodx::tonemap::psychov::custom_psycho31_GradeLMS(
+      extended_lms,
+      grade_anchor_lms,
+      grade_anchor_lms,
       RENODX_TONE_MAP_HIGHLIGHTS,
       RENODX_TONE_MAP_SHADOWS,
-      CONTRAST * RENODX_TONE_MAP_CONTRAST,
-      FLARE + 0.1f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+      RENODX_TONE_MAP_CONTRAST,
+      0.1f * pow(RENODX_TONE_MAP_FLARE, 10.f),
       HIGHLIGHT_CONTRAST * RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS,
-      SHADOW_CONTRAST * RENODX_TONE_MAP_CONTRAST_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST_SHADOWS,
       SATURATION * RENODX_TONE_MAP_SATURATION,
       RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
       lerp(DECHROMA, 1.f, RENODX_TONE_MAP_DECHROMA),
-      input_pivot_linear,
-      output_pivot_linear,
       0.f,
-      1.f,
-      1,
-      1.f,
-      1.f,
-      0.5f,
-      0.f,
-      renodx::tonemap::psychov::PSYCHO30_SOURCE_BOUNDARY_NONE,
-      1.f);
+      tonal_input_lms,
+      true);
+
+  const float3 graded_lms = abs(pre_shoulder_lms);
+  const float3 response_lms = renodx::tonemap::psychov::custom_psycho31_ApplyAnchoredCInfinityShoulder(
+      graded_lms, target_peak_lms, grade_anchor_lms, 1.f);
+
+  // Keep MeanA2's hue reference on the original source; tonal-region weighting follows the
+  // post-Remedy signal that actually enters PsychoV grading.
+  const float3 source_q = input_lms / source_anchor_lms;
+  const float3 tonal_input_q = tonal_input_lms / grade_anchor_lms;
+  const float3 response_u = renodx::math::CopySign(response_lms, pre_shoulder_lms) / target_peak_lms;
+  const float mean_a2_weight = renodx::tonemap::psychov::custom_psycho31_ShoulderMeanA2Weight(
+      abs(tonal_input_q), graded_lms, response_lms, 1.f, 0.5f, 0.f);
+
+  float response_yf;
+  uint response_valid;
+  const float3 desired_coord = renodx::tonemap::psychov::custom_psycho31_MeanA2Response(
+      source_q, response_u, mean_a2_weight, response_yf, response_valid);
+  if (response_valid == 0u) return 0.f;
+
+  static const int TARGET_GAMUT = renodx::tonemap::psychov::CUSTOM_PSYCHO31_TARGET_GAMUT_BT2020;
+  const float normalized_demand = renodx::tonemap::psychov::custom_psycho31_NormalizedL8TargetDemand(
+      desired_coord, response_yf, TARGET_GAMUT);
+  const float3 mapped_coord = renodx::tonemap::psychov::custom_psycho31_MapL8TargetDemand(
+      desired_coord, response_yf, TARGET_GAMUT, normalized_demand);
+  if (any(isnan(mapped_coord)) || any(isinf(mapped_coord))) return 0.f;
+
+  const float3 output_lms = renodx::tonemap::psychov::psycho31_LMSFromTest30Coord(mapped_coord, hdr_ratio);
+  const float3 output_bt709 = mul(renodx::tonemap::psychov::PSYCHO30_LMS_TO_BT709_MAT, output_lms);
+
+  return !any(isnan(output_bt709)) && !any(isinf(output_bt709)) ? output_bt709 : 0.f;
 }
 
 float3 ApplySDRToneMap(float3 untonemapped, RemedyAgXParameters params) {
@@ -402,6 +504,7 @@ float3 ApplyRemedyAgX(
     float input_g,
     float input_b,
     float paper_white,
+    int g_bHDR,
     float g_fAgxMinEV,
     float g_fAgxMaxEV,
     float g_fAgxToePower,
@@ -420,16 +523,26 @@ float3 ApplyRemedyAgX(
     float g_fAgxHDRToePrecalcConstant,
     float g_fAgxHDRShoulderPrecalcConstant,
     float2 texcoord) {
+  [branch]
+  if (g_bHDR != 0 && TONE_MAP_TYPE != 0.f) {
+    paper_white = shader_injection.diffuse_white_nits / 80.f;
+    g_fAgxHDRRatio = shader_injection.peak_white_nits / shader_injection.diffuse_white_nits;
+  }
+
   const float3 untonemapped = float3(input_r, input_g, input_b);
 
   float3 output_color;
 
   [branch]
   if (TONE_MAP_TYPE == 3.f) {  // RenoDX (PsychoV)
-    const float ev_range = g_fAgxMaxEV - g_fAgxMinEV;
-    const float input_pivot_linear = exp2(g_fAgxMinEV + REMEDY_AGX_LOG_PIVOT * ev_range);
-
-    output_color = ApplyRenoDXPsychoVToneMap(untonemapped, g_fAgxHDRRatio, input_pivot_linear, REMEDY_AGX_MID_GRAY);
+    output_color = ApplyRenoDXPsychoVToneMap(
+        untonemapped,
+        g_fAgxHDRRatio,
+        g_fAgxMinEV,
+        g_fAgxMaxEV,
+        g_fAgxToePower,
+        g_fAgxContrastSlope,
+        g_fAgxToePrecalcConstant);
   } else {
     const RemedyAgXParameters params =
         CreateRemedyAgXParameters(

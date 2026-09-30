@@ -47,12 +47,15 @@ cbuffer postprocess : register(b3) {
 SamplerState g_sLinearClamp_internal : register(s6, space1);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
   float4 SV_Target;
   float4 _14;
   float _21;
@@ -69,9 +72,10 @@ float4 main(
   float _45;
   float _46;
   _14 = g_tSource.Sample(g_sLinearClamp_internal, float2((g_vInvOutputRes.x * SV_Position.x), (g_vInvOutputRes.y * SV_Position.y)));
-  _21 = g_fPaperWhite * _14.x;
-  _22 = g_fPaperWhite * _14.y;
-  _23 = g_fPaperWhite * _14.z;
+  const float paper_white = ConditionalOverrideGameBrightness(g_fPaperWhite, g_bHDR);
+  _21 = paper_white * _14.x;
+  _22 = paper_white * _14.y;
+  _23 = paper_white * _14.z;
   if (!(g_bPostProcessConvertToBackBufferFormat == 0)) {
     _30 = (g_bHDR == 0);
     do {

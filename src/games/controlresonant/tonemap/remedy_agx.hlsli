@@ -109,24 +109,6 @@ float3 ApplyRemedyAgXSigmoid(
       (toe / pow(renodx::math::SignPow(toe, toe_power) + 1.f, 1.f / toe_power)) * -toe_scale);
 }
 
-// Infinite shoulder-scale limit used by RenoDX Vanilla+/Enhanced:
-// preserve the original AgX toe and continue linearly in normalized-log space.
-float3 ApplyRemedyAgXSigmoidShoulderless(
-    float3 log_color,
-    float log_pivot,
-    float output_pivot,
-    float contrast_slope,
-    float toe_power,
-    float toe_scale) {
-  const float3 toe = (contrast_slope / toe_scale) * max(log_pivot - log_color, 0.f);
-
-  return select(
-             log_color >= log_pivot,
-             contrast_slope * (log_color - log_pivot),
-             (toe / pow(pow(toe, toe_power) + 1.f, 1.f / toe_power)) * -toe_scale)
-         + output_pivot;
-}
-
 static const float3x3 REMEDY_BT2020_TO_BT709 = float3x3(
     1.6604962f, -0.58765644f, -0.072839774f,
     -0.124547094f, 1.1328951f, -0.008348013f,

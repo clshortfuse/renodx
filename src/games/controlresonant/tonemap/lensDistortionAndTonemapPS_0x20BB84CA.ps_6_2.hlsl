@@ -109,12 +109,15 @@ cbuffer postprocess : register(b8) {
 SamplerState g_sLinearClamp_internal : register(s6, space1);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
   float4 SV_Target;
   float _21;
   float _22;
@@ -380,14 +383,14 @@ float4 main(
   _85 = 0.0f;
   _86 = -1;
   bool _loop_break_0 = false;
-  while(true) {
+  while (true) {
     _88 = _82;
     _89 = _83;
     _90 = _84;
     _91 = _85;
     _92 = -1;
     bool _loop_break_1 = false;
-    while(true) {
+    while (true) {
       _95 = (floor(_69 * g_vSourceRes.x) + 0.5f) + float((int)(_92));
       _96 = (floor(_70 * g_vSourceRes.y) + 0.5f) + float((int)(_86));
       _104 = (_69 - (_95 / g_vSourceRes.x)) * g_vSourceRes.x;
@@ -507,13 +510,13 @@ float4 main(
       }
       _312 = (g_bEnableHDRLUT == 0);
       if (!(_312 || (!_239))) {
-      #if 1
+#if 1
         float3 graded_color = ApplyVanillaPQLUT(
             float3(_307, _308, _309), g_tBaseColorCorrectionMap, g_sLinearClamp_internal, g_fTonemapSaturation);
         _395 = graded_color.x;
         _396 = graded_color.y;
         _397 = graded_color.z;
-      #else
+#else
         _328 = exp2(log2(saturate(_307 * 0.00800000037997961f)) * 0.1593017578125f);
         _329 = exp2(log2(saturate(_308 * 0.00800000037997961f)) * 0.1593017578125f);
         _330 = exp2(log2(saturate(_309 * 0.00800000037997961f)) * 0.1593017578125f);
@@ -531,7 +534,7 @@ float4 main(
         _395 = (lerp(_384, _380, g_fTonemapSaturation));
         _396 = (lerp(_384, _381, g_fTonemapSaturation));
         _397 = (lerp(_384, _382, g_fTonemapSaturation));
-      #endif
+#endif
       } else {
         _395 = _307;
         _396 = _308;
@@ -547,7 +550,7 @@ float4 main(
 #if 1
               float3 agx_color = ApplyRemedyAgX(
                   _395, _396, _397, _247,
-                  g_fAgxMinEV, g_fAgxMaxEV,
+                  g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
                   g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
                   g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
                   g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
@@ -757,7 +760,10 @@ float4 main(
           _1188 = (_1177 * g_fTonemapBrightness);
           _1189 = (_1178 * g_fTonemapBrightness);
         } while (false);
-        if (_loop_break_1 && !_loop_break_0) { _loop_break_1 = false; continue; }
+        if (_loop_break_1 && !_loop_break_0) {
+          _loop_break_1 = false;
+          continue;
+        }
       } else {
         _1187 = (_395 * _247);
         _1188 = (_396 * _247);
@@ -781,7 +787,8 @@ float4 main(
       if (!(_174)) {
         _1243 = (uint)(int(SV_Position.x)) + (uint)(-96);
         _1244 = (uint)(int(SV_Position.y)) + (uint)(-48);
-        uint2 _1245; g_tBaseColorCorrectionMap.GetDimensions(_1245.x, _1245.y);
+        uint2 _1245;
+        g_tBaseColorCorrectionMap.GetDimensions(_1245.x, _1245.y);
         if (((int)_1244 < (int)int(float((int)((int)(_1245.y))))) && (((int)(_1244 | _1243) > (int)-1) && ((int)_1243 < (int)int(float((int)((int)(_1245.x))))))) {
           _1259 = g_tBaseColorCorrectionMap.Load(int3(_1243, _1244, 0));
           if (_312) {
@@ -812,7 +819,10 @@ float4 main(
               } while (false);
               if (_loop_break_1 && !_loop_break_0) break;
             } while (false);
-            if (_loop_break_1 && !_loop_break_0) { _loop_break_1 = false; continue; }
+            if (_loop_break_1 && !_loop_break_0) {
+              _loop_break_1 = false;
+              continue;
+            }
           } else {
             _1296 = _1259.x;
             _1297 = _1259.y;
@@ -850,7 +860,10 @@ float4 main(
             _1350 = _1298;
           }
         } while (false);
-        if (_loop_break_1 && !_loop_break_0) { _loop_break_1 = false; continue; }
+        if (_loop_break_1 && !_loop_break_0) {
+          _loop_break_1 = false;
+          continue;
+        }
       } else {
         _1348 = _1296;
         _1349 = _1297;
@@ -880,7 +893,10 @@ float4 main(
             _1403 = _1385;
           }
         } while (false);
-        if (_loop_break_1 && !_loop_break_0) { _loop_break_1 = false; continue; }
+        if (_loop_break_1 && !_loop_break_0) {
+          _loop_break_1 = false;
+          continue;
+        }
       } else {
         _1401 = _1348;
         _1402 = _1349;
@@ -892,7 +908,10 @@ float4 main(
       SV_Target.w = 1.0f;
       break;
     }
-    if (_loop_break_0) { _loop_break_0 = false; continue; }
+    if (_loop_break_0) {
+      _loop_break_0 = false;
+      continue;
+    }
     break;
   }
   return SV_Target;
