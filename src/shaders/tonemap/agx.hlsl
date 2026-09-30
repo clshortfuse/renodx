@@ -10,9 +10,9 @@
 // which separates inset rotation from outset/reverse rotation.
 // https://github.com/EaryChow/Blender-AgX-Resolve
 //
-// This implementation assumes scene-linear input and uses normalized log2
-// as the working encoding. The sigmoid input pivot is therefore derived from
-// the encoded position of input_mid_gray rather than exposed independently.
+// The full Apply pipeline assumes scene-linear input and normalized log2
+// encoding. An explicit-pivot tone-scale builder also supports wrappers
+// using another encoding, such as Camera-AgX's LogC3.
 namespace renodx {
 namespace tonemap {
 namespace agx {
@@ -290,7 +290,9 @@ ToneScale BuildToneScale(ToneScaleParameters parameters, float toe_scale, float 
   return tone_scale;
 }
 
-ToneScale BuildToneScale(ToneScaleParameters parameters) {
+// input_pivot is expressed in the caller's encoded input domain.
+// Compute normalization scales using that pivot before evaluating the sigmoid.
+ToneScale BuildToneScale(ToneScaleParameters parameters, float input_pivot) {
   ToneScale tone_scale;
   tone_scale.parameters = parameters;
 
@@ -298,8 +300,7 @@ ToneScale BuildToneScale(ToneScaleParameters parameters) {
   tone_scale.inverse_ev_range = 1.f / ev_range;
   tone_scale.minimum_linear = parameters.input_mid_gray * exp2(parameters.min_ev);
 
-  // Normalized-log position of EV 0 (input_mid_gray).
-  tone_scale.input_pivot = -parameters.min_ev * tone_scale.inverse_ev_range;
+  tone_scale.input_pivot = input_pivot;
 
   tone_scale.inverse_toe_power = 1.f / parameters.toe_power;
   tone_scale.inverse_shoulder_power = 1.f / parameters.shoulder_power;
@@ -325,6 +326,14 @@ ToneScale BuildToneScale(ToneScaleParameters parameters) {
   tone_scale.shoulder_scale = shoulder_extent / shoulder_normalization;
 
   return tone_scale;
+}
+
+// Normalized-log convenience overload for Kraken and Blender-AgX.
+ToneScale BuildToneScale(ToneScaleParameters parameters) {
+  const float ev_range = parameters.max_ev - parameters.min_ev;
+  const float inverse_ev_range = 1.f / ev_range;
+
+  return BuildToneScale(parameters, -parameters.min_ev * inverse_ev_range);
 }
 
 #define AGX_ENCODE_LOG2_GENERATOR(T)                                                           \
