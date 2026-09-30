@@ -22,7 +22,7 @@ struct RemedyAgXParameters {
   float hdr_toe_scale;
   float hdr_shoulder_scale;
 
-  // Linear-domain tangent continuation used by Vanilla+/Enhanced.
+  // Linear-domain tangent continuation used by Vanilla+/Customized.
   float input_pivot_linear;
   float output_pivot_linear;
   float linear_tangent_slope;
