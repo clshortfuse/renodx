@@ -297,7 +297,7 @@ float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters pa
 
   color = ApplyShoulderlessAgXFormation(color, params, TONE_MAP_HIGHLIGHT_COMPRESSION);
 
-  color = renodx::tonemap::SmoothShoulder(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
+  color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
 
   // Preserve Vanilla+'s original outset ordering in the gamma-shaped domain.
   color = renodx::math::SignPow(color, 1.f / params.tone_scale.parameters.output_power);
@@ -354,7 +354,7 @@ float3 ApplyRenoDXEnhancedToneMap(float3 untonemapped, RemedyAgXParameters param
 
   color = ApplyShoulderlessAgXFormation(color, params, TONE_MAP_HIGHLIGHT_COMPRESSION);
 
-  color = renodx::tonemap::SmoothShoulder(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
+  color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
 
   color = mul(agx.outset, color);
 
