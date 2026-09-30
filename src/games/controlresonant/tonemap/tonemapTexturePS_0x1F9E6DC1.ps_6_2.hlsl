@@ -1,4 +1,5 @@
 #include "./tonemap.hlsli"
+#include "../composeSceneAndUICS/composeSceneAndUICS.hlsli"
 
 Texture2D<float4> txBuffer : register(t0);
 
@@ -147,21 +148,21 @@ float4 main(
   _8 = txBuffer.Sample(samplercoherenttxBuffer, float2(TEXCOORD.x, TEXCOORD.y));
   if (!(g_iTonemapper == 0)) {
     if (g_iTonemapper == 2) {
-  #if 1
+#if 1
       float3 agx_color = ApplyRemedyAgX(
-        _8.x, _8.y, _8.z, g_fPaperWhite,
-        g_fAgxMinEV, g_fAgxMaxEV,
-        g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
-        g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
-        g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
-        g_vAgxOutsetRow0, g_vAgxOutsetRow1, g_vAgxOutsetRow2,
-        g_fAgxHDRRatio, g_fAgxHDRMidGrey,
+          _8.x, _8.y, _8.z, g_fPaperWhite,
+          g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
+          g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
+          g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
+          g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
+          g_vAgxOutsetRow0, g_vAgxOutsetRow1, g_vAgxOutsetRow2,
+          g_fAgxHDRRatio, g_fAgxHDRMidGrey,
           g_fAgxHDRToePrecalcConstant, g_fAgxHDRShoulderPrecalcConstant,
           TEXCOORD.xy);
       _689 = agx_color.x;
       _690 = agx_color.y;
       _691 = agx_color.z;
-  #else
+#else
       _48 = max(_8.x, 0.0f);
       _49 = max(_8.y, 0.0f);
       _50 = max(_8.z, 0.0f);
@@ -288,9 +289,10 @@ float4 main(
     _690 = _8.y;
     _691 = _8.z;
   }
-  SV_Target.x = (_689 / g_fSDRBrightnessMultiplier);
-  SV_Target.y = (_690 / g_fSDRBrightnessMultiplier);
-  SV_Target.z = (_691 / g_fSDRBrightnessMultiplier);
+  const float ui_brightness = ConditionalOverrideUIBrightness(g_fSDRBrightnessMultiplier, g_bHDR);
+  SV_Target.x = (_689 / ui_brightness);
+  SV_Target.y = (_690 / ui_brightness);
+  SV_Target.z = (_691 / ui_brightness);
   SV_Target.w = _8.w;
 
   return SV_Target;

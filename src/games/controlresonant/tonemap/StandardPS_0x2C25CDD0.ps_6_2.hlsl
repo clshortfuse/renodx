@@ -1,4 +1,5 @@
 #include "./tonemap.hlsli"
+#include "../composeSceneAndUICS/composeSceneAndUICS.hlsli"
 
 Texture2D<float4> g_tRandomBlueNoiseRGBA : register(t3);
 
@@ -55,7 +56,9 @@ cbuffer shared_tonemap_post : register(b3) {
 cbuffer ManualUpdateCB_DataPS : register(b0) {
   struct {
     float4 Data_PS[2048];
-  } ManualUpdateCB_DataPS_view : packoffset(c000.x);
+  }
+ManualUpdateCB_DataPS_view:
+  packoffset(c000.x);
 
   // Raw views preserve dynamic cbufferLoadLegacy.f32/i32 access.
   float4 ManualUpdateCB_DataPS_raw[2048] : packoffset(c0);
@@ -78,17 +81,20 @@ SamplerState samplercoherenttxBuffer1 : register(s1);
 SamplerState samplercoherenttxBuffer2 : register(s2);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position,
-  linear float4 TEXCOORD : TEXCOORD,
-  linear float4 TEXCOORD_1 : TEXCOORD1,
-  linear float3 TEXCOORD_2 : TEXCOORD2,
-  nointerpolation uint4 TEXCOORD_3 : TEXCOORD3,
-  noperspective float4 TEXCOORD_4 : TEXCOORD4
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float4 TEXCOORD_1: TEXCOORD1,
+    linear float3 TEXCOORD_2: TEXCOORD2,
+    nointerpolation uint4 TEXCOORD_3: TEXCOORD3,
+    noperspective float4 TEXCOORD_4: TEXCOORD4) : SV_Target {
   float4 SV_Target;
   int _25;
   float4 _26;
@@ -365,7 +371,7 @@ float4 main(
 #if 1
                       float3 agx_color = ApplyRemedyAgX(
                           _68.x, _68.y, _68.z, g_fPaperWhite,
-                          g_fAgxMinEV, g_fAgxMaxEV,
+                          g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
                           g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
                           g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
                           g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
@@ -499,9 +505,10 @@ float4 main(
                       }
                     }
                   }
-                  _860 = (_803 / g_fSDRBrightnessMultiplier);
-                  _861 = (_804 / g_fSDRBrightnessMultiplier);
-                  _862 = (_805 / g_fSDRBrightnessMultiplier);
+                  const float ui_brightness = ConditionalOverrideUIBrightness(g_fSDRBrightnessMultiplier, g_bHDR);
+                  _860 = (_803 / ui_brightness);
+                  _861 = (_804 / ui_brightness);
+                  _862 = (_805 / ui_brightness);
                 } while (false);
               } else {
                 if (!(txBufferIsBT2100Encoded == 0)) {

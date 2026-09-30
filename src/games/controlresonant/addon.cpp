@@ -18,64 +18,61 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
 #include "pipeline_layouts.hpp"
 #include "shared.h"
 
 namespace {
 
-#if ENABLE_SLIDERS
 ShaderInjectData shader_injection;
-#endif
+
+constexpr float FALLBACK_PEAK_NITS = 1000.f;
+float peak_nits_default = FALLBACK_PEAK_NITS;
+bool peak_nits_default_initialized = false;
+bool swapchain_is_hdr = false;
+renodx::utils::settings::Setting* tone_map_peak_nits_setting = nullptr;
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
-#if !ENABLE_SLIDERS
-float use_shaders = 1.f;
-float current_use_shaders = -1.f;
-
-void OnPresent(
-    [[maybe_unused]] reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    [[maybe_unused]] const reshade::api::rect* source_rect,
-    [[maybe_unused]] const reshade::api::rect* dest_rect,
-    [[maybe_unused]] uint32_t dirty_rect_count,
-    [[maybe_unused]] const reshade::api::rect* dirty_rects) {
-  if (use_shaders == current_use_shaders) return;
-
-  auto* device = swapchain->get_device();
-  if (device == nullptr) return;
-
-  if (use_shaders != 0.f) {
-    for (const auto& [hash, shader] : custom_shaders) {
-      renodx::utils::shader::AddRuntimeReplacement(device, hash, shader.code);
-    }
-    reshade::log::message(reshade::log::level::info, "[RenoDX] Enabling shaders (toggle)");
-  } else {
-    renodx::utils::shader::RemoveRuntimeReplacements(device);
-    reshade::log::message(reshade::log::level::info, "[RenoDX] Disabling shaders (toggle)");
-  }
-  current_use_shaders = use_shaders;
-}
-#endif  // !ENABLE_SLIDERS
-
 renodx::utils::settings::Settings settings = {
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Game and UI brightness are controlled by the in-game sliders.\n"
-                 "Peak brightness can be set in renderer.ini:\n"
-                 "%LOCALAPPDATA%\\Remedy\\CONTROLResonant\\renderer.ini",
-        .section = "Note",
+    tone_map_peak_nits_setting = new renodx::utils::settings::Setting{
+        .key = "ToneMapPeakNits",
+        .binding = &shader_injection.peak_white_nits,
+        .default_value = FALLBACK_PEAK_NITS,
+        .can_reset = false,
+        .label = "Peak Brightness",
+        .section = "Output",
+        .tooltip = "Sets the value of peak white in nits.\nDefault: detected display peak nits (1000 nits fallback)",
+        .min = 48.f,
+        .max = 10000.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 4.f; },
+        .is_visible = []() { return swapchain_is_hdr; },
+        .is_logarithmic = true,
     },
-#if !ENABLE_SLIDERS
     new renodx::utils::settings::Setting{
-        .binding = &use_shaders,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .label = "Enable Mod",
-        .section = "Options",
-        .on_change = []() { current_use_shaders = -1.f; },
+        .key = "ToneMapGameNits",
+        .binding = &shader_injection.diffuse_white_nits,
+        .default_value = 203.f,
+        .label = "Game Brightness",
+        .section = "Output",
+        .tooltip = "Sets the value of 100% white in nits",
+        .min = 48.f,
+        .max = 500.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_visible = []() { return swapchain_is_hdr; },
     },
-#else
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Output",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_visible = []() { return swapchain_is_hdr; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
@@ -95,7 +92,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls how strongly upper midtones and lower highlights are restrained to prevent harsh, eye-searing brightness while preserving brighter highlight separation.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return shader_injection.tone_map_type == 1.f || shader_injection.tone_map_type == 2.f; },
+        .is_visible = []() { return shader_injection.tone_map_type == 1.f || shader_injection.tone_map_type == 2.f || shader_injection.tone_map_type == 3.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGamutClip",
@@ -252,7 +249,6 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-#endif  // ENABLE_SLIDERS
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
@@ -310,14 +306,42 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
-#if ENABLE_SLIDERS
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
+  if (swapchain == nullptr) return;
+
+  swapchain_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
+
+  if (!swapchain_is_hdr || peak_nits_default_initialized) return;
+  peak_nits_default_initialized = true;
+  const auto detected_peak_nits = renodx::utils::swapchain::GetPeakNits(swapchain);
+  tone_map_peak_nits_setting->can_reset = detected_peak_nits.has_value() && *detected_peak_nits > 0.f;
+  peak_nits_default = (tone_map_peak_nits_setting->can_reset ? *detected_peak_nits : FALLBACK_PEAK_NITS);
+
+  const bool was_using_default = tone_map_peak_nits_setting->GetValue() == tone_map_peak_nits_setting->default_value;
+  tone_map_peak_nits_setting->default_value = peak_nits_default;
+  if (was_using_default) {
+    tone_map_peak_nits_setting->Set(peak_nits_default)->Write();
+  }
+}
+
+void OnPresent(
+    [[maybe_unused]] reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    [[maybe_unused]] const reshade::api::rect* source_rect,
+    [[maybe_unused]] const reshade::api::rect* dest_rect,
+    [[maybe_unused]] uint32_t dirty_rect_count,
+    [[maybe_unused]] const reshade::api::rect* dirty_rects) {
+  OnInitSwapchain(swapchain, false);
+}
+
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
+      {"ToneMapPeakNits", peak_nits_default},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
       {"ToneMapType", 0.f},
       {"ToneMapHighlightCompression", 0.f},
       {"ToneMapGamutClip", 100.f},
-      {"UIVisibility", 1.f},
-      {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -328,11 +352,8 @@ void OnPresetOff() {
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeLUTStrength", 100.f},
-      {"ColorGradeLUTScaling", 0.f},
-      {"FxGrainStrength", 0.f},
   });
 }
-#endif  // ENABLE_SLIDERS
 
 bool initialized = false;
 
@@ -345,6 +366,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto params) {
         if (device->get_api() != reshade::api::device_api::d3d12) return false;
@@ -367,39 +391,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
-#if ENABLE_SLIDERS
 
         renodx::mods::shader::expected_constant_buffer_index = 0;
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
-#else
-        renodx::utils::settings::use_presets = false;
-        renodx::utils::shader::use_replace_async = true;
-#endif
 
         initialized = true;
       }
 
-#if !ENABLE_SLIDERS
-      current_use_shaders = -1.f;
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
-#endif
       break;
     case DLL_PROCESS_DETACH:
-#if !ENABLE_SLIDERS
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-#endif
       reshade::unregister_addon(h_module);
       break;
   }
 
-#if ENABLE_SLIDERS
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-#else
-  renodx::utils::settings::Use(fdw_reason, &settings);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders);
-#endif
 
   return TRUE;
 }

@@ -105,12 +105,15 @@ cbuffer postprocess : register(b7) {
 SamplerState g_sLinearClamp_internal : register(s6, space1);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
   float4 SV_Target;
   float _20;
   float _21;
@@ -401,13 +404,13 @@ float4 main(
   }
   _226 = (g_bEnableHDRLUT == 0);
   if (!(_226 || (!_152))) {
-  #if 1
+#if 1
     float3 graded_color = ApplyVanillaPQLUT(
-      float3(_221, _222, _223), g_tBaseColorCorrectionMap, g_sLinearClamp_internal, g_fTonemapSaturation);
+        float3(_221, _222, _223), g_tBaseColorCorrectionMap, g_sLinearClamp_internal, g_fTonemapSaturation);
     _309 = graded_color.x;
     _310 = graded_color.y;
     _311 = graded_color.z;
-  #else
+#else
     _242 = exp2(log2(saturate(_221 * 0.00800000037997961f)) * 0.1593017578125f);
     _243 = exp2(log2(saturate(_222 * 0.00800000037997961f)) * 0.1593017578125f);
     _244 = exp2(log2(saturate(_223 * 0.00800000037997961f)) * 0.1593017578125f);
@@ -425,7 +428,7 @@ float4 main(
     _309 = (lerp(_298, _294, g_fTonemapSaturation));
     _310 = (lerp(_298, _295, g_fTonemapSaturation));
     _311 = (lerp(_298, _296, g_fTonemapSaturation));
-  #endif
+#endif
   } else {
     _309 = _221;
     _310 = _222;
@@ -444,7 +447,7 @@ float4 main(
 #if 1
           float3 agx_color = ApplyRemedyAgX(
               _317, _318, _319, _161,
-              g_fAgxMinEV, g_fAgxMaxEV,
+              g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
               g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
               g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
               g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
@@ -664,7 +667,8 @@ float4 main(
   if (!(_87)) {
     _1050 = (uint)(int(SV_Position.x)) + (uint)(-96);
     _1051 = (uint)(int(SV_Position.y)) + (uint)(-48);
-    uint2 _1052; g_tBaseColorCorrectionMap.GetDimensions(_1052.x, _1052.y);
+    uint2 _1052;
+    g_tBaseColorCorrectionMap.GetDimensions(_1052.x, _1052.y);
     if (((int)_1051 < (int)int(float((int)((int)(_1052.y))))) && (((int)(_1051 | _1050) > (int)-1) && ((int)_1050 < (int)int(float((int)((int)(_1052.x))))))) {
       _1066 = g_tBaseColorCorrectionMap.Load(int3(_1050, _1051, 0));
       if (_226) {
