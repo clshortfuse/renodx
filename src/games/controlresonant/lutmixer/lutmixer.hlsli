@@ -25,9 +25,9 @@ float3 CompressBT709ColorToXYZ(float3 color_bt709) {
 float3 CompressLUTMixerOutput(float3 color) {
   [branch]
   if (TONE_MAP_TYPE == 2.f) {
-    float3 lms = mul(renodx::tonemap::psychov::PSYCHO30_BT709_TO_LMS_MAT, color);
-    lms = CompressLMSRadial(lms);
-    color = mul(renodx::tonemap::psychov::PSYCHO30_LMS_TO_BT709_MAT, lms);
+    float3 xyz = renodx::color::xyz::from::BT709(color);
+    xyz = CompressXYZRadial(xyz);
+    color = renodx::color::bt709::from::XYZ(xyz);
   } else if (TONE_MAP_TYPE == 3.f) {
     float3 lms = mul(renodx::tonemap::psychov::PSYCHO30_BT709_TO_LMS_MAT, color);
     lms = CompressLMSRadial(lms);

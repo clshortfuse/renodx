@@ -7,39 +7,6 @@ float ConditionalOverrideGameBrightness(float original_paper_white, int hdr_enab
              : shader_injection.diffuse_white_nits / 80.f;
 }
 
-float3 ApplyEnhancedMeanA2Hue(
-    float3 source_bt709,
-    float3 pre_shoulder_bt2020,
-    float3 response_bt2020,
-    RemedyAgXParameters params,
-    float shadow_source_weight = 1.f,
-    float mid_gray_source_weight = 0.5f,
-    float highlight_source_weight = 0.f) {
-  const float3 source_lms = mul(renodx::tonemap::psychov::PSYCHO30_BT709_TO_LMS_MAT, source_bt709);
-  const float3 pre_shoulder_lms = mul(renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT, pre_shoulder_bt2020);
-  const float3 response_lms = mul(renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT, response_bt2020);
-
-  const float3 source_anchor_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS * params.input_pivot_linear;
-  const float3 target_peak_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS * params.hdr_ratio;
-
-  const float3 source_q = source_lms / source_anchor_lms;
-  const float3 response_u = response_lms / target_peak_lms;
-
-  const float source_weight = renodx::tonemap::psychov::custom_psycho31_ShoulderMeanA2Weight(
-      abs(source_q), pre_shoulder_lms, response_lms, shadow_source_weight, mid_gray_source_weight, highlight_source_weight);
-
-  float unused_response_yf;
-  uint valid;
-  const float3 response_coord = renodx::tonemap::psychov::custom_psycho31_MeanA2Response(
-      source_q, response_u, source_weight, unused_response_yf, valid);
-
-  if (valid == 0u) return response_bt2020;
-
-  const float3 corrected_lms = renodx::tonemap::psychov::psycho31_LMSFromTest30Coord(response_coord, params.hdr_ratio);
-
-  return mul(renodx::tonemap::psychov::PSYCHO30_LMS_TO_BT2020_MAT, corrected_lms);
-}
-
 float3 CInfinityTransition(float3 position) {
   position = saturate(position);
   return rcp(1.f + exp2((1.f - 2.f * position) / (position * (1.f - position))));
@@ -400,6 +367,7 @@ float3 ApplyRenoDXEnhancedToneMap(float3 untonemapped, RemedyAgXParameters param
       RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
       RENODX_TONE_MAP_DECHROMA);
 
+  color = FixNegativeLuminanceBT2020(color);
   color = CompressBT2020Radial(color);
   color = max(color, 0.f);
 
@@ -468,16 +436,21 @@ float3 ApplyRenoDXPsychoVToneMap(
 
   float response_yf;
   uint response_valid;
-  const float3 desired_coord = renodx::tonemap::psychov::custom_psycho31_MeanA2Response(
+  float3 desired_coord = renodx::tonemap::psychov::custom_psycho31_MeanA2Response(
       source_q, response_u, mean_a2_weight, response_yf, response_valid);
   if (response_valid == 0u) return 0.f;
+
+  float3 desired_lms = renodx::tonemap::psychov::psycho31_LMSFromTest30Coord(desired_coord, hdr_ratio);
+  desired_lms = FixNegativeLuminanceLMS(desired_lms);
+  desired_coord = renodx::tonemap::psychov::psycho31_Test30CoordFromLMS(desired_lms, hdr_ratio);
+  response_yf = renodx::tonemap::psychov::psycho31_YfFromTest30Coord(desired_coord);
 
   static const int TARGET_GAMUT = renodx::tonemap::psychov::CUSTOM_PSYCHO31_TARGET_GAMUT_BT2020;
   const float normalized_demand = renodx::tonemap::psychov::custom_psycho31_NormalizedL8TargetDemand(
       desired_coord, response_yf, TARGET_GAMUT);
+
   const float3 mapped_coord = renodx::tonemap::psychov::custom_psycho31_MapL8TargetDemand(
       desired_coord, response_yf, TARGET_GAMUT, normalized_demand);
-  if (any(isnan(mapped_coord)) || any(isinf(mapped_coord))) return 0.f;
 
   const float3 output_lms = renodx::tonemap::psychov::psycho31_LMSFromTest30Coord(mapped_coord, hdr_ratio);
   const float3 output_bt709 = mul(renodx::tonemap::psychov::PSYCHO30_LMS_TO_BT709_MAT, output_lms);
