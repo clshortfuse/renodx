@@ -4,7 +4,7 @@
 float ConditionalOverrideGameBrightness(float original_paper_white, int hdr_enabled) {
   return (hdr_enabled == 0 || TONE_MAP_TYPE == 0.f)
              ? original_paper_white
-             : shader_injection.diffuse_white_nits / 80.f;
+             : RENODX_DIFFUSE_WHITE_NITS / 80.f;
 }
 
 float3 CInfinityTransition(float3 position) {
@@ -498,8 +498,8 @@ float3 ApplyRemedyAgX(
     float2 texcoord) {
   [branch]
   if (g_bHDR != 0 && TONE_MAP_TYPE != 0.f) {
-    paper_white = shader_injection.diffuse_white_nits / 80.f;
-    g_fAgxHDRRatio = shader_injection.peak_white_nits / shader_injection.diffuse_white_nits;
+    paper_white = RENODX_DIFFUSE_WHITE_NITS / 80.f;
+    g_fAgxHDRRatio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   }
 
   const float3 untonemapped = float3(input_r, input_g, input_b);
