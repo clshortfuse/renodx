@@ -174,7 +174,7 @@ float3 RejectNonPositiveBT709Luminance(float3 color) {
              : color;
 }
 
-// Shared Remedy AgX toe + tangent formation used by Vanilla+, Enhanced, and PsychoV.
+// Shared Remedy AgX toe + tangent formation used by Vanilla+, Customized, and PsychoV.
 struct RemedyExtendedAgXParameters {
   float min_log2_linear;
   float inverse_ev_range;
@@ -272,7 +272,7 @@ float3 ApplyShoulderlessAgXFormation(float3 linear_input, RemedyAgXParameters pa
 //
 // 0: Vanilla
 // 1: RenoDX (Vanilla+)
-// 2: RenoDX (Enhanced)
+// 2: RenoDX (Customized)
 // 3: RenoDX (PsychoV)
 // 4: SDR
 // -----------------------------------------------------------------------------
@@ -320,7 +320,7 @@ float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters pa
   return renodx::color::bt709::from::BT2020(color);
 }
 
-float3 ApplyRenoDXEnhancedToneMap(float3 untonemapped, RemedyAgXParameters params) {
+float3 ApplyRenoDXCustomizedToneMap(float3 untonemapped, RemedyAgXParameters params) {
   untonemapped = RejectNonPositiveBT709Luminance(untonemapped);
   float3 color = renodx::color::bt2020::from::BT709(untonemapped);
 
@@ -542,8 +542,8 @@ float3 ApplyRemedyAgX(
       output_color = ApplyVanillaToneMap(untonemapped, params);
     } else if (TONE_MAP_TYPE == 1.f) {  // RenoDX (Vanilla+)
       output_color = ApplyRenoDXVanillaPlusToneMap(untonemapped, params);
-    } else if (TONE_MAP_TYPE == 2.f) {  // RenoDX (Enhanced)
-      output_color = ApplyRenoDXEnhancedToneMap(untonemapped, params);
+    } else if (TONE_MAP_TYPE == 2.f) {  // RenoDX (Customized)
+      output_color = ApplyRenoDXCustomizedToneMap(untonemapped, params);
     } else {  // SDR
       output_color = ApplySDRToneMap(untonemapped, params);
     }
