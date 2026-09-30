@@ -377,16 +377,27 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
         if (device->get_api() != reshade::api::device_api::d3d12) return false;
-        if (DIAGNOSTIC_SKIP_THREE_PARAM_LAYOUTS && params.size() == 3u) {
-          control_resonant::pipeline_layouts::LogDiagnosticLayout(device, params);
+
+        if (control_resonant::pipeline_layouts::DIAGNOSTIC_SKIP_THREE_PARAM_LAYOUTS && params.size() == 3u) {
+          control_resonant::pipeline_layouts::LogSkippedLayout(device, params, "diagnostic three-parameter exclusion");
           return false;
         }
-        return control_resonant::pipeline_layouts::ShouldInjectPipelineLayout(params);
+
+        if (!control_resonant::pipeline_layouts::ShouldInjectPipelineLayout(params)) {
+          control_resonant::pipeline_layouts::LogSkippedLayout(
+              device, params,
+              (control_resonant::pipeline_layouts::HasAccelerationStructure(params)
+                   ? "acceleration structure"
+                   : "captured RT-related signature"));
+          return false;
+        }
+        return true;
       };
 
-      if (DIAGNOSTIC_SKIP_THREE_PARAM_LAYOUTS) {
-        reshade::log::message(reshade::log::level::info,
-                              "[RenoDX CONTROL] Diagnostic original 3-param exclusion enabled (creation only).");
+      if (control_resonant::pipeline_layouts::DIAGNOSTIC_SKIP_THREE_PARAM_LAYOUTS) {
+        reshade::log::message(
+            reshade::log::level::info,
+            "[RenoDX CONTROL] Diagnostic original 3-param exclusion enabled (creation only).");
       }
 
       if (!initialized) {
