@@ -1298,6 +1298,15 @@ float3 custom_psycho31_MeanA2Response(
       authored_dt.y);
 }
 
+float3 psycho31_Test30CoordFromLMS(float3 lms, float peak_value) {
+  const float3 normalized_lms = lms / (PSYCHO30_D65_WHITE_LMS * peak_value);
+
+  return float3(
+      normalized_lms.x - normalized_lms.y,
+      normalized_lms.x + normalized_lms.y + normalized_lms.z,
+      2.f * normalized_lms.z - normalized_lms.x - normalized_lms.y);
+}
+
 // Dimensionless radial demand against the target's fixed-Yf L8 boundary.
 float custom_psycho31_NormalizedL8TargetDemand(
     float3 coord,
