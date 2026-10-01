@@ -1219,6 +1219,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberTonemapLinearOnDraw(0x7404F723),
     UberTonemapLinearOnDraw(0x8331BEFC),
     UberTonemapLinearOnDraw(0x8613B876),
+    UberTonemapLinearOnDraw(0x9444BC8B),
     UberTonemapLinearOnDraw(0x19130C81),
     UberTonemapGammaOnDraw(0x179468F9), // no LUT
     UberTonemapLinearOnDraw(0x28721650),
@@ -1257,6 +1258,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberTonemapLinearOnDraw(0x00C855E4),
     UberTonemapLinearOnDraw(0x0E5920D0),
     UberTonemapLinearOnDraw(0x54CAE2A0),
+    UberTonemapLinearOnDraw(0x55F37016),
     UberTonemapLinearOnDraw(0xC06DEF33),
     UberTonemapLinearOnDraw(0x59762D4A),
     UberTonemapLinearOnDraw(0x5F655887),
@@ -2428,6 +2430,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x5D490E8A, &CountLinear),
     CustomShaderEntryCallback(0x3715DB93, &CountLinear),
     CustomShaderEntryCallback(0x04960CEC, &CountLinear),
+    CustomShaderEntryCallback(0xADDB01CD, &CountLinear),
     CustomShaderEntryCallback(0xFC5C534E, &CountLinear),
     CustomShaderEntryCallback(0x1EE4CF1C, &CountLinear),
     CustomShaderEntryCallback(0x49B47E38, &CountLinear),
