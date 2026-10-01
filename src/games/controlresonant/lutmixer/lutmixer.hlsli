@@ -25,13 +25,18 @@ float3 CompressBT709ColorToXYZ(float3 color_bt709) {
 float3 CompressLUTMixerOutput(float3 color) {
   [branch]
   if (TONE_MAP_TYPE == 2.f) {
-    float3 xyz = renodx::color::xyz::from::BT709(color);
-    xyz = CompressXYZRadial(xyz);
-    color = renodx::color::bt709::from::XYZ(xyz);
+    color = mul(renodx::color::BT709_TO_BT2020_MAT, color);
+    color = mul(BT2020_TO_CUSTOM_PRIMARIES_MAT, color);
+
+    color = CompressCustomPrimariesRadial(color);
+
+    color = mul(CUSTOM_PRIMARIES_TO_BT2020_MAT, color);
+    color = mul(renodx::color::BT2020_TO_BT709_MAT, color);
   } else if (TONE_MAP_TYPE == 3.f) {
     float3 lms = mul(renodx::tonemap::psychov::PSYCHO30_BT709_TO_LMS_MAT, color);
     lms = CompressLMSRadial(lms);
     color = mul(renodx::tonemap::psychov::PSYCHO30_LMS_TO_BT709_MAT, lms);
   }
+
   return color;
 }

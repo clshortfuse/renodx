@@ -2316,6 +2316,39 @@ float3 CompressBT2020Radial(float3 color) {
   return mad(radial_rgb, mapped_demand / normalized_demand, yf);
 }
 
+// float3 CompressBT2020Radial(float3 color, float fit_strength = 1.f) {
+//   static const float3 BT2020_TO_NORMALIZED_YF =
+//       renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_L * renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT[0]
+//           / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS.x
+//       + renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_M * renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT[1]
+//             / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS.y;
+
+//   const float3 lower_rgb = max(-color, 0.f);
+//   const float lower_scale = renodx::math::Max(lower_rgb);
+
+//   if (lower_scale == 0.f) {
+//     return color;
+//   }
+
+//   const float3 clipped = max(color, 0.f);
+//   const float yf = dot(BT2020_TO_NORMALIZED_YF, color);
+
+//   if (yf <= 0.f) {
+//     return clipped;
+//   }
+
+//   float3 normalized_lower = lower_rgb / lower_scale;
+//   normalized_lower *= normalized_lower;
+//   normalized_lower *= normalized_lower;
+
+//   const float lower_norm = lower_scale * sqrt(sqrt(sqrt(dot(normalized_lower, normalized_lower))));
+//   const float radial_scale = rcp(1.f + lower_norm / yf);
+
+//   const float3 fitted = mad(color - yf, radial_scale, yf);
+
+//   return lerp(clipped, fitted, fit_strength);
+// }
+
 float3 CompressXYZRadial(float3 xyz) {
   const float3 d65_xyz = renodx::color::xyz::from::xyY(float3(renodx::color::WHITE_POINT_D65, 1.f));
 
