@@ -354,10 +354,6 @@ class Shared {
     auto* event = internal::FindEvent(*module, ev, reinterpret_cast<void*>(callback));
     if (event == nullptr) return;
 
-    if (event->reshade_registered) {
-      event->unregister_reshade(event->callback);
-      event->reshade_registered = false;
-    }
     event->active = false;
     internal::SyncReshadeEvents(*control);
   }

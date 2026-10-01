@@ -1017,21 +1017,16 @@ static void UnregisterOnInitCallback(InitCallback callback) {
 static void UnregisterOnCreateCallback(CreateCallback callback) {
   internal::shared.UnregisterCallback(&internal::SharedData::on_create_callbacks, callback);
   std::erase(local_create_callbacks, callback);
-  internal::shared.RegisterEvent<reshade::addon_event::create_pipeline>(OnCreatePipeline, !local_create_callbacks.empty());
 }
 
 static void UnregisterOnBindCallback(BindCallback callback) {
   internal::shared.UnregisterCallback(&internal::SharedData::on_bind_callbacks, callback);
   std::erase(local_bind_callbacks, callback);
-  internal::shared.RegisterEvent<reshade::addon_event::bind_pipeline>(
-      OnBindPipeline, !local_bind_callbacks.empty() || !local_bind_info_callbacks.empty());
 }
 
 static void UnregisterOnBindInfoCallback(BindInfoCallback callback) {
   internal::shared.UnregisterCallback(&internal::SharedData::on_bind_pipeline_info_callbacks, callback);
   std::erase(local_bind_info_callbacks, callback);
-  internal::shared.RegisterEvent<reshade::addon_event::bind_pipeline>(
-      OnBindPipeline, !local_bind_callbacks.empty() || !local_bind_info_callbacks.empty());
 }
 
 static void UnregisterOnDestroyCallback(DestroyCallback callback) {
