@@ -149,25 +149,6 @@ float3 ApplyAnchoredSaturationGrading(
   return lerp(dot(color, luminance_weights).xxx, color, effective_saturation);
 }
 
-// Vanilla 48-cube packed LUT: PQ-shaped input coordinates, sampled output used directly.
-float3 SampleVanillaPQLUT(float3 color, Texture2D<float4> g_tBaseColorCorrectionMap, SamplerState g_sLinearClamp_internal) {
-  color = renodx::color::pq::EncodeSafe(color, 80.f);
-  return renodx::lut::Sample(g_tBaseColorCorrectionMap, g_sLinearClamp_internal, color, 48.f);
-}
-
-float3 ApplyVanillaPQLUT(float3 color, Texture2D<float4> g_tBaseColorCorrectionMap, SamplerState g_sLinearClamp_internal, float g_fTonemapSaturation) {
-  [branch]
-  if (COLOR_GRADE_LUT_STRENGTH == 0.f) {
-    return color;
-  }
-
-  float3 lutted = SampleVanillaPQLUT(color, g_tBaseColorCorrectionMap, g_sLinearClamp_internal);
-  float grayscale = renodx::color::y::from::BT709(lutted);
-  lutted = lerp(grayscale, lutted, g_fTonemapSaturation);
-
-  return lerp(color, lutted, COLOR_GRADE_LUT_STRENGTH);
-}
-
 float3 RejectNonPositiveBT709Luminance(float3 color) {
   return renodx::color::yf::from::BT709(color) <= 0.f
              ? 0.f
@@ -324,39 +305,17 @@ float3 ApplyRenoDXCustomizedToneMap(float3 untonemapped, RemedyAgXParameters par
   untonemapped = RejectNonPositiveBT709Luminance(untonemapped);
   float3 color = renodx::color::bt2020::from::BT709(untonemapped);
 
-  renodx::tonemap::agx::GamutParameters agx_parameters;
-
-  // Vanilla: float3(0.05f, 0.05f, 0.05f)
-  agx_parameters.attenuation = float3(
-      0.05f,
-      0.32f,
-      0.24f);
-
-  // Vanilla: float3(0.f, 0.f, 0.f)
-  agx_parameters.inset_hue_flight = float3(
-      5.5f,
-      -25.f,
-      -6.f);
-
-  // Vanilla: float3(0.2f, 0.2f, 0.2f)
-  agx_parameters.purity = float3(
-      0.42f,
-      0.32f,
-      0.24f);
-
-  agx_parameters.outset_hue_flight = agx_parameters.inset_hue_flight;
-
-  const renodx::tonemap::agx::GamutTransforms agx =
-      renodx::tonemap::agx::BuildGamutTransforms(renodx::color::BT2020_TO_XYZ_MAT, agx_parameters);
-
-  color = mul(agx.inset, color);
+  color = mul(BT2020_TO_CUSTOM_PRIMARIES_MAT, color);
   color = max(0.f, color);
 
   color = ApplyShoulderlessAgXFormation(color, params, TONE_MAP_HIGHLIGHT_COMPRESSION);
 
   color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
 
-  color = mul(agx.outset, color);
+  const float neutral = dot(color, CUSTOM_PRIMARIES_NEUTRAL_WEIGHTS);
+  color = lerp(neutral, color, 1.1875f);
+
+  color = mul(CUSTOM_PRIMARIES_TO_BT2020_MAT, color);
 
   color = ApplyAnchoredSaturationGrading(
       color,
@@ -369,7 +328,6 @@ float3 ApplyRenoDXCustomizedToneMap(float3 untonemapped, RemedyAgXParameters par
 
   color = FixNegativeLuminanceBT2020(color);
   color = CompressBT2020Radial(color);
-  color = max(color, 0.f);
 
   return renodx::color::bt709::from::BT2020(color);
 }
@@ -472,6 +430,7 @@ float3 ApplySDRToneMap(float3 untonemapped, RemedyAgXParameters params) {
 // Entry
 // -----------------------------------------------------------------------------
 
+// Callers select paper white upstream so post-tonemap effects use the same brightness.
 float3 ApplyRemedyAgX(
     float input_r,
     float input_g,
@@ -495,10 +454,10 @@ float3 ApplyRemedyAgX(
     float g_fAgxHDRMidGrey,
     float g_fAgxHDRToePrecalcConstant,
     float g_fAgxHDRShoulderPrecalcConstant,
-    float2 texcoord) {
+    float2 texcoord,
+    float g_fAgxHDRSaturation = 0.f) {
   [branch]
   if (g_bHDR != 0 && TONE_MAP_TYPE != 0.f) {
-    paper_white = RENODX_DIFFUSE_WHITE_NITS / 80.f;
     g_fAgxHDRRatio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   }
 
@@ -535,7 +494,8 @@ float3 ApplyRemedyAgX(
             g_fAgxHDRRatio,
             g_fAgxHDRMidGrey,
             g_fAgxHDRToePrecalcConstant,
-            g_fAgxHDRShoulderPrecalcConstant);
+            g_fAgxHDRShoulderPrecalcConstant,
+            g_fAgxHDRSaturation);
 
     [branch]
     if (TONE_MAP_TYPE == 0.f) {  // Vanilla

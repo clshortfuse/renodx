@@ -207,15 +207,15 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 4.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeLUTStrength",
-        .binding = &shader_injection.color_grade_lut_strength,
-        .default_value = 100.f,
-        .label = "Color Grade Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ColorGradeLUTStrength",
+    //     .binding = &shader_injection.color_grade_lut_strength,
+    //     .default_value = 100.f,
+    //     .label = "Color Grade Strength",
+    //     .section = "Color Grading",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.01f; },
+    // },
     // new renodx::utils::settings::Setting{
     //     .key = "ColorGradeLUTScaling",
     //     .binding = &shader_injection.color_grade_lut_scaling,
@@ -351,7 +351,6 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradeLUTStrength", 100.f},
   });
 }
 

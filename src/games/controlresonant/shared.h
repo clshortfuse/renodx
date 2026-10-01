@@ -21,7 +21,6 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_dechroma;
   float tone_map_flare;
-  float color_grade_lut_strength;
 
   float tone_map_gamut_clip;
 };
@@ -48,7 +47,6 @@ cbuffer shader_injection : register(b0, space50) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-#define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
 
 #include "../../shaders/renodx.hlsl"
 
