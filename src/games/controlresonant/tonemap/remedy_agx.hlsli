@@ -21,6 +21,7 @@ struct RemedyAgXParameters {
   float hdr_mid_gray;
   float hdr_toe_scale;
   float hdr_shoulder_scale;
+  float hdr_saturation;
 
   // Linear-domain tangent continuation used by Vanilla+/Customized.
   float input_pivot_linear;
@@ -45,7 +46,8 @@ RemedyAgXParameters CreateRemedyAgXParameters(
     float hdr_ratio,
     float hdr_mid_gray,
     float hdr_toe_scale,
-    float hdr_shoulder_scale) {
+    float hdr_shoulder_scale,
+    float hdr_saturation) {
   RemedyAgXParameters params;
 
   const float mid_gray_log2 = log2(REMEDY_AGX_MID_GRAY);
@@ -74,6 +76,7 @@ RemedyAgXParameters CreateRemedyAgXParameters(
   params.hdr_mid_gray = hdr_mid_gray;
   params.hdr_toe_scale = hdr_toe_scale;
   params.hdr_shoulder_scale = hdr_shoulder_scale;
+  params.hdr_saturation = hdr_saturation;
 
   // Linear-light input value at Remedy's fixed normalized-log pivot.
   // This evaluates to 18% for the game's standard log bounds.
@@ -145,24 +148,35 @@ float3 ApplyVanillaHDRExpansion(float3 color, RemedyAgXParameters params) {
 
   const float max_ev = log2(1.f / params.hdr_mid_gray);
   const float ev_range = max_ev + HDR_TOE_STOPS;
+  const float log_hdr_ratio = log2(params.hdr_ratio);
   const float3 relative_ev = min(max(log2(max(color, 1e-12f) / params.hdr_mid_gray), -HDR_TOE_STOPS), max_ev);
+  const float3 log_color = (relative_ev + HDR_TOE_STOPS) / ev_range;
+  const float max_log_color = renodx::math::Max(log_color);
 
   const float hdr_input_pivot = HDR_TOE_STOPS / ev_range;
-  const float hdr_output_pivot = (HDR_TOE_STOPS - log2(params.hdr_ratio)) / ev_range;
+  const float hdr_output_pivot = (HDR_TOE_STOPS - log_hdr_ratio) / ev_range;
 
-  const float3 hdr_shoulder = ((relative_ev / ev_range) * HDR_SLOPE) / params.hdr_shoulder_scale;
-  const float3 hdr_toe = (-relative_ev / ev_range) * (HDR_SLOPE / params.hdr_toe_scale);
+  const float hdr_shoulder = ((max_log_color - hdr_input_pivot) * HDR_SLOPE) / params.hdr_shoulder_scale;
+  const float hdr_toe = (HDR_SLOPE / params.hdr_toe_scale) * (hdr_input_pivot - max_log_color);
 
-  color = ApplyRemedyAgXSigmoid(
-      hdr_shoulder,
-      hdr_toe,
-      ((relative_ev + HDR_TOE_STOPS) / ev_range) >= hdr_input_pivot,
-      HDR_SHOULDER_POWER,
-      HDR_TOE_POWER,
-      params.hdr_shoulder_scale,
-      params.hdr_toe_scale);
+  const float mapped_max =
+      ApplyRemedyAgXSigmoid(
+          hdr_shoulder.xxx,
+          hdr_toe.xxx,
+          max_log_color >= hdr_input_pivot,
+          HDR_SHOULDER_POWER,
+          HDR_TOE_POWER,
+          params.hdr_shoulder_scale,
+          params.hdr_toe_scale)
+          .x
+      + hdr_output_pivot;
 
-  return saturate(exp2(((color + hdr_output_pivot) * ev_range) - HDR_TOE_STOPS) * params.hdr_mid_gray) * params.hdr_ratio;
+  const float saturation_scale = exp2(((mapped_max - max_log_color) * ev_range + log_hdr_ratio) * params.hdr_saturation);
+
+  color = exp2((mapped_max + saturation_scale * (log_color - max_log_color)) * ev_range - HDR_TOE_STOPS)
+          * params.hdr_mid_gray;
+
+  return saturate(color) * params.hdr_ratio;
 }
 
 #endif  // RENODX_GAMES_CONTROLRESONANT_REMEDY_AGX_HLSLI_
