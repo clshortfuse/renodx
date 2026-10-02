@@ -2283,9 +2283,11 @@ float3 psychotm_test31(
 }  // namespace tonemap
 }  // namespace renodx
 
-// Linear BT.2020, lower gamut boundary only: preserve positive Yf without a peak ceiling.
+// Linear BT.2020, lower gamut boundary only: preserve positive Yf at all strengths, without a peak ceiling.
 // Compression depends on chromaticity, not exposure or paper-white scaling.
-float3 CompressBT2020Radial(float3 color) {
+// fit_strength: 0 = Yf-matched lower-clipped RGB, 1 = full radial fit; intermediate values blend the two.
+// norm_power >= 1: higher values round corners less; 8 retains the original norm.
+float3 CompressBT2020Radial(float3 color, float fit_strength = 1.f, float norm_power = 8.f) {
   static const float3 BT2020_TO_NORMALIZED_YF =
       renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_L * renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT[0]
           / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS.x
@@ -2295,59 +2297,42 @@ float3 CompressBT2020Radial(float3 color) {
   const float yf = dot(BT2020_TO_NORMALIZED_YF, color);
   if (yf <= 0.f) return 0.f;
 
+  float3 clipped = 0.f;
+  if (fit_strength != 1.f) {
+    clipped = max(color, 0.f);
+    clipped *= yf / dot(BT2020_TO_NORMALIZED_YF, clipped);
+    if (fit_strength == 0.f) return clipped;
+  }
+
   const float3 radial_rgb = color - yf;
   const float3 lower_rgb = max(-radial_rgb, 0.f);
   const float lower_scale = renodx::math::Max(lower_rgb);
   if (lower_scale == 0.f) return color;
 
-  // Stable L8 norm. yf cancels out during max normalization, so only divide
+  // Stable norm. yf cancels out during max normalization, so only divide
   // the final lower-bound magnitude by yf.
   float3 normalized_lower = lower_rgb / lower_scale;
-  normalized_lower *= normalized_lower;
-  normalized_lower *= normalized_lower;
+  float lower_norm;
+  if (norm_power == 8.f) {
+    normalized_lower *= normalized_lower;
+    normalized_lower *= normalized_lower;
+    lower_norm = lower_scale * sqrt(sqrt(sqrt(dot(normalized_lower, normalized_lower))));
+  } else {
+    const float3 powers = pow(normalized_lower, norm_power);
+    lower_norm = lower_scale * pow(powers.x + powers.y + powers.z, rcp(norm_power));
+  }
 
-  const float lower_norm = lower_scale * sqrt(sqrt(sqrt(dot(normalized_lower, normalized_lower))));
   const float normalized_demand = lower_norm / yf;
 
   const float mapped_demand = renodx::tonemap::psychov::custom_psycho31_SmoothUnitLimit(
       normalized_demand,
       renodx::tonemap::psychov::CUSTOM_PSYCHO31_SMOOTH_LIMIT_SHARPNESS);
 
-  return mad(radial_rgb, mapped_demand / normalized_demand, yf);
+  const float3 fitted = mad(radial_rgb, mapped_demand / normalized_demand, yf);
+  if (fit_strength == 1.f) return fitted;
+
+  return lerp(clipped, fitted, fit_strength);
 }
-
-// float3 CompressBT2020Radial(float3 color, float fit_strength = 1.f) {
-//   static const float3 BT2020_TO_NORMALIZED_YF =
-//       renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_L * renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT[0]
-//           / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS.x
-//       + renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_M * renodx::tonemap::psychov::PSYCHO30_BT2020_TO_LMS_MAT[1]
-//             / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS.y;
-
-//   const float3 lower_rgb = max(-color, 0.f);
-//   const float lower_scale = renodx::math::Max(lower_rgb);
-
-//   if (lower_scale == 0.f) {
-//     return color;
-//   }
-
-//   const float3 clipped = max(color, 0.f);
-//   const float yf = dot(BT2020_TO_NORMALIZED_YF, color);
-
-//   if (yf <= 0.f) {
-//     return clipped;
-//   }
-
-//   float3 normalized_lower = lower_rgb / lower_scale;
-//   normalized_lower *= normalized_lower;
-//   normalized_lower *= normalized_lower;
-
-//   const float lower_norm = lower_scale * sqrt(sqrt(sqrt(dot(normalized_lower, normalized_lower))));
-//   const float radial_scale = rcp(1.f + lower_norm / yf);
-
-//   const float3 fitted = mad(color - yf, radial_scale, yf);
-
-//   return lerp(clipped, fitted, fit_strength);
-// }
 
 float3 CompressXYZRadial(float3 xyz) {
   const float3 d65_xyz = renodx::color::xyz::from::xyY(float3(renodx::color::WHITE_POINT_D65, 1.f));
