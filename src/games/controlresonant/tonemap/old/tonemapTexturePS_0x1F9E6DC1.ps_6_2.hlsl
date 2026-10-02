@@ -1,5 +1,5 @@
 #include "../tonemap.hlsli"
-#include "../../composeSceneAndUICS/composeSceneAndUICS.hlsli"
+#include "../../UI/UI.hlsli"
 
 Texture2D<float4> txBuffer : register(t0);
 

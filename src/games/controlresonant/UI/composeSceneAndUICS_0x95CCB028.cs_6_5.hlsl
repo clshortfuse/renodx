@@ -1,3 +1,5 @@
+#include "./UI.hlsli"
+
 Texture2D<float4> g_tFillSource : register(t0);
 
 Texture2D<float4> g_tColorGradingLUT : register(t1);

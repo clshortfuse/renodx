@@ -1,5 +1,5 @@
 #include "./tonemap.hlsli"
-#include "../composeSceneAndUICS/composeSceneAndUICS.hlsli"
+#include "../UI/UI.hlsli"
 
 Texture2D<float4> txBuffer : register(t0);
 
@@ -51,13 +51,16 @@ cbuffer shared_tonemap_post : register(b2) {
 SamplerState samplercoherenttxBuffer : register(s0);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float2 TEXCOORD: TEXCOORD) : SV_Target {
   float4 SV_Target;
   float4 _8;
   float _353;
@@ -143,21 +146,21 @@ float4 main(
   _8 = txBuffer.Sample(samplercoherenttxBuffer, float2(TEXCOORD.x, TEXCOORD.y));
   if (!(g_iTonemapper == 0)) {
     if (g_iTonemapper == 2) {
-  #if 1
+#if 1
       float3 agx_color = ApplyRemedyAgX(
-        _8.x, _8.y, _8.z, ConditionalOverrideGameBrightness(g_fPaperWhite, g_bHDR),
-        g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
-        g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
-        g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
-        g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
-        g_vAgxOutsetRow0, g_vAgxOutsetRow1, g_vAgxOutsetRow2,
-        g_fAgxHDRRatio, g_fAgxHDRMidGrey,
-        g_fAgxHDRToePrecalcConstant, g_fAgxHDRShoulderPrecalcConstant,
-        TEXCOORD.xy, g_fAgxHDRSaturation);
+          _8.x, _8.y, _8.z, ConditionalOverrideGameBrightness(g_fPaperWhite, g_bHDR),
+          g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
+          g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
+          g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
+          g_vAgxInsetRow0, g_vAgxInsetRow1, g_vAgxInsetRow2,
+          g_vAgxOutsetRow0, g_vAgxOutsetRow1, g_vAgxOutsetRow2,
+          g_fAgxHDRRatio, g_fAgxHDRMidGrey,
+          g_fAgxHDRToePrecalcConstant, g_fAgxHDRShoulderPrecalcConstant,
+          TEXCOORD.xy, g_fAgxHDRSaturation);
       _623 = agx_color.x;
       _624 = agx_color.y;
       _625 = agx_color.z;
-  #else
+#else
       _48 = max(_8.x, 0.0f);
       _49 = max(_8.y, 0.0f);
       _50 = max(_8.z, 0.0f);
