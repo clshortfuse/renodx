@@ -1,5 +1,5 @@
 #include "../tonemap.hlsli"
-#include "../../composeSceneAndUICS/composeSceneAndUICS.hlsli"
+#include "../../UI/UI.hlsli"
 
 Texture2D<float4> g_tRandomBlueNoiseRGBA : register(t3);
 
@@ -336,6 +336,7 @@ float4 main(
             _67 = min(max(TEXCOORD_1.y, _50.y), (_50.y + _50.w));
           }
           _68 = txBuffer.Sample(samplercoherenttxBuffer, float2(_66, _67));
+          const float ui_brightness = ConditionalOverrideUIBrightness(g_fSDRBrightnessMultiplier, g_bHDR);
           do {
             if (!(txBufferIsUserBackground == 0)) {
               _79 = (g_bHDR == 0);
@@ -349,8 +350,8 @@ float4 main(
                   _97 = mad(1.118751049041748f, _68.z, mad(-0.10059737414121628f, _68.y, (_68.x * -0.018153680488467216f)));
                 }
                 if (!(_79)) {
-                  _104 = max((dot(float3(_95, _96, _97), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f)) / (g_fSDRBrightnessMultiplier * 0.3940886855125427f)), 0.0f);
-                  _119 = ((1.0f - (1.0f / (fUIHDRBackdropBackgroundDarkeningStrength + 1.0f))) * ((select((!(_104 == 0.0f)), (1.0f / _104), 0.0f) * (_104 / ((_104 + 1.0f) * g_fSDRBrightnessMultiplier))) + -1.0f)) + 1.0f;
+                  _104 = max((dot(float3(_95, _96, _97), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f)) / (ui_brightness * 0.3940886855125427f)), 0.0f);
+                  _119 = ((1.0f - (1.0f / (fUIHDRBackdropBackgroundDarkeningStrength + 1.0f))) * ((select((!(_104 == 0.0f)), (1.0f / _104), 0.0f) * (_104 / ((_104 + 1.0f) * ui_brightness))) + -1.0f)) + 1.0f;
                   _860 = (_119 * _95);
                   _861 = (_119 * _96);
                   _862 = (_119 * _97);
@@ -505,7 +506,6 @@ float4 main(
                       }
                     }
                   }
-                  const float ui_brightness = ConditionalOverrideUIBrightness(g_fSDRBrightnessMultiplier, g_bHDR);
                   _860 = (_803 / ui_brightness);
                   _861 = (_804 / ui_brightness);
                   _862 = (_805 / ui_brightness);
