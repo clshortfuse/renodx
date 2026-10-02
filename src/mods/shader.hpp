@@ -204,6 +204,8 @@ static float* resource_tag_float = nullptr;
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static uint32_t constant_buffer_offset = 0;
+// Alignment of the custom push constant start (in 32-bit values). 0 disables additional alignment.
+static uint32_t push_constant_alignment = 4u;
 static auto minimum_constant_buffer_stages = reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
 
 static renodx::utils::data::ParallelNodeHashMap<uint32_t, CustomShader> custom_shaders;
@@ -1062,9 +1064,17 @@ static bool OnCreatePipelineLayout(
       return false;
     }
 
+    if (is_vulkan && push_constant_alignment != 0u) {
+      const uint32_t remainder = vk_pc_offset % push_constant_alignment;
+      if (remainder != 0u) {
+        vk_pc_offset += push_constant_alignment - remainder;
+      }
+    }
+
     constant_injection_cost = std::min(slots, remaining_dword_count);
     if (expand_vulkan_push_constants) {
-      new_params[injection_index].push_constants.count += constant_injection_cost;
+      new_params[injection_index].push_constants.count =
+          vk_pc_offset - new_params[injection_index].push_constants.binding + constant_injection_cost;
     } else {
       new_params[injection_index] = reshade::api::pipeline_layout_param(
           reshade::api::constant_range{
@@ -1485,8 +1495,16 @@ static void OnInitPipelineLayout(
             remaining_dword_count = used_dword_count >= 64u ? 0u : 64u - used_dword_count;
           }
 
+          if (is_vulkan && push_constant_alignment != 0u) {
+            const uint32_t remainder = vk_pc_offset % push_constant_alignment;
+            if (remainder != 0u) {
+              vk_pc_offset += push_constant_alignment - remainder;
+            }
+          }
+
           if (expand_vulkan_push_constants) {
-            new_params[injection_index].push_constants.count += std::min(slots, remaining_dword_count);
+            new_params[injection_index].push_constants.count =
+                vk_pc_offset - new_params[injection_index].push_constants.binding + std::min(slots, remaining_dword_count);
           } else {
             new_params[injection_index] = reshade::api::pipeline_layout_param(
                 reshade::api::constant_range{
