@@ -230,7 +230,7 @@ float3 ApplyRemedyExtendedAgXCurve(float3 linear_input, RemedyExtendedAgXParamet
       params.output_pivot_linear + params.linear_tangent_slope * (linear_input - params.input_pivot_linear),
       shoulderless_agx_linear);
 
-  return lerp(color, shoulderless_agx_linear, shoulder_blend_strength * 0.75f);
+  return lerp(color, shoulderless_agx_linear, shoulder_blend_strength * 0.35f);
 }
 
 float3 ApplyShoulderlessAgXFormation(float3 linear_input, RemedyAgXParameters params, float shoulder_blend_strength) {
@@ -278,7 +278,7 @@ float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters pa
 
   color = ApplyShoulderlessAgXFormation(color, params, TONE_MAP_HIGHLIGHT_COMPRESSION);
 
-  color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
+  color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 100.f);
 
   // Preserve Vanilla+'s original outset ordering in the gamma-shaped domain.
   color = renodx::math::SignPow(color, 1.f / params.tone_scale.parameters.output_power);
@@ -310,10 +310,14 @@ float3 ApplyRenoDXCustomizedToneMap(float3 untonemapped, RemedyAgXParameters par
 
   color = ApplyShoulderlessAgXFormation(color, params, TONE_MAP_HIGHLIGHT_COMPRESSION);
 
-  color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 1.f);
+  const float neutral = dot(color, CUSTOM_PRIMARIES_LUMINANCE_WEIGHTS);
+  color = lerp(neutral.xxx, color, 1.1875f);
 
-  const float neutral = dot(color, CUSTOM_PRIMARIES_NEUTRAL_WEIGHTS);
-  color = lerp(neutral, color, 1.1875f);
+  color = ToSecondaryCustomPrimaries(color, TONE_MAP_SECONDARY_PRIMARIES_SCALE);
+
+  color = renodx::tonemap::CInfinityRollOff(color, params.hdr_ratio, params.output_pivot_linear, 100.f);
+
+  color = FromSecondaryCustomPrimaries(color, TONE_MAP_SECONDARY_PRIMARIES_SCALE);
 
   color = mul(CUSTOM_PRIMARIES_TO_BT2020_MAT, color);
 
@@ -381,8 +385,7 @@ float3 ApplyRenoDXPsychoVToneMap(
       true);
 
   const float3 graded_lms = abs(pre_shoulder_lms);
-  const float3 response_lms = renodx::tonemap::psychov::custom_psycho31_ApplyAnchoredCInfinityShoulder(
-      graded_lms, target_peak_lms, grade_anchor_lms, 1.f);
+  const float3 response_lms = renodx::tonemap::CInfinityRollOff(graded_lms, target_peak_lms, grade_anchor_lms, 100.f);
 
   // Keep MeanA2's hue reference on the original source; tonal-region weighting follows the
   // post-Remedy signal that actually enters PsychoV grading.
