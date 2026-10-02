@@ -1,5 +1,5 @@
 #include "./tonemap.hlsli"
-#include "../composeSceneAndUICS/composeSceneAndUICS.hlsli"
+#include "../UI/UI.hlsli"
 
 Texture2D<float4> g_tRandomBlueNoiseRGBA : register(t3);
 
@@ -57,7 +57,9 @@ cbuffer shared_tonemap_post : register(b3) {
 cbuffer ManualUpdateCB_DataPS : register(b0) {
   struct {
     float4 Data_PS[2048];
-  } ManualUpdateCB_DataPS_view : packoffset(c000.x);
+  }
+ManualUpdateCB_DataPS_view:
+  packoffset(c000.x);
 
   // Raw views preserve dynamic cbufferLoadLegacy.f32/i32 access.
   float4 ManualUpdateCB_DataPS_raw[2048] : packoffset(c0);
@@ -80,17 +82,20 @@ SamplerState samplercoherenttxBuffer1 : register(s1);
 SamplerState samplercoherenttxBuffer2 : register(s2);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position,
-  linear float4 TEXCOORD : TEXCOORD,
-  linear float4 TEXCOORD_1 : TEXCOORD1,
-  linear float3 TEXCOORD_2 : TEXCOORD2,
-  nointerpolation uint4 TEXCOORD_3 : TEXCOORD3,
-  noperspective float4 TEXCOORD_4 : TEXCOORD4
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float4 TEXCOORD_1: TEXCOORD1,
+    linear float3 TEXCOORD_2: TEXCOORD2,
+    nointerpolation uint4 TEXCOORD_3: TEXCOORD3,
+    noperspective float4 TEXCOORD_4: TEXCOORD4) : SV_Target {
   float4 SV_Target;
   int _25;
   float4 _26;
@@ -329,6 +334,7 @@ float4 main(
             _67 = min(max(TEXCOORD_1.y, _50.y), (_50.y + _50.w));
           }
           _68 = txBuffer.Sample(samplercoherenttxBuffer, float2(_66, _67));
+          const float ui_brightness = ConditionalOverrideUIBrightness(g_fSDRBrightnessMultiplier, g_bHDR);
           do {
             if (!(txBufferIsUserBackground == 0)) {
               _79 = (g_bHDR == 0);
@@ -342,8 +348,8 @@ float4 main(
                   _97 = mad(1.118751049041748f, _68.z, mad(-0.10059737414121628f, _68.y, (_68.x * -0.018153680488467216f)));
                 }
                 if (!(_79)) {
-                  _104 = max((dot(float3(_95, _96, _97), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f)) / (g_fSDRBrightnessMultiplier * 0.3940886855125427f)), 0.0f);
-                  _119 = ((1.0f - (1.0f / (fUIHDRBackdropBackgroundDarkeningStrength + 1.0f))) * ((select((!(_104 == 0.0f)), (1.0f / _104), 0.0f) * (_104 / ((_104 + 1.0f) * g_fSDRBrightnessMultiplier))) + -1.0f)) + 1.0f;
+                  _104 = max((dot(float3(_95, _96, _97), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f)) / (ui_brightness * 0.3940886855125427f)), 0.0f);
+                  _119 = ((1.0f - (1.0f / (fUIHDRBackdropBackgroundDarkeningStrength + 1.0f))) * ((select((!(_104 == 0.0f)), (1.0f / _104), 0.0f) * (_104 / ((_104 + 1.0f) * ui_brightness))) + -1.0f)) + 1.0f;
                   _794 = (_119 * _95);
                   _795 = (_119 * _96);
                   _796 = (_119 * _97);
@@ -363,7 +369,7 @@ float4 main(
                     if (g_iTonemapper == 2) {
 #if 1
                       float3 agx_color = ApplyRemedyAgX(
-                        _68.x, _68.y, _68.z, ConditionalOverrideGameBrightness(g_fPaperWhite, g_bHDR),
+                          _68.x, _68.y, _68.z, ConditionalOverrideGameBrightness(g_fPaperWhite, g_bHDR),
                           g_bHDR, g_fAgxMinEV, g_fAgxMaxEV,
                           g_fAgxToePower, g_fAgxShoulderPower, g_fAgxContrastSlope,
                           g_fAgxToePrecalcConstant, g_fAgxShoulderPrecalcConstant,
@@ -495,7 +501,6 @@ float4 main(
                       }
                     }
                   }
-                  const float ui_brightness = ConditionalOverrideUIBrightness(g_fSDRBrightnessMultiplier, g_bHDR);
                   _794 = (_737 / ui_brightness);
                   _795 = (_738 / ui_brightness);
                   _796 = (_739 / ui_brightness);
