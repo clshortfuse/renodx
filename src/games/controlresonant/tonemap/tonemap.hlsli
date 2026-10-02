@@ -331,7 +331,7 @@ float3 ApplyRenoDXCustomizedToneMap(float3 untonemapped, RemedyAgXParameters par
       RENODX_TONE_MAP_DECHROMA);
 
   color = FixNegativeLuminanceBT2020(color);
-  color = CompressBT2020Radial(color);
+  color = CompressBT2020Radial(color, 0.5f, 8.f);
 
   return renodx::color::bt709::from::BT2020(color);
 }
