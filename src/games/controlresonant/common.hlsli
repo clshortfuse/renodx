@@ -22,26 +22,45 @@ float3 ClampBT2020ToLMS(float3 color) {
   return renodx::color::bt2020::from::LMS(lms);
 }
 
-// Custom primaries preserve the chosen hue angles while enclosing BT.2020 and reducing uneven per-channel highlight blowout.
+// D65-normalized custom working gamut, expanded to fully enclose BT.2020.
+// R: -26.00° from D65 for stronger red -> orange highlight flight.
+// G: +102.99° from D65, retaining the original green highlight trajectory.
+// B: -121.17° from D65, pushed near the zero-Y boundary to increase blue/purple highlight blowout.
+// Luminance weights are the XYZ Y row; expansion weights are the D65 barycentric weights used for radial secondary-primary scaling.
 static const float3x3 CUSTOM_PRIMARIES_TO_XYZ_MAT = float3x3(
-    0.621829884f, 0.149360609f, 0.179265434f,
-    0.183793709f, 0.779045165f, 0.037161125f,
-    0.008268489f, -0.081634929f, 1.162424191f);
+    0.612550128f, 0.188342167f, 0.149537757f,
+    0.017545760f, 0.982367808f, 0.000086432f,
+    0.026749645f, -0.102940791f, 1.164997638f);
 
 static const float3x3 BT2020_TO_CUSTOM_PRIMARIES_MAT = float3x3(
-    1.000000000f, 0.000000000f, 0.000000000f,
-    0.101286172f, 0.866239827f, 0.032474001f,
-    0.000000000f, 0.084984570f, 0.915015430f);
+    0.962911598f, 0.003151047f, 0.033926831f,
+    0.250217071f, 0.690103475f, 0.059679623f,
+    0.000000000f, 0.085002920f, 0.915213009f);
 
 static const float3x3 CUSTOM_PRIMARIES_TO_BT2020_MAT = float3x3(
-    1.000000000f, 0.000000000f, 0.000000000f,
-    -0.117334788f, 1.158448248f, -0.041113459f,
-    0.010897791f, -0.107594061f, 1.096696271f);
+    1.038516933f, 0.000000002f, -0.038497693f,
+    -0.379593390f, 1.460791126f, -0.081184447f,
+    0.035255778f, -0.135674985f, 1.100182040f);
 
-static const float3 CUSTOM_PRIMARIES_NEUTRAL_WEIGHTS = float3(
-    0.267770495f,
-    0.278587608f,
-    0.453641897f);
+static const float3 CUSTOM_PRIMARIES_LUMINANCE_WEIGHTS = float3(
+    0.017545760f,
+    0.982367808f,
+    0.000086432f);
+
+static const float3 CUSTOM_PRIMARIES_EXPANSION_WEIGHTS = float3(
+    0.216121886f,
+    0.351328095f,
+    0.432550020f);
+
+float3 ToSecondaryCustomPrimaries(float3 color, float primaries_scale) {
+  const float neutral = dot(color, CUSTOM_PRIMARIES_EXPANSION_WEIGHTS);
+  return lerp(neutral.xxx, color, rcp(primaries_scale));
+}
+
+float3 FromSecondaryCustomPrimaries(float3 color, float primaries_scale) {
+  const float neutral = dot(color, CUSTOM_PRIMARIES_EXPANSION_WEIGHTS);
+  return lerp(neutral.xxx, color, primaries_scale);
+}
 
 float3 CompressCustomPrimariesRadial(float3 color, float fit_strength = 1.f) {
   const float3 lower_rgb = max(-color, 0.f);
