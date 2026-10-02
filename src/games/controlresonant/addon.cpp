@@ -94,6 +94,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return shader_injection.tone_map_type == 1.f || shader_injection.tone_map_type == 2.f || shader_injection.tone_map_type == 3.f; },
     },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ToneMapSecondaryPrimariesScale",
+    //     .binding = &shader_injection.tone_map_secondary_primaries_scale,
+    //     .default_value = 3.f,
+    //     .label = "Primaries Expansion",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Scales the secondary custom primaries radially from D65 before highlight compression.",
+    //     .min = 1.f,
+    //     .max = 10.f,
+    //     .is_visible = []() { return shader_injection.tone_map_type == 2.f; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGamutClip",
         .binding = &shader_injection.tone_map_gamut_clip,
