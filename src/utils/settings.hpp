@@ -789,17 +789,15 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ImColor::HSV(0, 0, 0.7f)));
           ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ImColor::HSV(0, 0, 0.8f)));
         }
-        auto* font = ImGui::GetFont();
-        auto old_scale = font->Scale;
-        auto previous_font_size = ImGui::GetFontSize();
-        font->Scale *= 0.75f;
-        ImGui::PushFont(font);
-        auto current_font_size = ImGui::GetFontSize();
+        const auto previous_font_size = ImGui::GetFontSize();
+        // Keep the host-owned font immutable; size belongs to the scoped font stack.
+        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.75f);
+        const auto current_font_size = ImGui::GetFontSize();
 
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, current_font_size * 2);
 
         ImVec2 cursor_pos = ImGui::GetCursorPos();
-        cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
+        cursor_pos.y += (previous_font_size - current_font_size) * 0.5f;
         ImGui::SetCursorPos(cursor_pos);
 
         ImGui::PushID(("##Reset" + identifier).c_str());
@@ -816,9 +814,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         if (is_using_default) {
           ImGui::PopStyleColor(3);
         }
-        font->Scale = old_scale;
-        ImGui::PopFont();
         ImGui::PopStyleVar();
+        ImGui::PopFont();
         ImGui::EndDisabled();
       }
 
