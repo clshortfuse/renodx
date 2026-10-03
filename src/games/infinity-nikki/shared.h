@@ -35,8 +35,6 @@
 #define RENODX_TONE_MAP_SCALING shader_injection.tone_map_scaling
 #define BLEND_FACTOR            shader_injection.blend_factor
 
-#define RENODX_INTERMEDIATE_ENCODING 1.f
-
 #define OVERRIDE_BLACK_CLIP 0
 #define PROCESSING_PATH     1
 #define SWAP_CHAIN_ENCODING 0
