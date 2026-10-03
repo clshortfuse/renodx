@@ -1,0 +1,18 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "orderofthesinkingstar",
+  "title": "Order of the Sinking Star Demo",
+  "status": "experimental",
+  "summary": "Adds selectable SDR and HDR10 output with Neutwo and PsychoV tone mapping, custom color grading, bloom, and FXAA controls.",
+  "deploy": {
+    "game_exe": "sinking_star.exe",
+    "process_name": "sinking_star.exe",
+    "api": "d3d12",
+    "architecture": [
+      "x64"
+    ],
+    "steam_appid": 4597250,
+    "platform": "steam",
+    "reshade_preferred_name": "dxgi.dll"
+  }
+}
