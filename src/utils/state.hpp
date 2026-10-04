@@ -41,7 +41,39 @@ using DescriptorTableSlots = FlaggedVector<reshade::api::descriptor_table, cross
 
 using PipelineBindPoint = renodx::utils::pipeline::PipelineBindPoint;
 
-struct __declspec(uuid("d2090c05-51a0-4094-ac24-cbf7353451a6")) SharedData {};
+static constexpr size_t D3D12_ROOT_DWORD_BUDGET = 64u;
+// Every root parameter consumes at least one DWORD of the signature budget.
+static constexpr size_t D3D12_ROOT_PARAMETER_COUNT = D3D12_ROOT_DWORD_BUDGET;
+static constexpr size_t GRAPHICS_ROOT_DOMAIN = 0u;
+static constexpr size_t COMPUTE_ROOT_DOMAIN = 1u;
+static constexpr std::array D3D12_ROOT_STAGES = {
+    reshade::api::shader_stage::all_graphics,
+    reshade::api::shader_stage::all_compute | reshade::api::shader_stage::all_ray_tracing};
+static constexpr uint32_t DESCRIPTOR_TABLE_REPLAY_BATCH_SIZE = 64u;
+
+// Configure before Use(DLL_PROCESS_ATTACH); repeated initialization calls merge
+// requirements. Snapshot capture requires the blanket opt-in before recording.
+static bool use_snapshot = false;
+static bool use_pipeline_tracking = false;
+static bool use_render_target_tracking = false;
+static bool use_dynamic_state_tracking = false;
+static bool use_viewport_scissor_tracking = false;
+static bool use_input_assembler_tracking = false;
+static bool use_push_constants = false;
+static bool use_push_descriptors = false;
+static bool use_descriptor_tables = false;
+
+struct __declspec(uuid("a23ef49c-44e1-4581-bf5b-bec964237b80")) SharedData {
+  bool use_snapshot = false;
+  bool use_pipeline_tracking = false;
+  bool use_render_target_tracking = false;
+  bool use_dynamic_state_tracking = false;
+  bool use_viewport_scissor_tracking = false;
+  bool use_input_assembler_tracking = false;
+  bool use_push_constants = false;
+  bool use_push_descriptors = false;
+  bool use_descriptor_tables = false;
+};
 
 static cross_addon::Shared<SharedData> shared;
 
@@ -407,13 +439,11 @@ struct PushedDescriptorUpdate {
 
 struct PushedConstants {
   uint32_t layout_param = 0u;
-  cross_addon::vector<uint32_t> values;
-  cross_addon::vector<uint8_t> known_values;
+  FlaggedVector<uint32_t, cross_addon::allocator<uint32_t>> values;
 
   void Reset(uint32_t new_layout_param) {
     layout_param = new_layout_param;
     values.clear();
-    known_values.clear();
   }
 };
 
@@ -455,6 +485,12 @@ struct DescriptorBank {
   }
 };
 
+struct D3D12RootDescriptor {
+  reshade::api::descriptor_type type = reshade::api::descriptor_type::constant_buffer;
+  reshade::api::buffer_range buffer = {};
+  reshade::api::resource_view view = {};
+};
+
 struct ShaderStagePushState {
   reshade::api::shader_stage stage = reshade::api::shader_stage::all;
   reshade::api::pipeline_layout layout = {0};
@@ -467,6 +503,7 @@ struct ShaderStagePushState {
   size_t constant_count = 0u;
   cross_addon::vector<DescriptorBank> descriptor_banks;
   bool has_unresolved_descriptors = false;
+  FlaggedArray<D3D12RootDescriptor, D3D12_ROOT_PARAMETER_COUNT>* root_descriptors = nullptr;
 
   void AssertInvariants() const {
 #ifndef NDEBUG
@@ -486,9 +523,6 @@ struct ShaderStagePushState {
       assert(descriptor_size != 0u);
       assert(descriptor.descriptor_data.Matches(descriptor.type));
       assert(descriptor.descriptor_data.Size() == descriptor.count);
-    }
-    for (size_t i = 0u; i < constant_count; ++i) {
-      assert(constants[i].values.size() == constants[i].known_values.size());
     }
     for (const auto& bank : descriptor_banks) bank.AssertInvariants();
 #endif
@@ -552,11 +586,21 @@ struct ShaderStagePushState {
 
   void Clear() {
     layout = {0};
+    if (root_descriptors != nullptr
+        && descriptor_slot_count == 0u && descriptor_count == 0u && constant_count == 0u
+        && descriptor_banks.empty() && resource_view_binds.empty()) {
+      root_descriptors->clear();
+      has_unresolved_descriptors = false;
+      return;
+    }
     ClearPushedState();
     descriptor_banks.clear();
   }
 
   void ClearPushedState() {
+    if (root_descriptors != nullptr) {
+      root_descriptors->clear();
+    }
     for (size_t i = 0; i < descriptor_slot_count; ++i) {
       descriptor_slots[i].descriptor_data.Clear();
       descriptor_slots[i].known_slots.clear();
@@ -566,7 +610,6 @@ struct ShaderStagePushState {
     }
     for (size_t i = 0; i < constant_count; ++i) {
       constants[i].values.clear();
-      constants[i].known_values.clear();
     }
     descriptor_slot_count = 0u;
     descriptor_count = 0u;
@@ -627,19 +670,94 @@ struct D3D10And11DescriptorState {
 
   struct Stage {
     reshade::api::pipeline_layout layout = {};
-    NativeDescriptorSlots<reshade::api::sampler, 16u> samplers;
-    NativeDescriptorSlots<reshade::api::resource_view, 128u> srvs;
+    NativeDescriptorSlots<reshade::api::sampler, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT> samplers;
+    NativeDescriptorSlots<reshade::api::resource_view, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT> srvs;
     NativeDescriptorSlots<reshade::api::buffer_range, 14u> cbvs;
   };
   std::array<Stage, SHADER_STAGES.size()> stages;
-  NativeDescriptorSlots<reshade::api::resource_view, 64u> graphics_uavs;
-  NativeDescriptorSlots<reshade::api::resource_view, 64u> compute_uavs;
+  NativeDescriptorSlots<reshade::api::resource_view, D3D11_1_UAV_SLOT_COUNT> graphics_uavs;
+  NativeDescriptorSlots<reshade::api::resource_view, D3D11_1_UAV_SLOT_COUNT> compute_uavs;
 };
 
 namespace internal {
 
+struct D3D12RootConstants {
+  struct ParameterRange {
+    uint8_t offset = 0u;
+    uint8_t count = 0u;
+  };
+  FlaggedArray<ParameterRange, D3D12_ROOT_PARAMETER_COUNT> parameters;
+  FlaggedArray<uint32_t, D3D12_ROOT_DWORD_BUDGET> values;
+  uint32_t used = 0u;
+
+  void Update(uint32_t layout_param, uint32_t first, std::span<const uint32_t> source) {
+    assert(layout_param < D3D12_ROOT_PARAMETER_COUNT && first <= D3D12_ROOT_DWORD_BUDGET && source.size() <= D3D12_ROOT_DWORD_BUDGET - first);
+    if (layout_param >= D3D12_ROOT_PARAMETER_COUNT || first > D3D12_ROOT_DWORD_BUDGET || source.size() > D3D12_ROOT_DWORD_BUDGET - first || source.empty()) return;
+    const auto end = static_cast<uint32_t>(first + source.size());
+    if (parameters.has(layout_param)) {
+      auto& range = parameters.get(layout_param);
+      if (end > range.count) {
+        const uint32_t extra = end - range.count;
+        assert(extra <= D3D12_ROOT_DWORD_BUDGET - used);
+        if (extra > D3D12_ROOT_DWORD_BUDGET - used) return;
+        const uint32_t insertion = range.offset + range.count;
+        // Growth is rare; move later parameters backwards without reviving holes.
+        for (uint32_t index = used; index > insertion;) {
+          --index;
+          if (values.has(index)) {
+            values.set(index + extra, values.get(index));
+          } else {
+            values.reset(index + extra);
+          }
+        }
+        values.clear(insertion, extra);
+        for (auto& parameter : parameters.values()) {
+          if (parameter.offset >= insertion) {
+            parameter.offset = static_cast<uint8_t>(parameter.offset + extra);
+          }
+        }
+        range.count = static_cast<uint8_t>(end);
+        used += extra;
+      }
+      values.setRange(range.offset + first, source);
+    } else {
+      assert(end <= D3D12_ROOT_DWORD_BUDGET - used);
+      if (end > D3D12_ROOT_DWORD_BUDGET - used) return;
+      parameters.set(layout_param, ParameterRange{.offset = static_cast<uint8_t>(used), .count = static_cast<uint8_t>(end)});
+      values.setRange(used + first, source);
+      used += end;
+    }
+  }
+
+  void Clear() {
+    if (used == 0u) return;
+    parameters.clear();
+    values.clear();
+    used = 0u;
+  }
+
+  void Apply(reshade::api::command_list* cmd_list, reshade::api::shader_stage stages,
+             reshade::api::pipeline_layout layout) const {
+    if (layout.handle == 0u) return;
+    for (const auto& [param, range] : parameters.entries()) {
+      // Each native call is bounded by its parameter even when payloads are adjacent.
+      uint32_t first = 0u;
+      while (first < range.count) {
+        while (first < range.count && !values.has(range.offset + first)) ++first;
+        if (first == range.count) break;
+        uint32_t end = first + 1u;
+        while (end < range.count && values.has(range.offset + end)) ++end;
+        cmd_list->push_constants(stages, layout, static_cast<uint32_t>(param), first, end - first,
+                                 &values.get(range.offset + first));
+        first = end;
+      }
+    }
+  }
+};
+
 struct CommandListSnapshotData {
-  cross_addon::vector<reshade::api::resource_view> render_targets;
+  // Active borrowed range; typed snapshot copies rebind to their own storage.
+  std::span<reshade::api::resource_view> render_targets;
   reshade::api::resource_view depth_stencil = {0};
   reshade::api::primitive_topology primitive_topology = reshade::api::primitive_topology::undefined;
   uint32_t blend_constant = 0;
@@ -651,27 +769,12 @@ struct CommandListSnapshotData {
   cross_addon::vector<reshade::api::rect> scissor_rects;
   cross_addon::vector<uint8_t> known_scissor_rect_slots;
   reshade::api::pipeline_layout graphics_pipeline_layout = {0};
-  DescriptorTableSlots graphics_descriptor_tables;
   reshade::api::pipeline_layout compute_pipeline_layout = {0};
-  DescriptorTableSlots compute_descriptor_tables;
   reshade::api::pipeline_layout ray_tracing_pipeline_layout = {0};
-  DescriptorTableSlots ray_tracing_descriptor_tables;
-  std::array<ShaderStagePushState, TRACKED_SHADER_STAGE_COUNT> shader_stage_push_states = {{
-      {.stage = reshade::api::shader_stage::vertex},
-      {.stage = reshade::api::shader_stage::hull},
-      {.stage = reshade::api::shader_stage::domain},
-      {.stage = reshade::api::shader_stage::geometry},
-      {.stage = reshade::api::shader_stage::pixel},
-      {.stage = reshade::api::shader_stage::compute},
-      {.stage = reshade::api::shader_stage::amplification},
-      {.stage = reshade::api::shader_stage::mesh},
-      {.stage = reshade::api::shader_stage::raygen},
-      {.stage = reshade::api::shader_stage::any_hit},
-      {.stage = reshade::api::shader_stage::closest_hit},
-      {.stage = reshade::api::shader_stage::miss},
-      {.stage = reshade::api::shader_stage::intersection},
-      {.stage = reshade::api::shader_stage::callable},
-  }};
+  // Borrowed from BackendSnapshotData; owning copies must rebind this view.
+  std::span<ShaderStagePushState> shader_stage_push_states;
+  // Empty outside D3D12; rebound by the typed snapshot owner on every copy/move.
+  std::span<D3D12RootConstants> root_constants;
   cross_addon::vector<reshade::api::resource> vertex_buffers;
   cross_addon::vector<uint64_t> vertex_buffer_offsets;
   cross_addon::vector<uint32_t> vertex_buffer_strides;
@@ -703,16 +806,14 @@ struct CommandListSnapshotData {
 #endif
   // Zero or one block: process-allocator ownership and independent snapshot copies.
   cross_addon::vector<D3D10And11DescriptorState> native_descriptors;
-  FlaggedArray<reshade::api::viewport, 16u> fixed_viewports;
-  FlaggedArray<reshade::api::rect, 16u> fixed_scissor_rects;
+  FlaggedArray<reshade::api::viewport, D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> fixed_viewports;
+  FlaggedArray<reshade::api::rect, D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> fixed_scissor_rects;
   cross_addon::vector<ResourceViewBind> resolved_resource_view_binds_scratch;
   uint32_t render_pass_depth = 0u;
   // Copyable canonical bind history for snapshots and compatibility consumers.
   cross_addon::vector<PipelineBind> pipeline_binds;
   // Retained for the UUID-backed layout.
   std::array<reshade::api::pipeline, 3u> bound_shader_pipelines = {};
-  // Node values stay at stable addresses while their pipelines remain alive.
-  mutable std::array<const pipeline::PipelineInfo*, pipeline::SHADER_STAGES.size()> bound_pipeline_infos = {};
   struct LayoutDataCacheEntry {
     reshade::api::pipeline_layout layout = {0u};
     // Borrowed node; valid only while the layout remains alive.
@@ -721,6 +822,7 @@ struct CommandListSnapshotData {
   // Graphics, compute, ray tracing. D3D12 ray tracing uses the compute entry;
   // OpenGL uses the graphics entry for its global layout.
   std::array<LayoutDataCacheEntry, 3u> layout_data_by_domain = {};
+  std::span<FlaggedArray<D3D12RootDescriptor, D3D12_ROOT_PARAMETER_COUNT>> root_descriptor_banks;
 
   [[nodiscard]] bool UsesFixedRasterLists() const {
     return device_api == reshade::api::device_api::d3d10
@@ -843,15 +945,19 @@ struct CommandListSnapshotData {
   }
 
   ShaderStagePushState* GetShaderStagePushState(reshade::api::shader_stage stage) {
-    const auto stage_index = GetSingleTrackedShaderStageIndex(stage);
-    if (stage_index >= shader_stage_push_states.size()) return nullptr;
-    return &shader_stage_push_states[stage_index];
+    if (GetSingleTrackedShaderStageIndex(stage) >= TRACKED_SHADER_STAGE_COUNT) return nullptr;
+    for (auto& push_state : shader_stage_push_states) {
+      if (renodx::utils::bitwise::HasFlag(push_state.stage, stage)) return &push_state;
+    }
+    return nullptr;
   }
 
   const ShaderStagePushState* GetShaderStagePushState(reshade::api::shader_stage stage) const {
-    const auto stage_index = GetSingleTrackedShaderStageIndex(stage);
-    if (stage_index >= shader_stage_push_states.size()) return nullptr;
-    return &shader_stage_push_states[stage_index];
+    if (GetSingleTrackedShaderStageIndex(stage) >= TRACKED_SHADER_STAGE_COUNT) return nullptr;
+    for (const auto& push_state : shader_stage_push_states) {
+      if (renodx::utils::bitwise::HasFlag(push_state.stage, stage)) return &push_state;
+    }
+    return nullptr;
   }
 
   reshade::api::resource_view GetPushedResourceView(reshade::api::shader_stage stage,
@@ -868,6 +974,25 @@ struct CommandListSnapshotData {
       return {0};
     }
     const auto* push_state = GetShaderStagePushState(stage);
+    if (device_api == reshade::api::device_api::d3d12) {
+      if (GetSingleTrackedShaderStageIndex(stage) >= TRACKED_SHADER_STAGE_COUNT) return {0};
+      const size_t domain = (bitwise::HasAnyFlag(stage, reshade::api::shader_stage::all_graphics) ? GRAPHICS_ROOT_DOMAIN : COMPUTE_ROOT_DOMAIN);
+      const auto& roots = root_descriptor_banks[domain];
+      if (roots.has(layout_param)) {
+        const auto& descriptor = roots.get(layout_param);
+        if (binding == 0u && descriptor.type == type && IsResourceViewDescriptorType(type)) return descriptor.view;
+        return {0u};
+      }
+      if (push_state == nullptr) return {0};
+      if (layout_param >= push_state->descriptor_count || !IsResourceViewDescriptorType(type)) return {0};
+      const auto& descriptor = push_state->descriptors[layout_param];
+      if (descriptor.type != type || descriptor.array_offset != 0u
+          || binding < descriptor.binding || binding - descriptor.binding >= descriptor.count) return {0};
+      if (type == reshade::api::descriptor_type::sampler_with_resource_view) {
+        return static_cast<const reshade::api::sampler_with_resource_view*>(descriptor.descriptor_data.Data())[binding - descriptor.binding].view;
+      }
+      return static_cast<const reshade::api::resource_view*>(descriptor.descriptor_data.Data())[binding - descriptor.binding];
+    }
     if (push_state == nullptr) return {0};
     for (size_t i = 0; i < push_state->descriptor_slot_count; ++i) {
       const auto& slots = push_state->descriptor_slots[i];
@@ -901,23 +1026,61 @@ struct CommandListSnapshotData {
       return {0};
     }
     const auto* push_state = GetShaderStagePushState(stage);
-    if (push_state == nullptr) return {0};
-    return push_state->GetResourceViewBind(type, slot, space);
+    if (device_api == reshade::api::device_api::d3d12) {
+      if (GetSingleTrackedShaderStageIndex(stage) >= TRACKED_SHADER_STAGE_COUNT) return {0};
+      const size_t domain = (bitwise::HasAnyFlag(stage, reshade::api::shader_stage::all_graphics) ? GRAPHICS_ROOT_DOMAIN : COMPUTE_ROOT_DOMAIN);
+      reshade::api::resource_view result = {};
+      pipeline_layout::GetPipelineLayoutData(domain == GRAPHICS_ROOT_DOMAIN ? graphics_root_pipeline_layout : compute_root_pipeline_layout, [&](const auto* layout_data) {
+        const auto resolve = [&](uint32_t parameter, const reshade::api::descriptor_table_update& update) {
+          if (parameter >= layout_data->params.size()
+              || !IsResourceViewDescriptorType(update.type)
+              || GetResourceViewBindingType(update.type) != GetResourceViewBindingType(type)) return false;
+          for (uint32_t index = 0u; index < update.count; ++index) {
+            const auto location = pipeline_layout::FindDescriptorLocation(
+                layout_data->params[parameter], reshade::api::device_api::d3d12, update, index);
+            if (location && location->register_slot == slot && location->register_space == space) {
+              result = (update.type == reshade::api::descriptor_type::sampler_with_resource_view
+                            ? static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[index].view
+                            : static_cast<const reshade::api::resource_view*>(update.descriptors)[index]);
+              return true;
+            }
+          }
+          return false;
+        };
+        for (const auto& [parameter, descriptor] : root_descriptor_banks[domain].entries()) {
+          if (resolve(static_cast<uint32_t>(parameter),
+                      {.count = 1u, .type = descriptor.type, .descriptors = &descriptor.view})) return;
+        }
+        if (push_state == nullptr) return;
+        for (size_t index = 0u; index < push_state->descriptor_count; ++index) {
+          const auto& descriptor = push_state->descriptors[index];
+          if (descriptor.count == 0u) continue;
+          if (resolve(descriptor.layout_param,
+                      {.binding = descriptor.binding, .array_offset = descriptor.array_offset, .count = descriptor.count, .type = descriptor.type, .descriptors = descriptor.descriptor_data.Data()})) return;
+        }
+      });
+      return result;
+    }
+    return push_state != nullptr ? push_state->GetResourceViewBind(type, slot, space) : reshade::api::resource_view{0};
   }
 
   void ClearPushStates(reshade::api::shader_stage stages) {
     for (auto& push_state : shader_stage_push_states) {
-      if (renodx::utils::bitwise::HasFlag(stages, push_state.stage)) {
+      if (renodx::utils::bitwise::HasAnyFlag(stages, push_state.stage)) {
         push_state.Clear();
+        if (!root_constants.empty()) {
+          root_constants[&push_state - shader_stage_push_states.data()].Clear();
+        }
       }
     }
   }
 
+  template <reshade::api::device_api Api, typename Tables>
   static void ApplyDescriptorTables(
       reshade::api::command_list* cmd_list,
       reshade::api::shader_stage stages,
       reshade::api::pipeline_layout layout,
-      const DescriptorTableSlots& tables,
+      const Tables& tables,
 #if RESHADE_API_VERSION >= 20
       const cross_addon::vector<cross_addon::vector<uint32_t>>& dynamic_offsets,
 #endif
@@ -932,10 +1095,10 @@ struct CommandListSnapshotData {
       return;
     }
 
-    if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) {
+    if constexpr (Api == reshade::api::device_api::d3d12) {
       for (auto&& [index, table] : tables.entries()) {
 #if RESHADE_API_VERSION >= 20
-        const auto* offsets = index < dynamic_offsets.size() ? &dynamic_offsets[index] : nullptr;
+        const auto* offsets = (index < dynamic_offsets.size() ? &dynamic_offsets[index] : nullptr);
         cmd_list->bind_descriptor_tables2(stages, layout, static_cast<uint32_t>(index), 1u, &table,
                                           offsets == nullptr ? 0u : static_cast<uint32_t>(offsets->size()),
                                           offsets == nullptr || offsets->empty() ? nullptr : offsets->data());
@@ -970,7 +1133,7 @@ struct CommandListSnapshotData {
         continue;
       }
 #endif
-      if (count != 0u && (index != first + count || count == 64u || &table != first_table + count)) {
+      if (count != 0u && (index != first + count || count == DESCRIPTOR_TABLE_REPLAY_BATCH_SIZE || &table != first_table + count)) {
         flush();
       }
       if (count == 0u) {
@@ -988,6 +1151,17 @@ struct CommandListSnapshotData {
       bool replay_descriptor_slots = false) {
     push_state.AssertInvariants();
     if (push_state.layout.handle == 0u) return;
+
+    if (push_state.root_descriptors != nullptr) {
+      for (const auto& [index, descriptor] : push_state.root_descriptors->entries()) {
+        ReplayPushDescriptors(cmd_list, push_state.stage, push_state.layout, static_cast<uint32_t>(index),
+                              {.count = 1u,
+                               .type = descriptor.type,
+                               .descriptors = (descriptor.type == reshade::api::descriptor_type::constant_buffer
+                                                   ? static_cast<const void*>(&descriptor.buffer)
+                                                   : static_cast<const void*>(&descriptor.view))});
+      }
+    }
 
     for (const auto& bank : push_state.descriptor_banks) {
       if (push_state.has_unresolved_descriptors) break;
@@ -1026,6 +1200,7 @@ struct CommandListSnapshotData {
     }
     for (size_t index = 0u; index < push_state.descriptor_count; ++index) {
       const auto& descriptor = push_state.descriptors[index];
+      if (descriptor.count == 0u) continue;
       ReplayPushDescriptors(
           cmd_list,
           push_state.stage,
@@ -1042,37 +1217,35 @@ struct CommandListSnapshotData {
     }
     for (size_t index = 0u; index < push_state.constant_count; ++index) {
       const auto& constants = push_state.constants[index];
-      size_t first = 0u;
-      while (first < constants.known_values.size()) {
-        while (first < constants.known_values.size() && constants.known_values[first] == 0u) {
-          ++first;
-        }
-        if (first >= constants.known_values.size()) break;
-
-        size_t end = first + 1u;
-        while (end < constants.known_values.size() && constants.known_values[end] != 0u) {
-          ++end;
-        }
+      for (const auto [first, values] : constants.values.ranges()) {
         cmd_list->push_constants(
             push_state.stage,
             push_state.layout,
             constants.layout_param,
             static_cast<uint32_t>(first),
-            static_cast<uint32_t>(end - first),
-            constants.values.data() + first);
-        first = end;
+            static_cast<uint32_t>(values.size()),
+            values.data());
       }
     }
   }
 
+  template <reshade::api::device_api Api, typename Tables>
   void ApplyGraphics(
       reshade::api::command_list* cmd_list,
+      const Tables& graphics_descriptor_tables,
       bool apply_pipelines = true) const {
     if (cmd_list == nullptr) return;
 
     if (render_targets_known) {
       // Destroyed RTVs are not removed
-      std::vector<reshade::api::resource_view> new_rtvs(render_targets.begin(), render_targets.end());
+      std::conditional_t<Api == reshade::api::device_api::d3d12,
+                         std::array<reshade::api::resource_view, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT>,
+                         std::vector<reshade::api::resource_view>>
+          new_rtvs;
+      if constexpr (Api != reshade::api::device_api::d3d12) {
+        new_rtvs.resize(render_targets.size());
+      }
+      std::copy(render_targets.begin(), render_targets.end(), new_rtvs.begin());
       size_t len = render_targets.size();
       for (size_t i = 0; i < len; ++i) {
         const auto& rtv = render_targets[i];
@@ -1086,7 +1259,7 @@ struct CommandListSnapshotData {
         new_dsv = {0u};
       }
       cmd_list->bind_render_targets_and_depth_stencil(
-          static_cast<uint32_t>(new_rtvs.size()),
+          static_cast<uint32_t>(render_targets.size()),
           new_rtvs.data(),
           new_dsv);
     }
@@ -1205,7 +1378,7 @@ struct CommandListSnapshotData {
       return;
     }
 
-    ApplyDescriptorTables(
+    ApplyDescriptorTables<Api>(
         cmd_list,
         reshade::api::shader_stage::all_graphics,
         graphics_pipeline_layout,
@@ -1215,6 +1388,9 @@ struct CommandListSnapshotData {
 #endif
         graphics_descriptor_tables_known);
 
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      root_constants[GRAPHICS_ROOT_DOMAIN].Apply(cmd_list, reshade::api::shader_stage::all_graphics, graphics_root_pipeline_layout);
+    }
     for (const auto& push_state : shader_stage_push_states) {
       if (renodx::utils::bitwise::HasAnyFlag(
               reshade::api::shader_stage::all_graphics,
@@ -1224,8 +1400,10 @@ struct CommandListSnapshotData {
     }
   }
 
+  template <reshade::api::device_api Api, typename Tables>
   void ApplyCompute(
       reshade::api::command_list* cmd_list,
+      const Tables& compute_descriptor_tables,
       bool apply_pipelines = true) const {
     if (cmd_list == nullptr) return;
 
@@ -1239,7 +1417,7 @@ struct CommandListSnapshotData {
       return;
     }
 
-    ApplyDescriptorTables(
+    ApplyDescriptorTables<Api>(
         cmd_list,
         reshade::api::shader_stage::all_compute,
         compute_pipeline_layout,
@@ -1248,11 +1426,20 @@ struct CommandListSnapshotData {
         compute_descriptor_table_dynamic_offsets,
 #endif
         compute_descriptor_tables_known);
-    ApplyPushState(cmd_list, *GetShaderStagePushState(reshade::api::shader_stage::compute));
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      root_constants[COMPUTE_ROOT_DOMAIN].Apply(cmd_list, reshade::api::shader_stage::all_compute | reshade::api::shader_stage::all_ray_tracing,
+                                                compute_root_pipeline_layout);
+    }
+    if (const auto* push_state = GetShaderStagePushState(reshade::api::shader_stage::compute)) {
+      ApplyPushState(cmd_list, *push_state);
+    }
   }
 
+  template <reshade::api::device_api Api, typename Tables>
   void ApplyRayTracing(
       reshade::api::command_list* cmd_list,
+      const Tables& compute_descriptor_tables,
+      const Tables& ray_tracing_descriptor_tables,
       bool apply_pipelines = true) const {
     if (cmd_list == nullptr) return;
     if (device_api == reshade::api::device_api::d3d11) return;
@@ -1262,7 +1449,12 @@ struct CommandListSnapshotData {
     }
     ApplyDynamicStates(cmd_list, PipelineBindPoint::RAY_TRACING);
 
-    ApplyDescriptorTables(
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      ApplyCompute<Api>(cmd_list, compute_descriptor_tables, false);
+      return;
+    }
+
+    ApplyDescriptorTables<Api>(
         cmd_list,
         reshade::api::shader_stage::all_ray_tracing,
         ray_tracing_pipeline_layout,
@@ -1280,57 +1472,54 @@ struct CommandListSnapshotData {
     }
   }
 
-  void Apply(reshade::api::command_list* cmd_list) const {
-    ApplyPipelines(cmd_list);
-    ApplyGraphics(cmd_list, false);
-    ApplyCompute(cmd_list, false);
-    ApplyRayTracing(cmd_list, false);
-  }
-
+  template <bool RecordedD3D12Only = false>
   void Clear() {
-    render_targets.clear();
+    render_targets = {};
     fixed_viewports.clear();
     fixed_scissor_rects.clear();
-    if (!native_descriptors.empty()) {
-      for (auto& stage : native_descriptors[0].stages) {
-        stage.samplers.slots.clear();
-        stage.srvs.slots.clear();
-        stage.cbvs.slots.clear();
+    if constexpr (!RecordedD3D12Only) {
+      if (!native_descriptors.empty()) {
+        for (auto& stage : native_descriptors[0].stages) {
+          stage.samplers.slots.clear();
+          stage.srvs.slots.clear();
+          stage.cbvs.slots.clear();
+        }
+        native_descriptors[0].graphics_uavs.slots.clear();
+        native_descriptors[0].compute_uavs.slots.clear();
       }
-      native_descriptors[0].graphics_uavs.slots.clear();
-      native_descriptors[0].compute_uavs.slots.clear();
+      viewports.clear();
+      known_viewport_slots.clear();
+      scissor_rects.clear();
+      known_scissor_rect_slots.clear();
+      vertex_buffers.clear();
+      vertex_buffer_offsets.clear();
+      vertex_buffer_strides.clear();
+      known_vertex_buffer_slots.clear();
+      dynamic_states.clear();
+      dynamic_state_order.clear();
+      for (auto& constants : root_constants) {
+        constants.Clear();
+      }
     }
     depth_stencil = {0};
     pipeline_binds.clear();
-    bound_pipeline_infos = {};
     primitive_topology = reshade::api::primitive_topology::undefined;
     blend_constant = 0;
     sample_mask = 0xFFFFFFFF;
     front_stencil_reference_value = 0;
     back_stencil_reference_value = 0;
-    viewports.clear();
-    known_viewport_slots.clear();
-    scissor_rects.clear();
-    known_scissor_rect_slots.clear();
     graphics_pipeline_layout = {0};
-    graphics_descriptor_tables.clear();
 #if RESHADE_API_VERSION >= 20
     graphics_descriptor_table_dynamic_offsets.clear();
 #endif
     compute_pipeline_layout = {0};
-    compute_descriptor_tables.clear();
 #if RESHADE_API_VERSION >= 20
     compute_descriptor_table_dynamic_offsets.clear();
 #endif
     ray_tracing_pipeline_layout = {0};
-    ray_tracing_descriptor_tables.clear();
 #if RESHADE_API_VERSION >= 20
     ray_tracing_descriptor_table_dynamic_offsets.clear();
 #endif
-    vertex_buffers.clear();
-    vertex_buffer_offsets.clear();
-    vertex_buffer_strides.clear();
-    known_vertex_buffer_slots.clear();
     index_buffer = {0};
     index_buffer_offset = 0u;
     index_size = 0u;
@@ -1346,8 +1535,6 @@ struct CommandListSnapshotData {
     compute_descriptor_tables_known = false;
     ray_tracing_descriptor_tables_known = false;
     index_buffer_known = false;
-    dynamic_states.clear();
-    dynamic_state_order.clear();
     graphics_root_pipeline_layout = {0};
     compute_root_pipeline_layout = {0};
     for (auto& push_state : shader_stage_push_states) {
@@ -1357,18 +1544,255 @@ struct CommandListSnapshotData {
     resolved_resource_view_binds_scratch.clear();
     render_pass_depth = 0u;
   }
+
+ protected:
+  // Only the typed owner may copy this view and rebind its borrowed storage.
+  CommandListSnapshotData() = default;
+  CommandListSnapshotData(const CommandListSnapshotData&) = default;
+  CommandListSnapshotData(CommandListSnapshotData&&) = default;
+  CommandListSnapshotData& operator=(const CommandListSnapshotData&) = default;
+  CommandListSnapshotData& operator=(CommandListSnapshotData&&) = default;
 };
 
-// The UUID carries only an API discriminator and the address of the typed owner.
-struct __declspec(uuid("10c115be-9ee1-4601-9afd-c0e24ce9bf81")) CommandListStateHandle {
+template <reshade::api::device_api Api, bool OwnsReplayStorage = true>
+struct BackendSnapshotData : CommandListSnapshotData {
+  std::conditional_t<Api == reshade::api::device_api::d3d12,
+                     std::array<reshade::api::resource_view, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT>,
+                     cross_addon::vector<reshade::api::resource_view>>
+      render_target_storage = {};
+
+  void ResizeRenderTargets(size_t count) {
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(count <= render_target_storage.size());
+    } else {
+      render_target_storage.resize(count);
+    }
+    render_targets = {render_target_storage.data(), count};
+  }
+  // D3D12 graphics stages share one PSO; compute has its own cached node.
+  // Borrowed nodes remain valid only while their pipelines remain alive.
+  mutable std::array<const pipeline::PipelineInfo*,
+                     Api == reshade::api::device_api::d3d12 ? D3D12_ROOT_STAGES.size() : pipeline::SHADER_STAGES.size()>
+      bound_pipeline_infos = {};
+  // A root signature has a 64-DWORD budget; each table consumes one DWORD.
+  using TableStorage = std::conditional_t<Api == reshade::api::device_api::d3d12,
+                                          FlaggedArray<reshade::api::descriptor_table, D3D12_ROOT_PARAMETER_COUNT>,
+                                          DescriptorTableSlots>;
+  TableStorage graphics_descriptor_tables;
+  TableStorage compute_descriptor_tables;
+  // Live D3D12 uses the compute bank; capture owns the compatibility bank.
+  std::conditional_t<OwnsReplayStorage, TableStorage, std::span<TableStorage, 0u>> ray_tracing_descriptor_tables;
+  std::conditional_t<OwnsReplayStorage,
+                     std::array<D3D12RootConstants, Api == reshade::api::device_api::d3d12 ? D3D12_ROOT_STAGES.size() : 0u>,
+                     std::span<D3D12RootConstants, 0u>>
+      root_constant_storage;
+  std::array<FlaggedArray<D3D12RootDescriptor, D3D12_ROOT_PARAMETER_COUNT>, Api == reshade::api::device_api::d3d12 ? D3D12_ROOT_STAGES.size() : 0u> root_descriptor_storage;
+
+  void RebindRootDescriptors() {
+    root_descriptor_banks = root_descriptor_storage;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      for (size_t index = 0u; index < push_states.size(); ++index) {
+        push_states[index].root_descriptors = &root_descriptor_storage[index];
+      }
+    }
+  }
+
+  void ApplyGraphics(reshade::api::command_list* cmd_list, bool apply_pipelines = true) const
+    requires(Api != reshade::api::device_api::d3d12 || OwnsReplayStorage)
+  {
+    CommandListSnapshotData::ApplyGraphics<Api>(cmd_list, graphics_descriptor_tables, apply_pipelines);
+  }
+  void ApplyCompute(reshade::api::command_list* cmd_list, bool apply_pipelines = true) const
+    requires(Api != reshade::api::device_api::d3d12 || OwnsReplayStorage)
+  {
+    CommandListSnapshotData::ApplyCompute<Api>(cmd_list, compute_descriptor_tables, apply_pipelines);
+  }
+  void ApplyRayTracing(reshade::api::command_list* cmd_list, bool apply_pipelines = true) const
+    requires(Api != reshade::api::device_api::d3d12 || OwnsReplayStorage)
+  {
+    CommandListSnapshotData::ApplyRayTracing<Api>(cmd_list, compute_descriptor_tables, ray_tracing_descriptor_tables, apply_pipelines);
+  }
+  void Apply(reshade::api::command_list* cmd_list) const
+    requires(Api != reshade::api::device_api::d3d12 || OwnsReplayStorage)
+  {
+    ApplyPipelines(cmd_list);
+    ApplyGraphics(cmd_list, false);
+    ApplyCompute(cmd_list, false);
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      ApplyDynamicStates(cmd_list, PipelineBindPoint::RAY_TRACING);
+    } else {
+      ApplyRayTracing(cmd_list, false);
+    }
+  }
+  void Clear() {
+    CommandListSnapshotData::Clear<Api == reshade::api::device_api::d3d12 && !OwnsReplayStorage>();
+    for (auto& roots : root_descriptor_storage) {
+      roots.clear();
+    }
+    ResizeRenderTargets(0u);
+    bound_pipeline_infos = {};
+    graphics_descriptor_tables.clear();
+    compute_descriptor_tables.clear();
+    if constexpr (OwnsReplayStorage) {
+      ray_tracing_descriptor_tables.clear();
+    }
+  }
+  static constexpr auto PUSH_STAGES = [] {
+    using reshade::api::shader_stage;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      return D3D12_ROOT_STAGES;
+    } else if constexpr (Api == reshade::api::device_api::d3d9) {
+      return std::array{shader_stage::vertex, shader_stage::pixel};
+    } else if constexpr (Api == reshade::api::device_api::d3d10) {
+      return std::array{shader_stage::vertex, shader_stage::geometry, shader_stage::pixel};
+    } else if constexpr (Api == reshade::api::device_api::d3d11 || Api == reshade::api::device_api::opengl) {
+      return D3D10And11DescriptorState::SHADER_STAGES;
+    } else {
+      return std::to_array(TRACKED_SHADER_STAGES);
+    }
+  }();
+  std::conditional_t<OwnsReplayStorage, std::array<ShaderStagePushState, PUSH_STAGES.size()>,
+                     cross_addon::vector<ShaderStagePushState>>
+      push_states = [] {
+        std::conditional_t<OwnsReplayStorage, std::array<ShaderStagePushState, PUSH_STAGES.size()>,
+                           cross_addon::vector<ShaderStagePushState>>
+            result{};
+        for (size_t index = 0u; index < result.size(); ++index) {
+          result[index].stage = PUSH_STAGES[index];
+        }
+        return result;
+      }();
+
+  BackendSnapshotData() {
+    RebindRootDescriptors();
+    device_api = Api;
+    shader_stage_push_states = push_states;
+    root_constants = root_constant_storage;
+  }
+  void ClearPushStates(reshade::api::shader_stage stages) {
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      if (renodx::utils::bitwise::HasAnyFlag(stages, PUSH_STAGES[GRAPHICS_ROOT_DOMAIN])) {
+        root_descriptor_storage[GRAPHICS_ROOT_DOMAIN].clear();
+        if (!push_states.empty()) {
+          push_states[GRAPHICS_ROOT_DOMAIN].Clear();
+        }
+        if constexpr (OwnsReplayStorage) {
+          root_constant_storage[GRAPHICS_ROOT_DOMAIN].Clear();
+        }
+      }
+      if (renodx::utils::bitwise::HasAnyFlag(stages, PUSH_STAGES[COMPUTE_ROOT_DOMAIN])) {
+        root_descriptor_storage[COMPUTE_ROOT_DOMAIN].clear();
+        if (!push_states.empty()) {
+          push_states[COMPUTE_ROOT_DOMAIN].Clear();
+        }
+        if constexpr (OwnsReplayStorage) {
+          root_constant_storage[COMPUTE_ROOT_DOMAIN].Clear();
+        }
+      }
+    } else {
+      CommandListSnapshotData::ClearPushStates(stages);
+    }
+  }
+  BackendSnapshotData(const BackendSnapshotData& other)
+      : CommandListSnapshotData(other),
+        render_target_storage(other.render_target_storage),
+        bound_pipeline_infos(other.bound_pipeline_infos),
+        graphics_descriptor_tables(other.graphics_descriptor_tables),
+        compute_descriptor_tables(other.compute_descriptor_tables),
+        ray_tracing_descriptor_tables(other.ray_tracing_descriptor_tables),
+        root_constant_storage(other.root_constant_storage),
+        root_descriptor_storage(other.root_descriptor_storage),
+        push_states(other.push_states) {
+    RebindRootDescriptors();
+    ResizeRenderTargets(other.render_targets.size());
+    shader_stage_push_states = push_states;
+    root_constants = root_constant_storage;
+  }
+  // Capture copies common recorded state, but allocates packed constants only
+  // in the replay owner. CommandListState::Capture fills those constants.
+  explicit BackendSnapshotData(const BackendSnapshotData<Api, false>& other)
+    requires(OwnsReplayStorage)
+      : CommandListSnapshotData(other),
+        render_target_storage(other.render_target_storage),
+        bound_pipeline_infos(other.bound_pipeline_infos),
+        graphics_descriptor_tables(other.graphics_descriptor_tables),
+        compute_descriptor_tables(other.compute_descriptor_tables),
+        root_descriptor_storage(other.root_descriptor_storage) {
+    ray_tracing_descriptor_tables = other.compute_descriptor_tables;
+    ray_tracing_pipeline_layout = other.compute_pipeline_layout;
+    ray_tracing_descriptor_tables_known = other.compute_descriptor_tables_known;
+    for (size_t index = 0u; index < push_states.size(); ++index) {
+      if (!other.push_states.empty()) {
+        push_states[index] = other.push_states[index];
+      }
+      push_states[index].layout = (index == GRAPHICS_ROOT_DOMAIN ? graphics_root_pipeline_layout : compute_root_pipeline_layout);
+    }
+    RebindRootDescriptors();
+    ResizeRenderTargets(other.render_targets.size());
+    shader_stage_push_states = push_states;
+    root_constants = root_constant_storage;
+  }
+  BackendSnapshotData(BackendSnapshotData&& other) noexcept
+      : CommandListSnapshotData(std::move(other)),
+        render_target_storage(std::move(other.render_target_storage)),
+        bound_pipeline_infos(other.bound_pipeline_infos),
+        graphics_descriptor_tables(std::move(other.graphics_descriptor_tables)),
+        compute_descriptor_tables(std::move(other.compute_descriptor_tables)),
+        ray_tracing_descriptor_tables(std::move(other.ray_tracing_descriptor_tables)),
+        root_constant_storage(std::move(other.root_constant_storage)),
+        root_descriptor_storage(std::move(other.root_descriptor_storage)),
+        push_states(std::move(other.push_states)) {
+    RebindRootDescriptors();
+    ResizeRenderTargets(other.render_targets.size());
+    other.render_targets = {};
+    shader_stage_push_states = push_states;
+    root_constants = root_constant_storage;
+  }
+  BackendSnapshotData& operator=(const BackendSnapshotData& other) {
+    CommandListSnapshotData::operator=(other);
+    render_target_storage = other.render_target_storage;
+    ResizeRenderTargets(other.render_targets.size());
+    bound_pipeline_infos = other.bound_pipeline_infos;
+    graphics_descriptor_tables = other.graphics_descriptor_tables;
+    compute_descriptor_tables = other.compute_descriptor_tables;
+    ray_tracing_descriptor_tables = other.ray_tracing_descriptor_tables;
+    root_constant_storage = other.root_constant_storage;
+    root_descriptor_storage = other.root_descriptor_storage;
+    push_states = other.push_states;
+    RebindRootDescriptors();
+    shader_stage_push_states = push_states;
+    root_constants = root_constant_storage;
+    return *this;
+  }
+  BackendSnapshotData& operator=(BackendSnapshotData&& other) noexcept {
+    CommandListSnapshotData::operator=(std::move(other));
+    render_target_storage = std::move(other.render_target_storage);
+    ResizeRenderTargets(other.render_targets.size());
+    other.render_targets = {};
+    bound_pipeline_infos = other.bound_pipeline_infos;
+    graphics_descriptor_tables = std::move(other.graphics_descriptor_tables);
+    compute_descriptor_tables = std::move(other.compute_descriptor_tables);
+    ray_tracing_descriptor_tables = std::move(other.ray_tracing_descriptor_tables);
+    root_constant_storage = std::move(other.root_constant_storage);
+    root_descriptor_storage = std::move(other.root_descriptor_storage);
+    push_states = std::move(other.push_states);
+    RebindRootDescriptors();
+    shader_stage_push_states = push_states;
+    root_constants = root_constant_storage;
+    return *this;
+  }
+};
+
+// Versioned with SharedData: previous modules must not interpret the new owners.
+struct __declspec(uuid("69cc992c-1de8-424c-82a6-723f25165a7b")) CommandListStateHandle {
   reshade::api::device_api api;
   void* state;
 };
 
 template <reshade::api::device_api Api>
 struct CommandListState {
-  CommandListStateHandle handle{Api, this};
-  CommandListSnapshotData snapshot;
+  CommandListStateHandle handle{.api = Api, .state = this};
+  BackendSnapshotData<Api, Api != reshade::api::device_api::d3d12> snapshot;
   static constexpr size_t PIPELINE_SLOT_COUNT = [] {
     if constexpr (Api == reshade::api::device_api::d3d11 || Api == reshade::api::device_api::opengl) {
       return 10u;
@@ -1380,6 +1804,1008 @@ struct CommandListState {
   }();
   FlaggedArray<PipelineBind, PIPELINE_SLOT_COUNT> bound_pipelines;
   uint64_t bind_sequence = 0u;
+
+  static constexpr std::array D3D12_DYNAMIC_STATES = {
+      reshade::api::dynamic_state::primitive_topology,
+      reshade::api::dynamic_state::blend_constant,
+      reshade::api::dynamic_state::front_stencil_reference_value,
+      reshade::api::dynamic_state::back_stencil_reference_value,
+      reshade::api::dynamic_state::depth_bias,
+      reshade::api::dynamic_state::depth_bias_clamp,
+      reshade::api::dynamic_state::depth_bias_slope_scaled};
+  struct D3D12Recording {
+    FlaggedArray<uint32_t, D3D12_DYNAMIC_STATES.size()> dynamic_states;
+    struct VertexBuffer {
+      reshade::api::resource buffer = {};
+      uint64_t offset = 0u;
+      uint32_t stride = 0u;
+    };
+    FlaggedArray<VertexBuffer, D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertex_buffers;
+    struct RootConstants {
+      struct Parameter {
+        uint8_t head = 0u;
+        uint8_t tail = 0u;
+        uint8_t count = 0u;
+        uint8_t contiguous_count = 0u;
+      };
+      FlaggedArray<Parameter, D3D12_ROOT_PARAMETER_COUNT> parameters;
+      FlaggedArray<uint32_t, D3D12_ROOT_DWORD_BUDGET> values;
+      std::array<uint8_t, D3D12_ROOT_DWORD_BUDGET> next;
+      uint32_t used = 0u;
+
+      void Update(uint32_t layout_param, uint32_t first, std::span<const uint32_t> source) {
+        assert(layout_param < D3D12_ROOT_PARAMETER_COUNT && first <= D3D12_ROOT_DWORD_BUDGET && source.size() <= D3D12_ROOT_DWORD_BUDGET - first);
+        if (layout_param >= D3D12_ROOT_PARAMETER_COUNT || first > D3D12_ROOT_DWORD_BUDGET || source.size() > D3D12_ROOT_DWORD_BUDGET - first || source.empty()) return;
+        const auto end = static_cast<uint32_t>(first + source.size());
+        const uint32_t previous_count = (parameters.has(layout_param) ? parameters.get(layout_param).count : 0u);
+        const uint32_t extra = (end > previous_count ? end - previous_count : 0u);
+        assert(extra <= D3D12_ROOT_DWORD_BUDGET - used);
+        if (extra > D3D12_ROOT_DWORD_BUDGET - used) return;
+        if (previous_count == 0u) {
+          parameters.set(layout_param, Parameter{.head = static_cast<uint8_t>(used)});
+        }
+        auto& parameter = parameters.get(layout_param);
+        if (extra != 0u) {
+          if (previous_count == 0u
+              || (parameter.contiguous_count == previous_count && parameter.tail + 1u == used)) {
+            parameter.contiguous_count = static_cast<uint8_t>(end);
+          }
+          if (previous_count != 0u) {
+            next[parameter.tail] = static_cast<uint8_t>(used);
+          }
+          for (uint32_t index = used; index + 1u < used + extra; ++index) {
+            next[index] = static_cast<uint8_t>(index + 1u);
+          }
+          used += extra;
+          parameter.tail = static_cast<uint8_t>(used - 1u);
+          parameter.count = static_cast<uint8_t>(end);
+        }
+        if (end <= parameter.contiguous_count) {
+          values.setRange(parameter.head + first, source);
+          return;
+        }
+        uint32_t slot = parameter.head;
+        for (uint32_t word = 0u; word < first; ++word) {
+          slot = next[slot];
+        }
+        for (size_t index = 0u; index < source.size(); ++index) {
+          values.set(slot, source[index]);
+          if (index + 1u < source.size()) {
+            slot = next[slot];
+          }
+        }
+      }
+
+      void Clear() {
+        if (used == 0u) return;
+        parameters.clear();
+        values.clear();
+        used = 0u;
+      }
+    };
+    std::array<RootConstants, D3D12_ROOT_STAGES.size()> root_constants;
+  };
+  std::array<D3D12Recording, Api == reshade::api::device_api::d3d12 ? 1u : 0u> recording;
+
+  void PushDescriptors(reshade::api::shader_stage stages,
+                       reshade::api::pipeline_layout layout,
+                       uint32_t layout_param,
+                       const reshade::api::descriptor_table_update& update) {
+    if (update.count == 0u) return;
+    const auto descriptor_size = GetDescriptorSizeOf(update.type);
+    assert(update.descriptors != nullptr);
+    assert(descriptor_size != 0u);
+    if (update.descriptors == nullptr || descriptor_size == 0u) return;
+
+    auto& current_state = snapshot;
+
+    if constexpr (Api == reshade::api::device_api::d3d10
+                  || Api == reshade::api::device_api::d3d11) {
+      // Native getters address context-owned binding slots; they cannot recover
+      // ReShade's synthetic layouts. See docs/plans/opaque-command-list-snapshot.md
+      // for the decompiled paths and their interface/refcount bookkeeping.
+      if (current_state.native_descriptors.empty()) {
+        current_state.native_descriptors.emplace_back();
+      }
+      auto& descriptors = current_state.native_descriptors[0];
+      const auto capture = [&](size_t index) {
+        auto& stage = descriptors.stages[index];
+        stage.layout = layout;
+        if (shared.data != nullptr && !shared.data->use_push_descriptors) return;
+        switch (update.type) {
+          case reshade::api::descriptor_type::sampler:
+            stage.samplers.Update(update.binding, update.count, update.descriptors);
+            break;
+          case reshade::api::descriptor_type::shader_resource_view:
+          case reshade::api::descriptor_type::buffer_shader_resource_view:
+            stage.srvs.Update(update.binding, update.count, update.descriptors);
+            break;
+          case reshade::api::descriptor_type::constant_buffer:
+            stage.cbvs.Update(update.binding, update.count, update.descriptors);
+            break;
+          case reshade::api::descriptor_type::unordered_access_view:
+          case reshade::api::descriptor_type::buffer_unordered_access_view:
+            if (D3D10And11DescriptorState::SHADER_STAGES[index]
+                == reshade::api::shader_stage::pixel) {
+              descriptors.graphics_uavs.Update(update.binding, update.count, update.descriptors);
+            } else if (D3D10And11DescriptorState::SHADER_STAGES[index]
+                       == reshade::api::shader_stage::compute) {
+              descriptors.compute_uavs.Update(update.binding, update.count, update.descriptors);
+            }
+            break;
+          default:
+            break;
+        }
+      };
+      if (const auto index = GetSingleTrackedShaderStageIndex(stages);
+          index < D3D10And11DescriptorState::SHADER_STAGES.size()) {
+        capture(index);
+      } else {
+        for (size_t index = 0u;
+             index < D3D10And11DescriptorState::SHADER_STAGES.size();
+             ++index) {
+          if (renodx::utils::bitwise::HasFlag(
+                  stages, D3D10And11DescriptorState::SHADER_STAGES[index])) {
+            capture(index);
+          }
+        }
+      }
+      return;
+    }
+
+    TransitionPipelineLayout(stages, layout);
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(stages == reshade::api::shader_stage::all_graphics
+             || stages == (reshade::api::shader_stage::all_compute | reshade::api::shader_stage::all_ray_tracing));
+      if (layout.handle == 0u) return;
+      if (stages != reshade::api::shader_stage::all_graphics
+          && stages != (reshade::api::shader_stage::all_compute | reshade::api::shader_stage::all_ray_tracing)) return;
+      if (layout_param < D3D12_ROOT_PARAMETER_COUNT && update.count == 1u && update.binding == 0u && update.array_offset == 0u
+          && (update.type == reshade::api::descriptor_type::constant_buffer
+              || update.type == reshade::api::descriptor_type::buffer_shader_resource_view
+              || update.type == reshade::api::descriptor_type::buffer_unordered_access_view
+              || update.type == reshade::api::descriptor_type::acceleration_structure)) {
+        const size_t domain = (stages == reshade::api::shader_stage::all_graphics ? GRAPHICS_ROOT_DOMAIN : COMPUTE_ROOT_DOMAIN);
+        D3D12RootDescriptor descriptor{.type = update.type};
+        if (update.type == reshade::api::descriptor_type::constant_buffer) {
+          descriptor.buffer = *static_cast<const reshade::api::buffer_range*>(update.descriptors);
+        } else {
+          descriptor.view = *static_cast<const reshade::api::resource_view*>(update.descriptors);
+        }
+        snapshot.root_descriptor_storage[domain].set(layout_param, descriptor);
+        if (!snapshot.push_states.empty()) {
+          auto& fallback = snapshot.push_states[domain];
+          if (layout_param < fallback.descriptor_count) {
+            fallback.descriptors[layout_param].count = 0u;
+            fallback.descriptors[layout_param].Clear();
+          }
+        }
+        return;
+      }
+    }
+    std::span<ShaderStagePushState> update_states;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      if (snapshot.push_states.empty()) {
+        snapshot.push_states.resize(snapshot.PUSH_STAGES.size());
+        for (size_t index = 0u; index < snapshot.PUSH_STAGES.size(); ++index) {
+          snapshot.push_states[index].stage = snapshot.PUSH_STAGES[index];
+          snapshot.push_states[index].layout = (index == GRAPHICS_ROOT_DOMAIN ? snapshot.graphics_root_pipeline_layout : snapshot.compute_root_pipeline_layout);
+        }
+        snapshot.RebindRootDescriptors();
+        snapshot.shader_stage_push_states = snapshot.push_states;
+      }
+      if (stages == reshade::api::shader_stage::all_graphics) {
+        update_states = {snapshot.push_states.data(), 1u};
+      } else {
+        update_states = {snapshot.push_states.data() + COMPUTE_ROOT_DOMAIN, 1u};
+      }
+    } else {
+      update_states = snapshot.push_states;
+    }
+
+    const pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+    if (Api != reshade::api::device_api::d3d12 && layout.handle != 0u
+        && (IsResourceViewDescriptorType(update.type)
+            || Api == reshade::api::device_api::vulkan
+            || Api == reshade::api::device_api::opengl)) {
+      if constexpr (Api == reshade::api::device_api::d3d9) {
+        layout_data = pipeline_layout::GetPipelineLayoutData(layout);
+      } else {
+        enum class LayoutDomain : uint8_t { GRAPHICS,
+                                            COMPUTE,
+                                            RAY_TRACING };
+        auto domain = LayoutDomain::GRAPHICS;
+        if constexpr (Api != reshade::api::device_api::opengl) {
+          if (renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_compute)) {
+            domain = LayoutDomain::COMPUTE;
+          } else if (renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_ray_tracing)) {
+            domain = (Api == reshade::api::device_api::d3d12
+                          ? LayoutDomain::COMPUTE
+                          : LayoutDomain::RAY_TRACING);
+          }
+        }
+        auto& cached = current_state.layout_data_by_domain[static_cast<size_t>(domain)];
+        if (cached.layout != layout) {
+          cached.layout = layout;
+          cached.data = nullptr;
+        }
+        if (cached.data == nullptr) {
+          cached.data = pipeline_layout::GetPipelineLayoutData(layout);
+        }
+        layout_data = cached.data;
+      }
+    }
+
+    auto& resolved_resource_view_binds = current_state.resolved_resource_view_binds_scratch;
+    ResourceViewBind single_resolved_bind;
+    std::span<const ResourceViewBind> resolved_binds;
+    const bool use_single_binding = (Api == reshade::api::device_api::d3d12 && update.count == 1u);
+    if (!use_single_binding) {
+      resolved_resource_view_binds.clear();
+    }
+    if (IsResourceViewDescriptorType(update.type) && layout_data != nullptr
+        && layout_param < layout_data->params.size()) {
+      if (!use_single_binding) {
+        resolved_resource_view_binds.reserve(update.count);
+      }
+      for (uint32_t index = 0u; index < update.count; ++index) {
+        uint32_t slot = 0u;
+        uint32_t space = 0u;
+        bool resolved = false;
+        if constexpr (Api == reshade::api::device_api::d3d9
+                      || Api == reshade::api::device_api::d3d10
+                      || Api == reshade::api::device_api::d3d11
+                      || Api == reshade::api::device_api::d3d12) {
+          const auto binding = renodx::utils::pipeline_layout::FindDescriptorLocation(
+              layout_data->params[layout_param], Api, update, index);
+          if (binding) {
+            slot = binding->register_slot;
+            space = binding->register_space;
+            resolved = true;
+          }
+        } else {
+          const auto element = renodx::utils::pipeline_layout::FindDescriptorLocation(
+              layout_data->params[layout_param], Api, update, index);
+          if (element) {
+            slot = element->binding;
+            space = element->array_offset;
+            resolved = true;
+          }
+        }
+        if (!resolved) {
+          break;
+        }
+        const ResourceViewBind resolved_bind = {
+            .type = GetResourceViewBindingType(update.type),
+            .slot = slot,
+            .space = space,
+            .view = (update.type == reshade::api::descriptor_type::sampler_with_resource_view
+                         ? static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[index].view
+                         : static_cast<const reshade::api::resource_view*>(update.descriptors)[index]),
+        };
+        if (use_single_binding) {
+          single_resolved_bind = resolved_bind;
+          resolved_binds = {&single_resolved_bind, 1u};
+        } else {
+          resolved_resource_view_binds.push_back(resolved_bind);
+        }
+      }
+    }
+    if (!use_single_binding) {
+      resolved_binds = resolved_resource_view_binds;
+    }
+
+    const auto update_resource_view_bindings = [&](ShaderStagePushState* push_state) {
+      for (const auto& resolved_bind : resolved_binds) {
+        const auto bind_it = std::find_if(
+            push_state->resource_view_binds.begin(),
+            push_state->resource_view_binds.end(),
+            [&](const ResourceViewBind& bind) {
+              return bind.type == resolved_bind.type
+                     && bind.slot == resolved_bind.slot
+                     && bind.space == resolved_bind.space;
+            });
+        if (bind_it != push_state->resource_view_binds.end()) {
+          if (resolved_bind.view.handle == 0u) {
+            if (bind_it + 1 != push_state->resource_view_binds.end()) {
+              *bind_it = push_state->resource_view_binds.back();
+            }
+            push_state->resource_view_binds.pop_back();
+          } else {
+            bind_it->view = resolved_bind.view;
+          }
+          continue;
+        }
+
+        if (resolved_bind.view.handle != 0u) {
+          push_state->resource_view_binds.push_back(resolved_bind);
+        }
+      }
+    };
+
+    for (auto& selected_state : update_states) {
+      const auto stage = selected_state.stage;
+      if constexpr (Api != reshade::api::device_api::d3d12) {
+        if (!renodx::utils::bitwise::HasFlag(stages, stage)) continue;
+      }
+      auto* push_state = &selected_state;
+      push_state->SetLayout(layout);
+      if constexpr (Api != reshade::api::device_api::d3d12) {
+        update_resource_view_bindings(push_state);
+      }
+      if (layout.handle == 0u) continue;
+
+      if constexpr (Api == reshade::api::device_api::d3d12) {
+        if (layout_param < D3D12_ROOT_PARAMETER_COUNT) {
+          push_state->root_descriptors->reset(layout_param);
+        }
+        if (push_state->descriptors.size() <= layout_param) {
+          push_state->descriptors.resize(layout_param + 1u);
+        }
+        while (push_state->descriptor_count <= layout_param) {
+          push_state->descriptors[push_state->descriptor_count++].count = 0u;
+        }
+        push_state->descriptors[layout_param].Store(layout_param, update);
+        continue;
+      }
+
+      const auto store_descriptor_update = [&](uint32_t update_layout_param,
+                                               const reshade::api::descriptor_table_update& descriptor_update) {
+        const auto store = [&](const reshade::api::descriptor_table_update& element) {
+          for (size_t index = 0u; index < push_state->descriptor_count; ++index) {
+            auto& previous = push_state->descriptors[index];
+            if (previous.layout_param == update_layout_param
+                && previous.type == element.type
+                && previous.binding == element.binding
+                && previous.array_offset == element.array_offset
+                && previous.count == element.count) {
+              previous.Store(update_layout_param, element);
+              // Preserve last-write ordering even for unresolved array batches.
+              for (size_t next = index + 1u; next < push_state->descriptor_count; ++next) {
+                std::swap(push_state->descriptors[next - 1u], push_state->descriptors[next]);
+              }
+              return;
+            }
+          }
+          push_state->AddDescriptorUpdate()->Store(update_layout_param, element);
+        };
+
+        const auto descriptor_size = GetDescriptorSizeOf(descriptor_update.type);
+        if constexpr (Api == reshade::api::device_api::vulkan
+                      || Api == reshade::api::device_api::opengl) {
+          bool resolved = false;
+          if (layout_data != nullptr && update_layout_param < layout_data->params.size()) {
+            const auto& param = layout_data->params[update_layout_param];
+            // Validate the whole spill before changing any stored elements.
+            bool can_resolve = renodx::utils::pipeline_layout::FindDescriptorLocation(
+                                   param, Api, descriptor_update, descriptor_update.count - 1u)
+                                   .has_value();
+            if (can_resolve) {
+              bool finite = !push_state->has_unresolved_descriptors
+                            && std::any_of(push_state->descriptor_banks.begin(), push_state->descriptor_banks.end(),
+                                           [&](const auto& bank) {
+                                             return bank.layout_param == update_layout_param
+                                                    && bank.type == descriptor_update.type;
+                                           });
+              if (!push_state->has_unresolved_descriptors && !finite) {
+                const auto prepare = [&](uint32_t count, const auto* ranges) {
+                  for (uint32_t i = 0; i < count; ++i) {
+                    if (ranges[i].type == descriptor_update.type
+                        && (ranges[i].count == UINT32_MAX
+                            || ranges[i].count > std::numeric_limits<size_t>::max() / descriptor_size)) return false;
+                  }
+                  for (uint32_t i = 0; i < count; ++i) {
+                    const auto& range = ranges[i];
+                    if (range.type != descriptor_update.type || range.count == 0u) continue;
+                    const auto found = std::find_if(push_state->descriptor_banks.begin(), push_state->descriptor_banks.end(),
+                                                    [&](const auto& bank) {
+                                                      return bank.layout_param == update_layout_param
+                                                             && bank.type == range.type
+                                                             && bank.binding == range.binding;
+                                                    });
+                    if (found != push_state->descriptor_banks.end()) continue;
+                    // Publish only a fully allocated bank; failed allocation leaves no partial bank.
+                    DescriptorBank bank;
+                    bank.layout_param = update_layout_param;
+                    bank.binding = range.binding;
+                    bank.count = range.count;
+                    bank.type = range.type;
+                    bank.payload.Resize(bank.type, bank.count);
+                    bank.present.resize(
+                        (static_cast<size_t>(bank.count) / DescriptorBank::WORD_BITS)
+                        + (bank.count % DescriptorBank::WORD_BITS != 0u ? 1u : 0u));
+                    bank.AssertInvariants();
+                    push_state->descriptor_banks.push_back(std::move(bank));
+                  }
+                  return true;
+                };
+                switch (param.type) {
+                  case reshade::api::pipeline_layout_param_type::push_descriptors:
+                    finite = prepare(1u, &param.push_descriptors);
+                    break;
+                  case reshade::api::pipeline_layout_param_type::descriptor_table:
+                  case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+                    finite = prepare(param.descriptor_table.count, param.descriptor_table.ranges);
+                    break;
+#if RESHADE_API_VERSION >= 20
+                  case reshade::api::pipeline_layout_param_type::descriptor_table_with_flags:
+                  case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges_and_flags:
+                    finite = prepare(param.descriptor_table_with_flags.count, param.descriptor_table_with_flags.ranges);
+                    break;
+#else
+                  case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
+                  case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
+                    finite = prepare(param.descriptor_table_with_static_samplers.count, param.descriptor_table_with_static_samplers.ranges);
+                    break;
+#endif
+                  default: break;
+                }
+                can_resolve = finite;
+              }
+              if (can_resolve) {
+                const auto find_bank = [&](uint32_t resolved_binding) {
+                  return std::find_if(push_state->descriptor_banks.begin(), push_state->descriptor_banks.end(),
+                                      [&](const auto& candidate) {
+                                        return candidate.layout_param == update_layout_param
+                                               && candidate.type == descriptor_update.type
+                                               && candidate.binding == resolved_binding;
+                                      });
+                };
+                // Resolution success does not imply that the finite-bank representation can store it.
+                // Validate the entire update before changing payloads. Failed resolution
+                // keeps the history fallback below responsible for the original update.
+                for (uint32_t index = 0u; index < descriptor_update.count; ++index) {
+                  const auto element = renodx::utils::pipeline_layout::FindDescriptorLocation(
+                      param, Api, descriptor_update, index);
+                  if (!element) {
+                    can_resolve = false;
+                    break;
+                  }
+                  if (finite) {
+                    const auto bank = find_bank(element->binding);
+                    if (bank == push_state->descriptor_banks.end() || element->array_offset >= bank->count) {
+                      can_resolve = false;
+                      break;
+                    }
+                    bank->AssertInvariants();
+                  }
+                }
+                for (uint32_t index = 0u; can_resolve && index < descriptor_update.count; ++index) {
+                  const auto resolved_element = renodx::utils::pipeline_layout::FindDescriptorLocation(
+                      param, Api, descriptor_update, index);
+                  assert(resolved_element.has_value());
+                  if (!resolved_element) {
+                    can_resolve = false;
+                    break;
+                  }
+                  auto element = descriptor_update;
+                  element.binding = resolved_element->binding;
+                  element.array_offset = resolved_element->array_offset;
+                  element.count = 1u;
+                  element.descriptors = static_cast<const uint8_t*>(descriptor_update.descriptors)
+                                        + (static_cast<size_t>(index) * descriptor_size);
+                  if (finite) {
+                    const auto bank_it = find_bank(resolved_element->binding);
+                    assert(bank_it != push_state->descriptor_banks.end());
+                    if (bank_it == push_state->descriptor_banks.end()) {
+                      can_resolve = false;
+                      break;
+                    }
+                    assert(resolved_element->array_offset < bank_it->count);
+                    if (resolved_element->array_offset >= bank_it->count) {
+                      can_resolve = false;
+                      break;
+                    }
+                    bank_it->payload.Copy(bank_it->type, resolved_element->array_offset, element.descriptors, 1u);
+                    bank_it->present[resolved_element->array_offset / DescriptorBank::WORD_BITS] |= size_t{1} << (resolved_element->array_offset % DescriptorBank::WORD_BITS);
+                  } else {
+                    store(element);
+                  }
+                }
+                resolved = can_resolve;
+              }
+            }
+          }
+          if (resolved) return;
+          for (auto& bank : push_state->descriptor_banks) {
+            if (push_state->has_unresolved_descriptors) break;
+            bank.AssertInvariants();
+            for (size_t index = bank.Next(0u); index < bank.count; index = bank.Next(index + 1u)) {
+              push_state->AddDescriptorUpdate()->Store(
+                  bank.layout_param,
+                  {.binding = bank.binding,
+                   .array_offset = static_cast<uint32_t>(index),
+                   .count = 1u,
+                   .type = bank.type,
+                   .descriptors = bank.payload.Data(index)});
+            }
+            std::fill(bank.present.begin(), bank.present.end(), size_t{0});
+          }
+          push_state->has_unresolved_descriptors = true;
+          // Only compare intervals with the same binding origin. Without layout
+          // metadata, cross-binding spill boundaries cannot be reconstructed.
+          size_t retained = 0u;
+          for (size_t index = 0u; index < push_state->descriptor_count; ++index) {
+            const auto& previous = push_state->descriptors[index];
+            if (previous.layout_param == update_layout_param
+                && previous.type == descriptor_update.type
+                && previous.binding == descriptor_update.binding
+                && previous.array_offset >= descriptor_update.array_offset
+                && static_cast<uint64_t>(previous.array_offset) + previous.count
+                       <= static_cast<uint64_t>(descriptor_update.array_offset) + descriptor_update.count) {
+              continue;
+            }
+            if (retained != index) {
+              std::swap(push_state->descriptors[retained], push_state->descriptors[index]);
+            }
+            ++retained;
+          }
+          push_state->descriptor_count = retained;
+          push_state->AddDescriptorUpdate()->Store(update_layout_param, descriptor_update);
+          return;
+        }
+
+        for (uint32_t index = 0u; index < descriptor_update.count; ++index) {
+          auto element = descriptor_update;
+          element.binding += index;
+          element.count = 1u;
+          element.descriptors = static_cast<const uint8_t*>(descriptor_update.descriptors)
+                                + (static_cast<size_t>(index) * descriptor_size);
+          store(element);
+        }
+      };
+
+      const auto update_descriptor_slots = [&](uint32_t update_layout_param,
+                                               reshade::api::descriptor_type type,
+                                               const void* descriptors) {
+        push_state->GetDescriptorSlots(update_layout_param, type)->Update(update.binding, update.count, descriptors);
+      };
+
+      if (update.array_offset != 0u) {
+        store_descriptor_update(layout_param, update);
+        continue;
+      }
+
+      if constexpr (Api == reshade::api::device_api::d3d9) {
+        if ((stage == reshade::api::shader_stage::vertex
+             && layout_param == D3D9_VERTEX_SAMPLER_LAYOUT_PARAM)
+            || (stage == reshade::api::shader_stage::pixel
+                && layout_param == D3D9_PIXEL_SAMPLER_LAYOUT_PARAM)) {
+          switch (update.type) {
+            case reshade::api::descriptor_type::sampler_with_resource_view:
+              update_descriptor_slots(layout_param, update.type, update.descriptors);
+              store_descriptor_update(layout_param, update);
+              continue;
+            case reshade::api::descriptor_type::shader_resource_view: {
+              std::vector<reshade::api::sampler_with_resource_view> descriptors(update.count);
+              const auto* resource_views = static_cast<const reshade::api::resource_view*>(update.descriptors);
+              assert(resource_views != nullptr);
+              for (uint32_t i = 0; i < update.count; ++i) {
+                descriptors[i] = {
+                    .sampler = {0},
+                    .view = resource_views[i],
+                };
+              }
+              update_descriptor_slots(layout_param, reshade::api::descriptor_type::sampler_with_resource_view, descriptors.data());
+              store_descriptor_update(
+                  layout_param,
+                  {
+                      .table = update.table,
+                      .binding = update.binding,
+                      .array_offset = update.array_offset,
+                      .count = update.count,
+                      .type = reshade::api::descriptor_type::sampler_with_resource_view,
+                      .descriptors = descriptors.data(),
+                  });
+              continue;
+            }
+            default:
+              break;
+          }
+        }
+        update_descriptor_slots(layout_param, update.type, update.descriptors);
+        store_descriptor_update(layout_param, update);
+        continue;
+      }
+
+      if constexpr (Api != reshade::api::device_api::d3d12) {
+        update_descriptor_slots(layout_param, update.type, update.descriptors);
+      }
+      store_descriptor_update(layout_param, update);
+    }
+    if (!use_single_binding) {
+      resolved_resource_view_binds.clear();
+    }
+  }
+
+  void BindDescriptorTables(reshade::api::shader_stage stages,
+                            reshade::api::pipeline_layout layout,
+                            uint32_t first, uint32_t count,
+                            const reshade::api::descriptor_table* tables
+#if RESHADE_API_VERSION >= 20
+                            ,
+                            uint32_t dynamic_offset_count, const uint32_t* dynamic_offsets
+#endif
+  ) {
+    auto& current_state = snapshot;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(first <= D3D12_ROOT_PARAMETER_COUNT && count <= D3D12_ROOT_PARAMETER_COUNT - first);
+      if (first > D3D12_ROOT_PARAMETER_COUNT || count > D3D12_ROOT_PARAMETER_COUNT - first) return;
+    }
+    TransitionPipelineLayout(stages, layout);
+    // Push-only consumers still need root-signature invalidation, not tables.
+    if (shared.data != nullptr && !shared.data->use_snapshot && !shared.data->use_descriptor_tables) return;
+    const bool has_graphics = renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_graphics);
+    const bool has_ray_tracing = renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_ray_tracing);
+    const bool has_compute = renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_compute)
+                             || (Api == reshade::api::device_api::d3d12 && has_ray_tracing);
+    if (!has_graphics && !has_compute && !has_ray_tracing) return;
+    // D3D12 emits this notification even for a redundant SetRootSignature.
+    // TransitionPipelineLayout already invalidates arguments on a real change.
+    const bool clear_descriptor_tables = count == 0u && tables == nullptr
+                                         && Api != reshade::api::device_api::d3d12;
+
+#if RESHADE_API_VERSION >= 20
+    cross_addon::vector<cross_addon::vector<uint32_t>> table_dynamic_offsets;
+    if (dynamic_offset_count != 0u && dynamic_offsets != nullptr) {
+      table_dynamic_offsets.resize(count);
+      const size_t domain_index = Api == reshade::api::device_api::opengl
+                                      ? 0u
+                                      : (has_compute || (has_ray_tracing && Api == reshade::api::device_api::d3d12)
+                                             ? 1u
+                                             : (has_ray_tracing ? 2u : 0u));
+      auto& cached = current_state.layout_data_by_domain[domain_index];
+      if (cached.layout != layout) {
+        cached.layout = layout;
+        cached.data = nullptr;
+      }
+      if (cached.data == nullptr) {
+        pipeline_layout::GetPipelineLayoutData(layout, [&](const auto* layout_data) {
+          cached.data = layout_data;
+        });
+      }
+      if (const auto* layout_data = cached.data; layout_data != nullptr) {
+        uint32_t source_offset = 0u;
+        const auto count_ranges = [](uint32_t range_count, const auto* ranges) {
+          uint32_t descriptor_count = 0u;
+          for (uint32_t range_index = 0u; range_index < range_count; ++range_index) {
+            const auto& range = ranges[range_index];
+            if (range.type
+                    != reshade::api::descriptor_type::constant_buffer_with_dynamic_offset
+                && range.type
+                       != reshade::api::descriptor_type::shader_storage_buffer_with_dynamic_offset) {
+              continue;
+            }
+            if (range.count == UINT32_MAX
+                || descriptor_count > UINT32_MAX - range.count) {
+              return UINT32_MAX;
+            }
+            descriptor_count += range.count;
+          }
+          return descriptor_count;
+        };
+        for (uint32_t index = 0u;
+             index < count && first + index < layout_data->params.size();
+             ++index) {
+          const auto& param = layout_data->params[first + index];
+          uint32_t table_offset_count = 0u;
+          switch (param.type) {
+            case reshade::api::pipeline_layout_param_type::push_descriptors:
+              if (param.push_descriptors.type
+                      == reshade::api::descriptor_type::constant_buffer_with_dynamic_offset
+                  || param.push_descriptors.type
+                         == reshade::api::descriptor_type::shader_storage_buffer_with_dynamic_offset) {
+                table_offset_count = param.push_descriptors.count;
+              }
+              break;
+            case reshade::api::pipeline_layout_param_type::descriptor_table:
+            case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+              table_offset_count = count_ranges(
+                  param.descriptor_table.count,
+                  param.descriptor_table.ranges);
+              break;
+            case reshade::api::pipeline_layout_param_type::descriptor_table_with_flags:
+            case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges_and_flags:
+              table_offset_count = count_ranges(
+                  param.descriptor_table_with_flags.count,
+                  param.descriptor_table_with_flags.ranges);
+              break;
+            case reshade::api::pipeline_layout_param_type::push_constants:
+              break;
+          }
+          if (table_offset_count == UINT32_MAX
+              || table_offset_count > dynamic_offset_count - source_offset) {
+            table_offset_count = dynamic_offset_count - source_offset;
+          }
+          table_dynamic_offsets[index].assign(
+              dynamic_offsets + source_offset,
+              dynamic_offsets + source_offset + table_offset_count);
+          source_offset += table_offset_count;
+          if (source_offset == dynamic_offset_count) break;
+        }
+      }
+    }
+#endif
+
+    const auto update_state = [&](reshade::api::pipeline_layout* tracked_layout,
+                                  auto* tracked_tables
+#if RESHADE_API_VERSION >= 20
+                                  ,
+                                  cross_addon::vector<cross_addon::vector<uint32_t>>* tracked_dynamic_offsets
+#endif
+                              ) {
+      if (clear_descriptor_tables || layout != *tracked_layout) {
+        tracked_tables->clear();  // Layout changed, which resets all descriptor table bindings
+#if RESHADE_API_VERSION >= 20
+        tracked_dynamic_offsets->clear();
+#endif
+      }
+      *tracked_layout = layout;
+      if (layout.handle == 0u || clear_descriptor_tables) return;
+      tracked_tables->setRange(first, {tables, count});
+#if RESHADE_API_VERSION >= 20
+      const size_t total_count = static_cast<size_t>(first) + count;
+      if (!table_dynamic_offsets.empty() && tracked_dynamic_offsets->size() < total_count) {
+        tracked_dynamic_offsets->resize(total_count);
+      }
+      for (uint32_t i = 0; i < count; ++i) {
+        if (table_dynamic_offsets.empty()) {
+          if (i + first >= tracked_dynamic_offsets->size()) continue;
+          (*tracked_dynamic_offsets)[i + first].clear();
+        } else {
+          (*tracked_dynamic_offsets)[i + first] = table_dynamic_offsets[i];
+        }
+      }
+#endif
+    };
+    if (has_graphics) {
+      current_state.graphics_descriptor_tables_known = true;
+      if constexpr (Api != reshade::api::device_api::d3d12) {
+        if (clear_descriptor_tables || layout != current_state.graphics_pipeline_layout) {
+          current_state.ClearPushStates(reshade::api::shader_stage::all_graphics);
+        }
+      }
+      update_state(
+          &current_state.graphics_pipeline_layout,
+          &current_state.graphics_descriptor_tables
+#if RESHADE_API_VERSION >= 20
+          ,
+          &current_state.graphics_descriptor_table_dynamic_offsets
+#endif
+      );
+    }
+    if (has_compute) {
+      current_state.compute_descriptor_tables_known = true;
+      if constexpr (Api != reshade::api::device_api::d3d12) {
+        if (clear_descriptor_tables || layout != current_state.compute_pipeline_layout) {
+          current_state.ClearPushStates(reshade::api::shader_stage::all_compute);
+        }
+      }
+      update_state(
+          &current_state.compute_pipeline_layout,
+          &current_state.compute_descriptor_tables
+#if RESHADE_API_VERSION >= 20
+          ,
+          &current_state.compute_descriptor_table_dynamic_offsets
+#endif
+      );
+    }
+    if constexpr (Api != reshade::api::device_api::d3d12) {
+      if (has_ray_tracing) {
+        current_state.ray_tracing_descriptor_tables_known = true;
+        if (clear_descriptor_tables || layout != current_state.ray_tracing_pipeline_layout) {
+          current_state.ClearPushStates(reshade::api::shader_stage::all_ray_tracing);
+        }
+        update_state(
+            &current_state.ray_tracing_pipeline_layout,
+            &current_state.ray_tracing_descriptor_tables
+#if RESHADE_API_VERSION >= 20
+            ,
+            &current_state.ray_tracing_descriptor_table_dynamic_offsets
+#endif
+        );
+      }
+    }
+  }
+
+  void BindPipelineStates(uint32_t count, const reshade::api::dynamic_state* states, const uint32_t* values) {
+    for (uint32_t index = 0u; index < count; ++index) {
+      if constexpr (Api == reshade::api::device_api::d3d12) {
+        const auto found = std::find(D3D12_DYNAMIC_STATES.begin(), D3D12_DYNAMIC_STATES.end(), states[index]);
+        if (found != D3D12_DYNAMIC_STATES.end()) {
+          recording[0].dynamic_states.set(found - D3D12_DYNAMIC_STATES.begin(), values[index]);
+        }
+      } else {
+        if (states[index] == reshade::api::dynamic_state::unknown) continue;
+        const auto [entry, inserted] = snapshot.dynamic_states.try_emplace(states[index], values[index]);
+        if (inserted) {
+          snapshot.dynamic_state_order.push_back(states[index]);
+        } else {
+          entry->second = values[index];
+        }
+      }
+    }
+  }
+
+  void BindRenderTargetsAndDepthStencil(uint32_t count, const reshade::api::resource_view* rtvs,
+                                        reshade::api::resource_view dsv) {
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(count <= snapshot.render_target_storage.size());
+      if (count > snapshot.render_target_storage.size()) return;
+    }
+    snapshot.ResizeRenderTargets(rtvs != nullptr ? count : 0u);
+    if (!snapshot.render_targets.empty()) {
+      std::copy_n(rtvs, count, snapshot.render_targets.data());
+    }
+    snapshot.depth_stencil = dsv;
+    snapshot.render_targets_known = true;
+  }
+
+  void BeginRenderPass(uint32_t count, const reshade::api::render_pass_render_target_desc* render_targets,
+                       const reshade::api::render_pass_depth_stencil_desc* depth_stencil) {
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(count <= snapshot.render_target_storage.size());
+      if (count > snapshot.render_target_storage.size()) return;
+    }
+    if (snapshot.render_pass_depth++ != 0u) return;
+    snapshot.ResizeRenderTargets(count);
+    for (uint32_t index = 0u; index < count; ++index) {
+      snapshot.render_targets[index] = render_targets[index].view;
+    }
+    snapshot.depth_stencil = (depth_stencil == nullptr ? reshade::api::resource_view{0u} : depth_stencil->view);
+    snapshot.render_targets_known = true;
+  }
+
+  void EndRenderPass() {
+    if (snapshot.render_pass_depth == 0u) return;
+    if (--snapshot.render_pass_depth != 0u) return;
+    snapshot.render_targets = {};
+    snapshot.depth_stencil = {0u};
+    snapshot.render_targets_known = true;
+  }
+
+  void BindViewports(uint32_t first, uint32_t count, const reshade::api::viewport* viewports) {
+    if constexpr (Api == reshade::api::device_api::d3d10 || Api == reshade::api::device_api::d3d11) {
+      if (shared.data != nullptr && !shared.data->use_viewport_scissor_tracking) return;
+    }
+    if constexpr (Api == reshade::api::device_api::d3d10 || Api == reshade::api::device_api::d3d11
+                  || Api == reshade::api::device_api::d3d12) {
+      assert(first == 0u && count <= D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
+      if (first != 0u || count > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE || (count != 0u && viewports == nullptr)) return;
+      if (count != 0u) {
+        snapshot.fixed_viewports.setRange(0u, {viewports, count});
+      }
+      snapshot.fixed_viewports.clear(count, D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE - count);
+      snapshot.viewports_known = true;
+    } else {
+      if (first == 0u && count == 0u) {
+        snapshot.viewports.clear();
+        snapshot.known_viewport_slots.clear();
+        snapshot.viewports_known = true;
+        return;
+      }
+      if (count == 0u || viewports == nullptr) return;
+      snapshot.viewports_known = true;
+      const uint32_t total_count = first + count;
+      if (snapshot.viewports.size() < total_count) {
+        snapshot.viewports.resize(total_count);
+        snapshot.known_viewport_slots.resize(total_count);
+      }
+      for (uint32_t index = 0u; index < count; ++index) {
+        snapshot.viewports[first + index] = viewports[index];
+        snapshot.known_viewport_slots[first + index] = 1u;
+      }
+    }
+  }
+
+  void BindScissorRects(uint32_t first, uint32_t count, const reshade::api::rect* rects) {
+    if constexpr (Api == reshade::api::device_api::d3d10 || Api == reshade::api::device_api::d3d11
+                  || Api == reshade::api::device_api::d3d12) {
+      assert(first == 0u && count <= D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
+      if (first != 0u || count > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE || (count != 0u && rects == nullptr)) return;
+      if (count != 0u) {
+        snapshot.fixed_scissor_rects.setRange(0u, {rects, count});
+      }
+      snapshot.fixed_scissor_rects.clear(count, D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE - count);
+      snapshot.scissor_rects_known = true;
+    } else {
+      if (first == 0u && count == 0u) {
+        snapshot.scissor_rects.clear();
+        snapshot.known_scissor_rect_slots.clear();
+        snapshot.scissor_rects_known = true;
+        return;
+      }
+      if (count == 0u || rects == nullptr) return;
+      snapshot.scissor_rects_known = true;
+      const uint32_t total_count = first + count;
+      if (snapshot.scissor_rects.size() < total_count) {
+        snapshot.scissor_rects.resize(total_count);
+        snapshot.known_scissor_rect_slots.resize(total_count);
+      }
+      for (uint32_t index = 0u; index < count; ++index) {
+        snapshot.scissor_rects[first + index] = rects[index];
+        snapshot.known_scissor_rect_slots[first + index] = 1u;
+      }
+    }
+  }
+
+  void BindVertexBuffers(uint32_t first, uint32_t count, const reshade::api::resource* buffers,
+                         const uint64_t* offsets, const uint32_t* strides) {
+    // D3D9 draw-UP bindings can reference ReShade's overwritten synthetic handle.
+    // D3D9/10/11 input-assembler state is captured through native getters instead.
+    if constexpr (Api == reshade::api::device_api::d3d9
+                  || Api == reshade::api::device_api::d3d10
+                  || Api == reshade::api::device_api::d3d11) return;
+    if (count == 0u) return;
+    assert(buffers != nullptr && offsets != nullptr);
+    if (buffers == nullptr || offsets == nullptr) return;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(first <= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT && count <= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT - first);
+      if (first > D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT || count > D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT - first) return;
+      auto& slots = recording[0].vertex_buffers;
+      for (uint32_t index = 0u; index < count; ++index) {
+        const auto slot = first + index;
+        uint32_t stride = 0u;
+        if (strides != nullptr) {
+          stride = strides[index];
+        } else if (slots.has(slot)) {
+          stride = slots.get(slot).stride;
+        }
+        slots.set(slot, typename D3D12Recording::VertexBuffer{
+                            .buffer = buffers[index], .offset = offsets[index], .stride = stride});
+      }
+    } else {
+      const uint32_t total_count = first + count;
+      if (snapshot.vertex_buffers.size() < total_count) {
+        snapshot.vertex_buffers.resize(total_count);
+        snapshot.vertex_buffer_offsets.resize(total_count);
+        snapshot.vertex_buffer_strides.resize(total_count);
+        snapshot.known_vertex_buffer_slots.resize(total_count);
+      }
+      for (uint32_t index = 0u; index < count; ++index) {
+        const auto slot = first + index;
+        snapshot.vertex_buffers[slot] = buffers[index];
+        snapshot.vertex_buffer_offsets[slot] = offsets[index];
+        if (strides != nullptr) {
+          snapshot.vertex_buffer_strides[slot] = strides[index];
+        }
+        snapshot.known_vertex_buffer_slots[slot] = 1u;
+      }
+    }
+  }
+
+  void BindIndexBuffer(reshade::api::resource buffer, uint64_t offset, uint32_t index_size) {
+    if constexpr (Api == reshade::api::device_api::d3d9
+                  || Api == reshade::api::device_api::d3d10
+                  || Api == reshade::api::device_api::d3d11) return;
+    snapshot.index_buffer = buffer;
+    snapshot.index_buffer_offset = offset;
+    snapshot.index_size = index_size;
+    snapshot.index_buffer_known = true;
+  }
+
+  void PushConstants(reshade::api::shader_stage stages, reshade::api::pipeline_layout layout,
+                     uint32_t layout_param, uint32_t first, uint32_t count, const void* values) {
+    assert(count != 0u);
+    assert(values != nullptr);
+    TransitionPipelineLayout(stages, layout);
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      assert(stages == reshade::api::shader_stage::all_graphics
+             || stages == (reshade::api::shader_stage::all_compute | reshade::api::shader_stage::all_ray_tracing));
+      if (stages != reshade::api::shader_stage::all_graphics
+          && stages != (reshade::api::shader_stage::all_compute | reshade::api::shader_stage::all_ray_tracing)) return;
+      if (layout.handle == 0u) return;
+      recording[0].root_constants[stages == reshade::api::shader_stage::all_graphics ? GRAPHICS_ROOT_DOMAIN : COMPUTE_ROOT_DOMAIN].Update(
+          layout_param, first, {static_cast<const uint32_t*>(values), count});
+    } else {
+      for (auto& push_state : snapshot.push_states) {
+        if (!renodx::utils::bitwise::HasFlag(stages, push_state.stage)) continue;
+        push_state.SetLayout(layout);
+        if (layout.handle == 0u) continue;
+        push_state.GetConstants(layout_param)->values.setRange(first, {static_cast<const uint32_t*>(values), count});
+      }
+    }
+  }
 
   [[nodiscard]] constexpr size_t GetPipelineSlot(reshade::api::pipeline_stage stage) const {
     if constexpr (Api == reshade::api::device_api::d3d11 || Api == reshade::api::device_api::opengl) {
@@ -1438,6 +2864,10 @@ struct CommandListState {
 #endif
         snapshot.graphics_descriptor_tables_known = false;
         snapshot.ClearPushStates(reshade::api::shader_stage::all_graphics);
+        if (!snapshot.push_states.empty()) {
+          snapshot.push_states[GRAPHICS_ROOT_DOMAIN].layout = layout;
+        }
+        recording[0].root_constants[GRAPHICS_ROOT_DOMAIN].Clear();
       }
       if ((renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_compute)
            || renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_ray_tracing))
@@ -1450,13 +2880,16 @@ struct CommandListState {
 #endif
         snapshot.compute_descriptor_tables_known = false;
         snapshot.ray_tracing_pipeline_layout = {0};
-        snapshot.ray_tracing_descriptor_tables.clear();
 #if RESHADE_API_VERSION >= 20
         snapshot.ray_tracing_descriptor_table_dynamic_offsets.clear();
 #endif
         snapshot.ray_tracing_descriptor_tables_known = false;
         snapshot.ClearPushStates(reshade::api::shader_stage::all_compute
                                  | reshade::api::shader_stage::all_ray_tracing);
+        if (!snapshot.push_states.empty()) {
+          snapshot.push_states[COMPUTE_ROOT_DOMAIN].layout = layout;
+        }
+        recording[0].root_constants[COMPUTE_ROOT_DOMAIN].Clear();
       }
     }
   }
@@ -1465,9 +2898,23 @@ struct CommandListState {
     snapshot.Clear();
     bound_pipelines.clear();
     bind_sequence = 0u;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      recording[0].dynamic_states.clear();
+      recording[0].vertex_buffers.clear();
+      for (auto& constants : recording[0].root_constants) {
+        constants.Clear();
+      }
+    }
   }
 
   void BindPipeline(reshade::api::pipeline_stage stages, reshade::api::pipeline pipeline, PipelineBindPoint bind_point) {
+    if constexpr (Api == reshade::api::device_api::opengl) {
+      // glUseProgram binds all shader stages, including the compute bit, even
+      // for graphics programs. The program is shared by both replay domains.
+      if (stages == reshade::api::pipeline_stage::all_shader_stages) {
+        bind_point = PipelineBindPoint::UNKNOWN;
+      }
+    }
     if (stages == reshade::api::pipeline_stage::all && pipeline.handle == 0u) {
       bound_pipelines.clear();
       bind_sequence = 0u;
@@ -1482,19 +2929,37 @@ struct CommandListState {
         for (size_t slot = 0u; slot < RESET_STAGES.size(); ++slot) {
           bound_pipelines.set(slot, PipelineBind{
                                         .stages = RESET_STAGES[slot],
-                                        .bind_point = slot == 5u ? PipelineBindPoint::COMPUTE : PipelineBindPoint::GRAPHICS,
+                                        .bind_point = (slot == 5u ? PipelineBindPoint::COMPUTE : PipelineBindPoint::GRAPHICS),
                                         .sequence = ++bind_sequence,
                                     });
         }
       }
     } else {
       const PipelineBind bind{.stages = stages, .pipeline = pipeline, .bind_point = bind_point, .sequence = ++bind_sequence};
-      if constexpr (Api == reshade::api::device_api::d3d12 || Api == reshade::api::device_api::vulkan) {
+      if constexpr (Api == reshade::api::device_api::d3d12) {
+        // Repeated handles still invalidate cached nodes: the old pipeline may
+        // have been destroyed and a new pipeline created at the same handle.
+        switch (bind_point) {
+          case PipelineBindPoint::GRAPHICS:
+            bound_pipelines.set(0u, bind);
+            snapshot.bound_pipeline_infos[GRAPHICS_ROOT_DOMAIN] = nullptr;
+            break;
+          case PipelineBindPoint::COMPUTE:
+            bound_pipelines.set(1u, bind);
+            snapshot.bound_pipeline_infos[COMPUTE_ROOT_DOMAIN] = nullptr;
+            break;
+          case PipelineBindPoint::RAY_TRACING:
+            bound_pipelines.set(2u, bind);
+            break;
+          default: assert(false); break;
+        }
+        return;
+      } else if constexpr (Api == reshade::api::device_api::vulkan) {
         switch (bind_point) {
           case PipelineBindPoint::GRAPHICS:    bound_pipelines.set(0u, bind); break;
           case PipelineBindPoint::COMPUTE:     bound_pipelines.set(1u, bind); break;
           case PipelineBindPoint::RAY_TRACING: bound_pipelines.set(2u, bind); break;
-          default:                          assert(false); break;
+          default:                             assert(false); break;
         }
       } else {
         size_t slot = GetPipelineSlot(stages);
@@ -1510,7 +2975,9 @@ struct CommandListState {
           while (remaining != 0u) {
             slot = GetPipelineSlot(static_cast<reshade::api::pipeline_stage>(uint32_t{1} << std::countr_zero(remaining)));
             remaining &= remaining - 1u;
-            if (slot != PIPELINE_SLOT_COUNT) bound_pipelines.set(slot, bind);
+            if (slot != PIPELINE_SLOT_COUNT) {
+              bound_pipelines.set(slot, bind);
+            }
           }
         }
       }
@@ -1540,6 +3007,49 @@ struct CommandListState {
         snapshot.bound_pipeline_infos[index] = nullptr;
       }
     }
+  }
+
+  [[nodiscard]] BackendSnapshotData<Api> Capture() const {
+    BackendSnapshotData<Api> data(snapshot);
+    CopyPipelineBinds(&data.pipeline_binds);
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      for (size_t domain = 0u; domain < recording[0].root_constants.size(); ++domain) {
+        const auto& source = recording[0].root_constants[domain];
+        auto& target = data.root_constant_storage[domain];
+        target.Clear();
+        for (const auto& [param, parameter] : source.parameters.entries()) {
+          target.parameters.set(param, D3D12RootConstants::ParameterRange{
+                                           .offset = static_cast<uint8_t>(target.used),
+                                           .count = parameter.count});
+          uint32_t slot = parameter.head;
+          for (uint32_t word = 0u; word < parameter.count; ++word) {
+            if (source.values.has(slot)) {
+              target.values.set(target.used + word, source.values.get(slot));
+            }
+            if (word + 1u < parameter.count) {
+              slot = source.next[slot];
+            }
+          }
+          target.used += parameter.count;
+        }
+      }
+      for (const auto& [slot, value] : recording[0].dynamic_states.entries()) {
+        data.dynamic_states.insert_or_assign(D3D12_DYNAMIC_STATES[slot], value);
+      }
+      for (const auto& [slot, value] : recording[0].vertex_buffers.entries()) {
+        if (data.vertex_buffers.size() <= slot) {
+          data.vertex_buffers.resize(slot + 1u);
+          data.vertex_buffer_offsets.resize(slot + 1u);
+          data.vertex_buffer_strides.resize(slot + 1u);
+          data.known_vertex_buffer_slots.resize(slot + 1u);
+        }
+        data.vertex_buffers[slot] = value.buffer;
+        data.vertex_buffer_offsets[slot] = value.offset;
+        data.vertex_buffer_strides[slot] = value.stride;
+        data.known_vertex_buffer_slots[slot] = 1u;
+      }
+    }
+    return data;
   }
 
   void CopyPipelineBinds(cross_addon::vector<PipelineBind>* binds) const {
@@ -1665,8 +3175,8 @@ struct CommandListState {
     }
     const bool is_d3d12 = cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12;
     const auto bind_descriptor_tables = [&](reshade::api::shader_stage stages,
-                                             reshade::api::pipeline_layout layout,
-                                             const std::vector<reshade::api::descriptor_table>& tables) {
+                                            reshade::api::pipeline_layout layout,
+                                            const std::vector<reshade::api::descriptor_table>& tables) {
       if (layout.handle == 0u) return;
       if (is_d3d12) {
         bool bound_table = false;
@@ -1714,7 +3224,31 @@ struct CommandListState {
 
 class CommandListSnapshot final {
  public:
+  [[nodiscard]] reshade::api::primitive_topology GetPrimitiveTopology() const {
+    const auto& data = GetData();
+    const auto found = data.dynamic_states.find(reshade::api::dynamic_state::primitive_topology);
+    return (found == data.dynamic_states.end() ? reshade::api::primitive_topology::undefined
+                                               : static_cast<reshade::api::primitive_topology>(found->second));
+  }
+
+  [[nodiscard]] reshade::api::resource_view GetRenderTarget(uint32_t slot) const {
+    const auto& data = GetData();
+    return (data.render_targets_known && slot < data.render_targets.size() ? data.render_targets[slot]
+                                                                           : reshade::api::resource_view{0u});
+  }
+
+  [[nodiscard]] reshade::api::resource_view GetPushedResourceView(
+      reshade::api::shader_stage stage, uint32_t layout_param,
+      reshade::api::descriptor_type type, uint32_t binding) const {
+    return GetData().GetPushedResourceView(stage, layout_param, type, binding);
+  }
+
+  void ApplyNativeDescriptors(reshade::api::shader_stage stage) const {
+    GetData().ApplyNativeDescriptors(command_list, stage);
+  }
+
   void RestoreConstantBufferBindings(uint32_t slot, bool is_dispatch) const {
+    const auto& state = GetData();
     if (slot >= D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT
         || (state.device_api != reshade::api::device_api::d3d10
             && state.device_api != reshade::api::device_api::d3d11)
@@ -1739,23 +3273,36 @@ class CommandListSnapshot final {
   }
 
   void Apply() const {
-    state.Apply(command_list);
+    std::visit([&](const auto& data) { data.Apply(command_list); }, state);
+    ApplyD3D9Samplers(command_list);
   }
 
-  void ApplyGraphics(bool apply_pipelines = true) const {
-    state.ApplyGraphics(command_list, apply_pipelines);
+  bool ApplyGraphics(bool apply_pipelines = true, reshade::api::command_list* destination = nullptr) const {
+    if (destination == nullptr) {
+      destination = command_list;
+    }
+    if (destination == nullptr || command_list == nullptr
+        || destination->get_device() != command_list->get_device()) return false;
+    std::visit([&](const auto& data) { data.ApplyGraphics(destination, apply_pipelines); }, state);
+    return ApplyD3D9Samplers(destination);
   }
 
-  void ApplyCompute(bool apply_pipelines = true) const {
-    state.ApplyCompute(command_list, apply_pipelines);
+  bool ApplyCompute(bool apply_pipelines = true, reshade::api::command_list* destination = nullptr) const {
+    if (destination == nullptr) {
+      destination = command_list;
+    }
+    if (destination == nullptr || command_list == nullptr
+        || destination->get_device() != command_list->get_device()) return false;
+    std::visit([&](const auto& data) { data.ApplyCompute(destination, apply_pipelines); }, state);
+    return true;
   }
 
   void ApplyRayTracing(bool apply_pipelines = true) const {
-    state.ApplyRayTracing(command_list, apply_pipelines);
+    std::visit([&](const auto& data) { data.ApplyRayTracing(command_list, apply_pipelines); }, state);
   }
 
   void ApplyPipelines(PipelineBindPoint bind_point = PipelineBindPoint::UNKNOWN) const {
-    state.ApplyPipelines(command_list, bind_point);
+    GetData().ApplyPipelines(command_list, bind_point);
   }
 
  private:
@@ -1766,7 +3313,36 @@ class CommandListSnapshot final {
       reshade::api::command_list* cmd_list);
 
   reshade::api::command_list* command_list = nullptr;
-  internal::CommandListSnapshotData state;
+  struct D3D9SamplerValue {
+    DWORD sampler;
+    D3DSAMPLERSTATETYPE type;
+    DWORD value;
+  };
+  std::vector<D3D9SamplerValue> d3d9_sampler_values;
+
+  bool ApplyD3D9Samplers(reshade::api::command_list* destination) const {
+    if (d3d9_sampler_values.empty()) return true;
+    auto* native = reinterpret_cast<IDirect3DDevice9*>(static_cast<uintptr_t>(destination->get_native()));
+    bool applied = true;
+    // Descriptor replay may set SRGBTEXTURE; native captured values take precedence.
+    for (const auto& sampler : d3d9_sampler_values) {
+      applied &= SUCCEEDED(native->SetSamplerState(sampler.sampler, sampler.type, sampler.value));
+    }
+    return applied;
+  }
+
+  std::variant<
+      internal::BackendSnapshotData<reshade::api::device_api::d3d9>,
+      internal::BackendSnapshotData<reshade::api::device_api::d3d10>,
+      internal::BackendSnapshotData<reshade::api::device_api::d3d11>,
+      internal::BackendSnapshotData<reshade::api::device_api::d3d12>,
+      internal::BackendSnapshotData<reshade::api::device_api::opengl>,
+      internal::BackendSnapshotData<reshade::api::device_api::vulkan>>
+      state;
+
+  const internal::CommandListSnapshotData& GetData() const {
+    return std::visit([](const auto& data) -> const internal::CommandListSnapshotData& { return data; }, state);
+  }
 };
 
 struct BoundDescriptorTables {
@@ -1797,7 +3373,7 @@ inline CommandListSnapshotData* GetTrackedSnapshotData(
     CommandListStateCache* cache = nullptr) {
   const auto* handle = GetCommandListStateHandle(cmd_list, cache);
   if (handle == nullptr) return nullptr;
-  return WithCommandListState(handle, [](auto& state) { return &state.snapshot; });
+  return WithCommandListState(handle, [](auto& state) -> CommandListSnapshotData* { return &state.snapshot; });
 }
 }  // namespace internal
 
@@ -1818,16 +3394,23 @@ inline const pipeline::PipelineInfo* GetBoundPipelineInfo(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stage,
     CommandListStateCache* cache = nullptr) {
-  const auto* state = internal::GetTrackedSnapshotData(cmd_list, cache);
-  const auto index = pipeline::GetShaderStageIndex(stage);
-  if (state == nullptr || index >= state->bound_pipeline_infos.size()) return nullptr;
-  if (const auto* info = state->bound_pipeline_infos[index]; info != nullptr) return info;
-  const auto bound_pipeline = GetBoundShaderPipeline(cmd_list, stage, cache);
-  if (bound_pipeline.handle == 0u) return nullptr;
-  pipeline::GetPipelineInfo(bound_pipeline, [&](const pipeline::PipelineInfo& info) {
-    state->bound_pipeline_infos[index] = &info;
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list, cache);
+  if (handle == nullptr) return nullptr;
+  return internal::WithCommandListState(handle, [&]<reshade::api::device_api Api>(const internal::CommandListState<Api>& state) -> const pipeline::PipelineInfo* {
+    auto index = pipeline::GetShaderStageIndex(stage);
+    if (index >= pipeline::SHADER_STAGES.size()) return nullptr;
+    if constexpr (Api == reshade::api::device_api::d3d12) {
+      index = (stage == reshade::api::pipeline_stage::compute_shader ? COMPUTE_ROOT_DOMAIN : GRAPHICS_ROOT_DOMAIN);
+    }
+    auto& cached = state.snapshot.bound_pipeline_infos[index];
+    if (cached != nullptr) return cached;
+    const auto bound_pipeline = state.GetBoundShaderPipeline(stage);
+    if (bound_pipeline.handle == 0u) return nullptr;
+    pipeline::GetPipelineInfo(bound_pipeline, [&](const pipeline::PipelineInfo& info) {
+      cached = &info;
+    });
+    return cached;
   });
-  return state->bound_pipeline_infos[index];
 }
 
 // Zero when the stage is unbound, unsupported, or the bound pipeline has no known shader detail.
@@ -1900,16 +3483,9 @@ static void OnBindRenderTargetsAndDepthStencil(
     uint32_t count,
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& state = *data;
-  if (count != 0u && rtvs != nullptr) {
-    state.render_targets.assign(rtvs, rtvs + count);
-  } else {
-    state.render_targets.clear();
-  }
-  state.depth_stencil = dsv;
-  state.render_targets_known = true;
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BindRenderTargetsAndDepthStencil(count, rtvs, dsv); });
 }
 
 static void OnBeginRenderPass(
@@ -1917,129 +3493,42 @@ static void OnBeginRenderPass(
     uint32_t count,
     const reshade::api::render_pass_render_target_desc* render_targets,
     const reshade::api::render_pass_depth_stencil_desc* depth_stencil) {
-  auto* state = internal::GetTrackedSnapshotData(cmd_list);
-  if (state == nullptr) return;
-  if (state->render_pass_depth++ != 0u) return;
-
-  state->render_targets.resize(count);
-  for (uint32_t index = 0u; index < count; ++index) {
-    state->render_targets[index] = render_targets[index].view;
-  }
-  state->depth_stencil = (depth_stencil == nullptr
-                              ? reshade::api::resource_view{0u}
-                              : depth_stencil->view);
-  state->render_targets_known = true;
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BeginRenderPass(count, render_targets, depth_stencil); });
 }
 
 static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
-  auto* state = internal::GetTrackedSnapshotData(cmd_list);
-  if (state == nullptr || state->render_pass_depth == 0u) return;
-  if (--state->render_pass_depth != 0u) return;
-  state->render_targets.clear();
-  state->depth_stencil = {0u};
-  state->render_targets_known = true;
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [](auto& state) { state.EndRenderPass(); });
 }
 
 static void OnBindPipelineStates(
     reshade::api::command_list* cmd_list,
     uint32_t count, const reshade::api::dynamic_state* states,
     const uint32_t* values) {
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& state = *data;
-
-  for (uint32_t i = 0; i < count; ++i) {
-    if (states[i] != reshade::api::dynamic_state::unknown) {
-      const auto [entry, inserted] = state.dynamic_states.try_emplace(states[i], values[i]);
-      if (inserted) {
-        state.dynamic_state_order.push_back(states[i]);
-      } else {
-        entry->second = values[i];
-      }
-    }
-  }
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BindPipelineStates(count, states, values); });
 }
 
 static void OnBindViewports(
     reshade::api::command_list* cmd_list,
     uint32_t first, uint32_t count,
     const reshade::api::viewport* viewports) {
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& state = *data;
-
-  if (state.UsesFixedRasterLists()) {
-    assert(first == 0u && count <= 16u);
-    if (first != 0u || count > 16u || (count != 0u && viewports == nullptr)) return;
-    if (count != 0u) {
-      state.fixed_viewports.setRange(0u, {viewports, count});
-    }
-    state.fixed_viewports.clear(count, 16u - count);
-    state.viewports_known = true;
-    return;
-  }
-
-  if (first == 0u && count == 0u) {
-    state.viewports.clear();
-    state.known_viewport_slots.clear();
-    state.viewports_known = true;
-    return;
-  }
-
-  if (count == 0u || viewports == nullptr) return;
-  state.viewports_known = true;
-
-  const uint32_t total_count = first + count;
-  if (state.viewports.size() < total_count) {
-    state.viewports.resize(total_count);
-    state.known_viewport_slots.resize(total_count);
-  }
-
-  for (uint32_t i = 0; i < count; ++i) {
-    state.viewports[i + first] = viewports[i];
-    state.known_viewport_slots[i + first] = 1u;
-  }
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BindViewports(first, count, viewports); });
 }
 
 static void OnBindScissorRects(
     reshade::api::command_list* cmd_list,
     uint32_t first, uint32_t count,
     const reshade::api::rect* rects) {
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& state = *data;
-
-  if (state.UsesFixedRasterLists()) {
-    assert(first == 0u && count <= 16u);
-    if (first != 0u || count > 16u || (count != 0u && rects == nullptr)) return;
-    if (count != 0u) {
-      state.fixed_scissor_rects.setRange(0u, {rects, count});
-    }
-    state.fixed_scissor_rects.clear(count, 16u - count);
-    state.scissor_rects_known = true;
-    return;
-  }
-
-  if (first == 0u && count == 0u) {
-    state.scissor_rects.clear();
-    state.known_scissor_rect_slots.clear();
-    state.scissor_rects_known = true;
-    return;
-  }
-
-  if (count == 0u || rects == nullptr) return;
-  state.scissor_rects_known = true;
-
-  const uint32_t total_count = first + count;
-  if (state.scissor_rects.size() < total_count) {
-    state.scissor_rects.resize(total_count);
-    state.known_scissor_rect_slots.resize(total_count);
-  }
-
-  for (uint32_t i = 0; i < count; ++i) {
-    state.scissor_rects[i + first] = rects[i];
-    state.known_scissor_rect_slots[i + first] = 1u;
-  }
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BindScissorRects(first, count, rects); });
 }
 
 static void OnBindVertexBuffers(
@@ -2049,39 +3538,9 @@ static void OnBindVertexBuffers(
     const reshade::api::resource* buffers,
     const uint64_t* offsets,
     const uint32_t* strides) {
-  // ReShade 6.8.0 resize_primitive_up_buffers overwrites the vertex handle with
-  // its index allocation. Do not cache these synthetic D3D9 bindings; RenderPass
-  // uses native GetStreamSource/GetIndices capture instead. This does not prevent
-  // ReShade's allocation bug, which is triggered by subscription presence.
-  // https://github.com/crosire/reshade/blob/v6.8.0/source/d3d9/d3d9_device.cpp
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  const auto device_api = data->device_api;
-  if (device_api == reshade::api::device_api::d3d9
-      || device_api == reshade::api::device_api::d3d10
-      || device_api == reshade::api::device_api::d3d11) return;
-  if (count == 0u) return;
-  assert(buffers != nullptr && offsets != nullptr);
-  if (buffers == nullptr || offsets == nullptr) return;
-
-  auto& state = *data;
-  const uint32_t total_count = first + count;
-  if (state.vertex_buffers.size() < total_count) {
-    state.vertex_buffers.resize(total_count);
-    state.vertex_buffer_offsets.resize(total_count);
-    state.vertex_buffer_strides.resize(total_count);
-    state.known_vertex_buffer_slots.resize(total_count);
-  }
-  for (uint32_t index = 0u; index < count; ++index) {
-    const auto slot = first + index;
-    state.vertex_buffers[slot] = buffers[index];
-    state.vertex_buffer_offsets[slot] = offsets[index];
-    // ReShade permits omitted strides (including D3D9 draw-UP cleanup).
-    if (strides != nullptr) {
-      state.vertex_buffer_strides[slot] = strides[index];
-    }
-    state.known_vertex_buffer_slots[slot] = 1u;
-  }
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BindVertexBuffers(first, count, buffers, offsets, strides); });
 }
 
 static void OnBindIndexBuffer(
@@ -2089,209 +3548,31 @@ static void OnBindIndexBuffer(
     reshade::api::resource buffer,
     uint64_t offset,
     uint32_t index_size) {
-  // See OnBindVertexBuffers: D3D9 input-assembler state is captured natively.
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  const auto device_api = data->device_api;
-  if (device_api == reshade::api::device_api::d3d9
-      || device_api == reshade::api::device_api::d3d10
-      || device_api == reshade::api::device_api::d3d11) return;
-  auto& state = *data;
-  state.index_buffer = buffer;
-  state.index_buffer_offset = offset;
-  state.index_size = index_size;
-  state.index_buffer_known = true;
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.BindIndexBuffer(buffer, offset, index_size); });
 }
 
 static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
                                    reshade::api::shader_stage stages,
                                    reshade::api::pipeline_layout layout,
                                    uint32_t first, uint32_t count,
+                                   const reshade::api::descriptor_table* tables
 #if RESHADE_API_VERSION >= 20
-                                   const reshade::api::descriptor_table* tables,
-                                   uint32_t dynamic_offset_count,
-                                   const uint32_t* dynamic_offsets) {
-#else
-                                   const reshade::api::descriptor_table* tables) {
+                                   ,
+                                   uint32_t dynamic_offset_count, const uint32_t* dynamic_offsets
 #endif
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& current_state = *data;
-  internal::WithCommandListState(internal::GetCommandListStateHandle(cmd_list), [&](auto& state) {
-    state.TransitionPipelineLayout(stages, layout);
+) {
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) {
+    state.BindDescriptorTables(stages, layout, first, count, tables
+#if RESHADE_API_VERSION >= 20
+                               ,
+                               dynamic_offset_count, dynamic_offsets
+#endif
+    );
   });
-  const bool has_graphics = renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_graphics);
-  const bool has_compute = renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_compute);
-  const bool has_ray_tracing = renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_ray_tracing);
-  if (!has_graphics && !has_compute && !has_ray_tracing) return;
-  // D3D12 emits this notification even for a redundant SetRootSignature.
-  // TransitionPipelineLayout already invalidates arguments on a real change.
-  const bool clear_descriptor_tables = count == 0u && tables == nullptr
-                                       && current_state.device_api != reshade::api::device_api::d3d12;
-
-#if RESHADE_API_VERSION >= 20
-  cross_addon::vector<cross_addon::vector<uint32_t>> table_dynamic_offsets;
-  if (dynamic_offset_count != 0u && dynamic_offsets != nullptr) {
-    table_dynamic_offsets.resize(count);
-    const size_t domain_index = current_state.device_api == reshade::api::device_api::opengl
-                                    ? 0u
-                                    : (has_compute || (has_ray_tracing && current_state.device_api == reshade::api::device_api::d3d12)
-                                           ? 1u
-                                           : (has_ray_tracing ? 2u : 0u));
-    auto& cached = current_state.layout_data_by_domain[domain_index];
-    if (cached.layout != layout) {
-      cached.layout = layout;
-      cached.data = nullptr;
-    }
-    if (cached.data == nullptr) {
-      pipeline_layout::GetPipelineLayoutData(layout, [&](const auto* layout_data) {
-        cached.data = layout_data;
-      });
-    }
-    if (const auto* layout_data = cached.data; layout_data != nullptr) {
-      uint32_t source_offset = 0u;
-      const auto count_ranges = [](uint32_t range_count, const auto* ranges) {
-        uint32_t descriptor_count = 0u;
-        for (uint32_t range_index = 0u; range_index < range_count; ++range_index) {
-          const auto& range = ranges[range_index];
-          if (range.type
-                  != reshade::api::descriptor_type::constant_buffer_with_dynamic_offset
-              && range.type
-                     != reshade::api::descriptor_type::shader_storage_buffer_with_dynamic_offset) {
-            continue;
-          }
-          if (range.count == UINT32_MAX
-              || descriptor_count > UINT32_MAX - range.count) {
-            return UINT32_MAX;
-          }
-          descriptor_count += range.count;
-        }
-        return descriptor_count;
-      };
-      for (uint32_t index = 0u;
-           index < count && first + index < layout_data->params.size();
-           ++index) {
-        const auto& param = layout_data->params[first + index];
-        uint32_t table_offset_count = 0u;
-        switch (param.type) {
-          case reshade::api::pipeline_layout_param_type::push_descriptors:
-            if (param.push_descriptors.type
-                    == reshade::api::descriptor_type::constant_buffer_with_dynamic_offset
-                || param.push_descriptors.type
-                       == reshade::api::descriptor_type::shader_storage_buffer_with_dynamic_offset) {
-              table_offset_count = param.push_descriptors.count;
-            }
-            break;
-          case reshade::api::pipeline_layout_param_type::descriptor_table:
-          case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
-            table_offset_count = count_ranges(
-                param.descriptor_table.count,
-                param.descriptor_table.ranges);
-            break;
-          case reshade::api::pipeline_layout_param_type::descriptor_table_with_flags:
-          case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges_and_flags:
-            table_offset_count = count_ranges(
-                param.descriptor_table_with_flags.count,
-                param.descriptor_table_with_flags.ranges);
-            break;
-          case reshade::api::pipeline_layout_param_type::push_constants:
-            break;
-        }
-        if (table_offset_count == UINT32_MAX
-            || table_offset_count > dynamic_offset_count - source_offset) {
-          table_offset_count = dynamic_offset_count - source_offset;
-        }
-        table_dynamic_offsets[index].assign(
-            dynamic_offsets + source_offset,
-            dynamic_offsets + source_offset + table_offset_count);
-        source_offset += table_offset_count;
-        if (source_offset == dynamic_offset_count) break;
-      }
-    }
-  }
-#endif
-
-  const auto update_state = [&](reshade::api::pipeline_layout* tracked_layout,
-                                DescriptorTableSlots* tracked_tables
-#if RESHADE_API_VERSION >= 20
-                                ,
-                                cross_addon::vector<cross_addon::vector<uint32_t>>* tracked_dynamic_offsets
-#endif
-                            ) {
-    if (clear_descriptor_tables || layout != *tracked_layout) {
-      tracked_tables->clear();  // Layout changed, which resets all descriptor table bindings
-#if RESHADE_API_VERSION >= 20
-      tracked_dynamic_offsets->clear();
-#endif
-    }
-    *tracked_layout = layout;
-
-    if (layout.handle == 0u || clear_descriptor_tables) {
-      return;
-    }
-
-    tracked_tables->setRange(first, {tables, count});
-#if RESHADE_API_VERSION >= 20
-    const size_t total_count = static_cast<size_t>(first) + count;
-    if (!table_dynamic_offsets.empty() && tracked_dynamic_offsets->size() < total_count) {
-      tracked_dynamic_offsets->resize(total_count);
-    }
-    for (uint32_t i = 0; i < count; ++i) {
-      if (table_dynamic_offsets.empty()) {
-        if (i + first >= tracked_dynamic_offsets->size()) continue;
-        (*tracked_dynamic_offsets)[i + first].clear();
-      } else {
-        (*tracked_dynamic_offsets)[i + first] = table_dynamic_offsets[i];
-      }
-    }
-#endif
-  };
-
-  if (has_graphics) {
-    current_state.graphics_descriptor_tables_known = true;
-    if (current_state.device_api != reshade::api::device_api::d3d12
-        && (clear_descriptor_tables || layout != current_state.graphics_pipeline_layout)) {
-      current_state.ClearPushStates(reshade::api::shader_stage::all_graphics);
-    }
-    update_state(
-        &current_state.graphics_pipeline_layout,
-        &current_state.graphics_descriptor_tables
-#if RESHADE_API_VERSION >= 20
-        ,
-        &current_state.graphics_descriptor_table_dynamic_offsets
-#endif
-    );
-  }
-  if (has_compute) {
-    current_state.compute_descriptor_tables_known = true;
-    if (current_state.device_api != reshade::api::device_api::d3d12
-        && (clear_descriptor_tables || layout != current_state.compute_pipeline_layout)) {
-      current_state.ClearPushStates(reshade::api::shader_stage::all_compute);
-    }
-    update_state(
-        &current_state.compute_pipeline_layout,
-        &current_state.compute_descriptor_tables
-#if RESHADE_API_VERSION >= 20
-        ,
-        &current_state.compute_descriptor_table_dynamic_offsets
-#endif
-    );
-  }
-  if (has_ray_tracing) {
-    current_state.ray_tracing_descriptor_tables_known = true;
-    if (current_state.device_api != reshade::api::device_api::d3d12
-        && (clear_descriptor_tables || layout != current_state.ray_tracing_pipeline_layout)) {
-      current_state.ClearPushStates(reshade::api::shader_stage::all_ray_tracing);
-    }
-    update_state(
-        &current_state.ray_tracing_pipeline_layout,
-        &current_state.ray_tracing_descriptor_tables
-#if RESHADE_API_VERSION >= 20
-        ,
-        &current_state.ray_tracing_descriptor_table_dynamic_offsets
-#endif
-    );
-  }
 }
 
 static void OnPushConstants(reshade::api::command_list* cmd_list,
@@ -2301,37 +3582,9 @@ static void OnPushConstants(reshade::api::command_list* cmd_list,
                             uint32_t first,
                             uint32_t count,
                             const void* values) {
-  assert(count != 0u);
-  assert(values != nullptr);
-
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& current_state = *data;
-  internal::WithCommandListState(internal::GetCommandListStateHandle(cmd_list), [&](auto& state) {
-    state.TransitionPipelineLayout(stages, layout);
-  });
-  const auto* source_values = static_cast<const uint32_t*>(values);
-
-  for (const auto stage : TRACKED_SHADER_STAGES) {
-    if (!renodx::utils::bitwise::HasFlag(stages, stage)) continue;
-    auto* push_state = current_state.GetShaderStagePushState(stage);
-    push_state->SetLayout(layout);
-    if (layout.handle == 0u) continue;
-
-    auto* constants = push_state->GetConstants(layout_param);
-
-    const uint32_t total_count = first + count;
-    if (constants->values.size() < total_count) {
-      constants->values.resize(total_count);
-      constants->known_values.resize(total_count);
-    }
-
-    for (uint32_t i = 0; i < count; ++i) {
-      const auto slot = first + i;
-      constants->values[slot] = source_values[i];
-      constants->known_values[slot] = 1u;
-    }
-  }
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) { state.PushConstants(stages, layout, layout_param, first, count, values); });
 }
 
 static void OnPushDescriptors(reshade::api::command_list* cmd_list,
@@ -2339,462 +3592,11 @@ static void OnPushDescriptors(reshade::api::command_list* cmd_list,
                               reshade::api::pipeline_layout layout,
                               uint32_t layout_param,
                               const reshade::api::descriptor_table_update& update) {
-  if (update.count == 0u) return;
-  const auto descriptor_size = GetDescriptorSizeOf(update.type);
-  assert(update.descriptors != nullptr);
-  assert(descriptor_size != 0u);
-  if (update.descriptors == nullptr || descriptor_size == 0u) return;
-
-  auto* data = internal::GetTrackedSnapshotData(cmd_list);
-  if (data == nullptr) return;
-  auto& current_state = *data;
-  const auto device_api = current_state.device_api;
-
-  if (device_api == reshade::api::device_api::d3d10
-      || device_api == reshade::api::device_api::d3d11) {
-    // Callbacks retain bounded live values and ReShade's synthetic stage
-    // layouts. Snapshot-time native getters refresh the actual bound objects,
-    // but cannot reconstruct those layout handles for replay.
-    if (current_state.native_descriptors.empty()) {
-      current_state.native_descriptors.emplace_back();
-    }
-    auto& descriptors = current_state.native_descriptors[0];
-    const auto capture = [&](size_t index) {
-      auto& stage = descriptors.stages[index];
-      stage.layout = layout;
-      switch (update.type) {
-        case reshade::api::descriptor_type::sampler:
-          stage.samplers.Update(update.binding, update.count, update.descriptors);
-          break;
-        case reshade::api::descriptor_type::shader_resource_view:
-        case reshade::api::descriptor_type::buffer_shader_resource_view:
-          stage.srvs.Update(update.binding, update.count, update.descriptors);
-          break;
-        case reshade::api::descriptor_type::constant_buffer:
-          stage.cbvs.Update(update.binding, update.count, update.descriptors);
-          break;
-        case reshade::api::descriptor_type::unordered_access_view:
-        case reshade::api::descriptor_type::buffer_unordered_access_view:
-          if (D3D10And11DescriptorState::SHADER_STAGES[index]
-              == reshade::api::shader_stage::pixel) {
-            descriptors.graphics_uavs.Update(update.binding, update.count, update.descriptors);
-          } else if (D3D10And11DescriptorState::SHADER_STAGES[index]
-                     == reshade::api::shader_stage::compute) {
-            descriptors.compute_uavs.Update(update.binding, update.count, update.descriptors);
-          }
-          break;
-        default:
-          break;
-      }
-    };
-    if (const auto index = GetSingleTrackedShaderStageIndex(stages);
-        index < D3D10And11DescriptorState::SHADER_STAGES.size()) {
-      capture(index);
-    } else {
-      for (size_t index = 0u;
-           index < D3D10And11DescriptorState::SHADER_STAGES.size();
-           ++index) {
-        if (renodx::utils::bitwise::HasFlag(
-                stages, D3D10And11DescriptorState::SHADER_STAGES[index])) {
-          capture(index);
-        }
-      }
-    }
-    return;
-  }
-
-  internal::WithCommandListState(internal::GetCommandListStateHandle(cmd_list), [&](auto& state) {
-    state.TransitionPipelineLayout(stages, layout);
+  const auto* handle = renodx::utils::data::Get<internal::CommandListStateHandle>(cmd_list);
+  if (handle == nullptr) return;
+  internal::WithCommandListState(handle, [&](auto& state) {
+    state.PushDescriptors(stages, layout, layout_param, update);
   });
-
-  const pipeline_layout::PipelineLayoutData* layout_data = nullptr;
-  if (layout.handle != 0u
-      && (IsResourceViewDescriptorType(update.type)
-          || device_api == reshade::api::device_api::vulkan
-          || device_api == reshade::api::device_api::opengl)) {
-    if (device_api == reshade::api::device_api::d3d9) {
-      layout_data = pipeline_layout::GetPipelineLayoutData(layout);
-    } else {
-      enum class LayoutDomain : size_t { GRAPHICS,
-                                         COMPUTE,
-                                         RAY_TRACING };
-      auto domain = LayoutDomain::GRAPHICS;
-      if (device_api != reshade::api::device_api::opengl) {
-        if (renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_compute)) {
-          domain = LayoutDomain::COMPUTE;
-        } else if (renodx::utils::bitwise::HasAnyFlag(stages, reshade::api::shader_stage::all_ray_tracing)) {
-          domain = (device_api == reshade::api::device_api::d3d12
-                        ? LayoutDomain::COMPUTE
-                        : LayoutDomain::RAY_TRACING);
-        }
-      }
-      auto& cached = current_state.layout_data_by_domain[static_cast<size_t>(domain)];
-      if (cached.layout != layout) {
-        cached.layout = layout;
-        cached.data = nullptr;
-      }
-      if (cached.data == nullptr) {
-        cached.data = pipeline_layout::GetPipelineLayoutData(layout);
-      }
-      layout_data = cached.data;
-    }
-  }
-
-  auto& resolved_resource_view_binds = current_state.resolved_resource_view_binds_scratch;
-  resolved_resource_view_binds.clear();
-  if (IsResourceViewDescriptorType(update.type) && layout_data != nullptr
-      && layout_param < layout_data->params.size()) {
-    resolved_resource_view_binds.reserve(update.count);
-    for (uint32_t index = 0u; index < update.count; ++index) {
-      uint32_t slot = 0u;
-      uint32_t space = 0u;
-      bool resolved = false;
-      switch (device_api) {
-        case reshade::api::device_api::d3d9:
-        case reshade::api::device_api::d3d10:
-        case reshade::api::device_api::d3d11:
-        case reshade::api::device_api::d3d12: {
-          const auto binding = renodx::utils::pipeline_layout::FindDescriptorLocation(
-              layout_data->params[layout_param],
-              device_api,
-              update,
-              index);
-          if (binding) {
-            slot = binding->register_slot;
-            space = binding->register_space;
-            resolved = true;
-          }
-          break;
-        }
-        case reshade::api::device_api::opengl:
-        case reshade::api::device_api::vulkan: {
-          const auto element = renodx::utils::pipeline_layout::FindDescriptorLocation(
-              layout_data->params[layout_param],
-              device_api,
-              update,
-              index);
-          if (element) {
-            slot = element->binding;
-            space = element->array_offset;
-            resolved = true;
-          }
-          break;
-        }
-        default:
-          assert(false);
-          break;
-      }
-      if (!resolved) {
-        break;
-      }
-      resolved_resource_view_binds.push_back({
-          .type = GetResourceViewBindingType(update.type),
-          .slot = slot,
-          .space = space,
-          .view = (update.type == reshade::api::descriptor_type::sampler_with_resource_view
-                       ? static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[index].view
-                       : static_cast<const reshade::api::resource_view*>(update.descriptors)[index]),
-      });
-    }
-  }
-
-  const auto update_resource_view_bindings = [&](ShaderStagePushState* push_state) {
-    for (const auto& resolved_bind : resolved_resource_view_binds) {
-      const auto bind_it = std::find_if(
-          push_state->resource_view_binds.begin(),
-          push_state->resource_view_binds.end(),
-          [&](const ResourceViewBind& bind) {
-            return bind.type == resolved_bind.type
-                   && bind.slot == resolved_bind.slot
-                   && bind.space == resolved_bind.space;
-          });
-      if (bind_it != push_state->resource_view_binds.end()) {
-        if (resolved_bind.view.handle == 0u) {
-          if (bind_it + 1 != push_state->resource_view_binds.end()) {
-            *bind_it = push_state->resource_view_binds.back();
-          }
-          push_state->resource_view_binds.pop_back();
-        } else {
-          bind_it->view = resolved_bind.view;
-        }
-        continue;
-      }
-
-      if (resolved_bind.view.handle != 0u) {
-        push_state->resource_view_binds.push_back(resolved_bind);
-      }
-    }
-  };
-
-  for (const auto stage : TRACKED_SHADER_STAGES) {
-    if (!renodx::utils::bitwise::HasFlag(stages, stage)) continue;
-    auto* push_state = current_state.GetShaderStagePushState(stage);
-    push_state->SetLayout(layout);
-    update_resource_view_bindings(push_state);
-    if (layout.handle == 0u) continue;
-
-    const auto store_descriptor_update = [&](uint32_t update_layout_param,
-                                             const reshade::api::descriptor_table_update& descriptor_update) {
-      const auto store = [&](const reshade::api::descriptor_table_update& element) {
-        for (size_t index = 0u; index < push_state->descriptor_count; ++index) {
-          auto& previous = push_state->descriptors[index];
-          if (previous.layout_param == update_layout_param
-              && previous.type == element.type
-              && previous.binding == element.binding
-              && previous.array_offset == element.array_offset
-              && previous.count == element.count) {
-            previous.Store(update_layout_param, element);
-            // Preserve last-write ordering even for unresolved array batches.
-            for (size_t next = index + 1u; next < push_state->descriptor_count; ++next) {
-              std::swap(push_state->descriptors[next - 1u], push_state->descriptors[next]);
-            }
-            return;
-          }
-        }
-        push_state->AddDescriptorUpdate()->Store(update_layout_param, element);
-      };
-
-      const auto descriptor_size = GetDescriptorSizeOf(descriptor_update.type);
-      if (device_api == reshade::api::device_api::vulkan
-          || device_api == reshade::api::device_api::opengl) {
-        bool resolved = false;
-        if (layout_data != nullptr && update_layout_param < layout_data->params.size()) {
-          const auto& param = layout_data->params[update_layout_param];
-          // Validate the whole spill before changing any stored elements.
-          bool can_resolve = renodx::utils::pipeline_layout::FindDescriptorLocation(
-              param, device_api, descriptor_update, descriptor_update.count - 1u).has_value();
-          if (can_resolve) {
-            bool finite = !push_state->has_unresolved_descriptors
-                          && std::any_of(push_state->descriptor_banks.begin(), push_state->descriptor_banks.end(),
-                                         [&](const auto& bank) {
-                                           return bank.layout_param == update_layout_param
-                                                  && bank.type == descriptor_update.type;
-                                         });
-            if (!push_state->has_unresolved_descriptors && !finite) {
-              const auto prepare = [&](uint32_t count, const auto* ranges) {
-                for (uint32_t i = 0; i < count; ++i) {
-                  if (ranges[i].type == descriptor_update.type
-                      && (ranges[i].count == UINT32_MAX
-                          || ranges[i].count > std::numeric_limits<size_t>::max() / descriptor_size)) return false;
-                }
-                for (uint32_t i = 0; i < count; ++i) {
-                  const auto& range = ranges[i];
-                  if (range.type != descriptor_update.type || range.count == 0u) continue;
-                  const auto found = std::find_if(push_state->descriptor_banks.begin(), push_state->descriptor_banks.end(),
-                                                  [&](const auto& bank) {
-                                                    return bank.layout_param == update_layout_param
-                                                           && bank.type == range.type
-                                                           && bank.binding == range.binding;
-                                                  });
-                  if (found != push_state->descriptor_banks.end()) continue;
-                  // Publish only a fully allocated bank; failed allocation leaves no partial bank.
-                  DescriptorBank bank;
-                  bank.layout_param = update_layout_param;
-                  bank.binding = range.binding;
-                  bank.count = range.count;
-                  bank.type = range.type;
-                  bank.payload.Resize(bank.type, bank.count);
-                  bank.present.resize(
-                      (static_cast<size_t>(bank.count) / DescriptorBank::WORD_BITS)
-                      + (bank.count % DescriptorBank::WORD_BITS != 0u ? 1u : 0u));
-                  bank.AssertInvariants();
-                  push_state->descriptor_banks.push_back(std::move(bank));
-                }
-                return true;
-              };
-              switch (param.type) {
-                case reshade::api::pipeline_layout_param_type::push_descriptors:
-                  finite = prepare(1u, &param.push_descriptors);
-                  break;
-                case reshade::api::pipeline_layout_param_type::descriptor_table:
-                case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
-                  finite = prepare(param.descriptor_table.count, param.descriptor_table.ranges);
-                  break;
-#if RESHADE_API_VERSION >= 20
-                case reshade::api::pipeline_layout_param_type::descriptor_table_with_flags:
-                case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges_and_flags:
-                  finite = prepare(param.descriptor_table_with_flags.count, param.descriptor_table_with_flags.ranges);
-                  break;
-#else
-                case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-                case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
-                  finite = prepare(param.descriptor_table_with_static_samplers.count, param.descriptor_table_with_static_samplers.ranges);
-                  break;
-#endif
-                default: break;
-              }
-              can_resolve = finite;
-            }
-            if (can_resolve) {
-              const auto find_bank = [&](uint32_t resolved_binding) {
-                return std::find_if(push_state->descriptor_banks.begin(), push_state->descriptor_banks.end(),
-                                    [&](const auto& candidate) {
-                                      return candidate.layout_param == update_layout_param
-                                             && candidate.type == descriptor_update.type
-                                             && candidate.binding == resolved_binding;
-                                    });
-              };
-              // Resolution success does not imply that the finite-bank representation can store it.
-              // Validate the entire update before changing payloads. Failed resolution
-              // keeps the history fallback below responsible for the original update.
-              for (uint32_t index = 0u; index < descriptor_update.count; ++index) {
-                const auto element = renodx::utils::pipeline_layout::FindDescriptorLocation(
-                    param, device_api, descriptor_update, index);
-                if (!element) {
-                  can_resolve = false;
-                  break;
-                }
-                if (finite) {
-                  const auto bank = find_bank(element->binding);
-                  if (bank == push_state->descriptor_banks.end() || element->array_offset >= bank->count) {
-                    can_resolve = false;
-                    break;
-                  }
-                  bank->AssertInvariants();
-                }
-              }
-              for (uint32_t index = 0u; can_resolve && index < descriptor_update.count; ++index) {
-                const auto resolved_element = renodx::utils::pipeline_layout::FindDescriptorLocation(
-                    param, device_api, descriptor_update, index);
-                assert(resolved_element.has_value());
-                if (!resolved_element) {
-                  can_resolve = false;
-                  break;
-                }
-                auto element = descriptor_update;
-                element.binding = resolved_element->binding;
-                element.array_offset = resolved_element->array_offset;
-                element.count = 1u;
-                element.descriptors = static_cast<const uint8_t*>(descriptor_update.descriptors)
-                                      + (static_cast<size_t>(index) * descriptor_size);
-                if (finite) {
-                  const auto bank_it = find_bank(resolved_element->binding);
-                  assert(bank_it != push_state->descriptor_banks.end());
-                  if (bank_it == push_state->descriptor_banks.end()) {
-                    can_resolve = false;
-                    break;
-                  }
-                  assert(resolved_element->array_offset < bank_it->count);
-                  if (resolved_element->array_offset >= bank_it->count) {
-                    can_resolve = false;
-                    break;
-                  }
-                  bank_it->payload.Copy(bank_it->type, resolved_element->array_offset, element.descriptors, 1u);
-                  bank_it->present[resolved_element->array_offset / DescriptorBank::WORD_BITS] |= size_t{1} << (resolved_element->array_offset % DescriptorBank::WORD_BITS);
-                } else {
-                  store(element);
-                }
-              }
-              resolved = can_resolve;
-            }
-          }
-        }
-        if (resolved) return;
-        for (auto& bank : push_state->descriptor_banks) {
-          if (push_state->has_unresolved_descriptors) break;
-          bank.AssertInvariants();
-          for (size_t index = bank.Next(0u); index < bank.count; index = bank.Next(index + 1u)) {
-            push_state->AddDescriptorUpdate()->Store(
-                bank.layout_param,
-                {.binding = bank.binding,
-                 .array_offset = static_cast<uint32_t>(index),
-                 .count = 1u,
-                 .type = bank.type,
-                 .descriptors = bank.payload.Data(index)});
-          }
-          std::fill(bank.present.begin(), bank.present.end(), size_t{0});
-        }
-        push_state->has_unresolved_descriptors = true;
-        // Only compare intervals with the same binding origin. Without layout
-        // metadata, cross-binding spill boundaries cannot be reconstructed.
-        size_t retained = 0u;
-        for (size_t index = 0u; index < push_state->descriptor_count; ++index) {
-          const auto& previous = push_state->descriptors[index];
-          if (previous.layout_param == update_layout_param
-              && previous.type == descriptor_update.type
-              && previous.binding == descriptor_update.binding
-              && previous.array_offset >= descriptor_update.array_offset
-              && static_cast<uint64_t>(previous.array_offset) + previous.count
-                     <= static_cast<uint64_t>(descriptor_update.array_offset) + descriptor_update.count) {
-            continue;
-          }
-          if (retained != index) {
-            std::swap(push_state->descriptors[retained], push_state->descriptors[index]);
-          }
-          ++retained;
-        }
-        push_state->descriptor_count = retained;
-        push_state->AddDescriptorUpdate()->Store(update_layout_param, descriptor_update);
-        return;
-      }
-
-      for (uint32_t index = 0u; index < descriptor_update.count; ++index) {
-        auto element = descriptor_update;
-        element.binding += index;
-        element.count = 1u;
-        element.descriptors = static_cast<const uint8_t*>(descriptor_update.descriptors)
-                              + (static_cast<size_t>(index) * descriptor_size);
-        store(element);
-      }
-    };
-
-    const auto update_descriptor_slots = [&](uint32_t update_layout_param,
-                                             reshade::api::descriptor_type type,
-                                             const void* descriptors) {
-      push_state->GetDescriptorSlots(update_layout_param, type)->Update(update.binding, update.count, descriptors);
-    };
-
-    if (update.array_offset != 0u) {
-      store_descriptor_update(layout_param, update);
-      continue;
-    }
-
-    if (device_api == reshade::api::device_api::d3d9) {
-      if ((stage == reshade::api::shader_stage::vertex
-           && layout_param == D3D9_VERTEX_SAMPLER_LAYOUT_PARAM)
-          || (stage == reshade::api::shader_stage::pixel
-              && layout_param == D3D9_PIXEL_SAMPLER_LAYOUT_PARAM)) {
-        switch (update.type) {
-          case reshade::api::descriptor_type::sampler_with_resource_view:
-            update_descriptor_slots(layout_param, update.type, update.descriptors);
-            store_descriptor_update(layout_param, update);
-            continue;
-          case reshade::api::descriptor_type::shader_resource_view: {
-            std::vector<reshade::api::sampler_with_resource_view> descriptors(update.count);
-            const auto* resource_views = static_cast<const reshade::api::resource_view*>(update.descriptors);
-            assert(resource_views != nullptr);
-            for (uint32_t i = 0; i < update.count; ++i) {
-              descriptors[i] = {
-                  .sampler = {0},
-                  .view = resource_views[i],
-              };
-            }
-            update_descriptor_slots(layout_param, reshade::api::descriptor_type::sampler_with_resource_view, descriptors.data());
-            store_descriptor_update(
-                layout_param,
-                {
-                    .table = update.table,
-                    .binding = update.binding,
-                    .array_offset = update.array_offset,
-                    .count = update.count,
-                    .type = reshade::api::descriptor_type::sampler_with_resource_view,
-                    .descriptors = descriptors.data(),
-                });
-            continue;
-          }
-          default:
-            break;
-        }
-      }
-      update_descriptor_slots(layout_param, update.type, update.descriptors);
-      store_descriptor_update(layout_param, update);
-      continue;
-    }
-
-    update_descriptor_slots(layout_param, update.type, update.descriptors);
-    store_descriptor_update(layout_param, update);
-  }
-  resolved_resource_view_binds.clear();
 }
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
@@ -2811,32 +3613,33 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
     PipelineBindPoint bind_point,
     CommandListStateCache* cache = nullptr) {
   if (bind_point == PipelineBindPoint::UNKNOWN) return std::nullopt;
-  const auto* state = internal::GetTrackedSnapshotData(cmd_list, cache);
-  if (state == nullptr) return std::nullopt;
-
-  switch (bind_point) {
-    case PipelineBindPoint::GRAPHICS:
-      return BoundDescriptorTables{
-          .layout = state->graphics_pipeline_layout,
-          .tables = state->graphics_descriptor_tables,
-          .known = state->graphics_descriptor_tables_known,
-      };
-    case PipelineBindPoint::COMPUTE:
-      return BoundDescriptorTables{
-          .layout = state->compute_pipeline_layout,
-          .tables = state->compute_descriptor_tables,
-          .known = state->compute_descriptor_tables_known,
-      };
-    case PipelineBindPoint::RAY_TRACING:
-      return BoundDescriptorTables{
-          .layout = state->ray_tracing_pipeline_layout,
-          .tables = state->ray_tracing_descriptor_tables,
-          .known = state->ray_tracing_descriptor_tables_known,
-      };
-    case PipelineBindPoint::UNKNOWN:
-      return std::nullopt;
-  }
-  return std::nullopt;
+  const auto* handle = internal::GetCommandListStateHandle(cmd_list, cache);
+  if (handle == nullptr) return std::nullopt;
+  return internal::WithCommandListState(handle, [&](const auto& state) -> std::optional<BoundDescriptorTables> {
+    const auto& data = state.snapshot;
+    const auto copy = [](reshade::api::pipeline_layout layout, const auto& tables, bool known) {
+      BoundDescriptorTables result{.layout = layout, .known = known};
+      for (const auto& [index, table] : tables.entries()) {
+        result.tables.set(index, table);
+      }
+      return result;
+    };
+    switch (bind_point) {
+      case PipelineBindPoint::GRAPHICS:
+        return copy(data.graphics_pipeline_layout, data.graphics_descriptor_tables, data.graphics_descriptor_tables_known);
+      case PipelineBindPoint::COMPUTE:
+        return copy(data.compute_pipeline_layout, data.compute_descriptor_tables, data.compute_descriptor_tables_known);
+      case PipelineBindPoint::RAY_TRACING:
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(state)>, internal::CommandListState<reshade::api::device_api::d3d12>>) {
+          return copy(data.compute_pipeline_layout, data.compute_descriptor_tables, data.compute_descriptor_tables_known);
+        } else {
+          return copy(data.ray_tracing_pipeline_layout, data.ray_tracing_descriptor_tables, data.ray_tracing_descriptor_tables_known);
+        }
+      case PipelineBindPoint::UNKNOWN:
+        return std::nullopt;
+    }
+    return std::nullopt;
+  });
 }
 
 [[nodiscard]] inline reshade::api::resource_view GetBoundResourceView(
@@ -3079,20 +3882,36 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
 
 [[nodiscard]] inline std::optional<CommandListSnapshot> GetSnapshot(
     reshade::api::command_list* cmd_list) {
+  if (shared.data != nullptr && !shared.data->use_snapshot) return std::nullopt;
   const auto* handle = internal::GetCommandListStateHandle(cmd_list);
   if (handle == nullptr) return std::nullopt;
 
   CommandListSnapshot snapshot;
   snapshot.command_list = cmd_list;
-  internal::WithCommandListState(handle, [&](const auto& live_state) {
-    snapshot.state = live_state.snapshot;
-    live_state.CopyPipelineBinds(&snapshot.state.pipeline_binds);
+  internal::WithCommandListState(handle, [&]<reshade::api::device_api Api>(const internal::CommandListState<Api>& live_state) {
+    snapshot.state = live_state.Capture();
   });
-  auto* state = &snapshot.state;
+  auto* state = std::visit([](auto& data) -> internal::CommandListSnapshotData* { return &data; }, snapshot.state);
   switch (state->device_api) {
     case reshade::api::device_api::d3d9: {
       auto* native_device = reinterpret_cast<IDirect3DDevice9*>(
           static_cast<uintptr_t>(cmd_list->get_native()));
+      // D3D9 SetSamplerState does not emit ReShade events, and SetTexture
+      // reports a zero sampler handle. Query these values at capture time.
+      // Slots 0..15 are pixel samplers; 256..260 are displacement/vertex samplers.
+      for (DWORD slot = 0u; slot <= D3DVERTEXTEXTURESAMPLER3 - D3DDMAPSAMPLER + 16u; ++slot) {
+        const DWORD sampler = (slot < 16u ? slot : D3DDMAPSAMPLER + slot - 16u);
+        for (DWORD type = D3DSAMP_ADDRESSU; type <= D3DSAMP_DMAPOFFSET; ++type) {
+          DWORD value = 0u;
+          if (SUCCEEDED(native_device->GetSamplerState(sampler, static_cast<D3DSAMPLERSTATETYPE>(type), &value))) {
+            snapshot.d3d9_sampler_values.push_back({
+                .sampler = sampler,
+                .type = static_cast<D3DSAMPLERSTATETYPE>(type),
+                .value = value,
+            });
+          }
+        }
+      }
       D3DCAPS9 caps = {};
       if (SUCCEEDED(native_device->GetDeviceCaps(&caps))) {
         state->vertex_buffers.resize(caps.MaxStreams);
@@ -3143,6 +3962,23 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
       }
       auto& descriptors = state->native_descriptors[0];
 
+      // RSGetViewports copies cached context records, not a table lookup or GPU
+      // query. Capture here instead of duplicating every viewport bind solely
+      // for snapshots (see docs/plans/opaque-command-list-snapshot.md).
+      using NativeViewport = std::conditional_t<std::is_same_v<Native, ID3D10Device>, D3D10_VIEWPORT, D3D11_VIEWPORT>;
+      std::array<NativeViewport, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewports = {};
+      UINT viewport_count = static_cast<UINT>(viewports.size());
+      native->RSGetViewports(&viewport_count, viewports.data());
+      state->fixed_viewports.clear();
+      for (UINT index = 0u; index < viewport_count; ++index) {
+        const auto& viewport = viewports[index];
+        state->fixed_viewports.set(index, reshade::api::viewport{
+                                              static_cast<float>(viewport.TopLeftX), static_cast<float>(viewport.TopLeftY),
+                                              static_cast<float>(viewport.Width), static_cast<float>(viewport.Height),
+                                              viewport.MinDepth, viewport.MaxDepth});
+      }
+      state->viewports_known = true;
+
       const auto store_vertex_buffers = [&](auto* native, uint32_t count) {
         using Native = std::remove_pointer_t<decltype(native)>;
         using Buffer = std::conditional_t<std::is_same_v<Native, ID3D10Device>, ID3D10Buffer, ID3D11Buffer>;
@@ -3189,8 +4025,8 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
         using Sampler = std::conditional_t<std::is_same_v<Native, ID3D10Device>, ID3D10SamplerState, ID3D11SamplerState>;
         using View = std::conditional_t<std::is_same_v<Native, ID3D10Device>, ID3D10ShaderResourceView, ID3D11ShaderResourceView>;
         using Buffer = std::conditional_t<std::is_same_v<Native, ID3D10Device>, ID3D10Buffer, ID3D11Buffer>;
-        std::array<Sampler*, 16u> samplers = {};
-        std::array<View*, 128u> views = {};
+        std::array<Sampler*, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT> samplers = {};
+        std::array<View*, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT> views = {};
         std::array<Buffer*, 14u> buffers = {};
         switch (shader_stage) {
           case reshade::api::shader_stage::vertex:
@@ -3233,8 +4069,8 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
         }
         const auto stage_index = GetSingleTrackedShaderStageIndex(shader_stage);
         auto& stage = descriptors.stages[stage_index];
-        std::array<reshade::api::sampler, 16u> sampler_handles = {};
-        std::array<reshade::api::resource_view, 128u> view_handles = {};
+        std::array<reshade::api::sampler, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT> sampler_handles = {};
+        std::array<reshade::api::resource_view, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT> view_handles = {};
         std::array<reshade::api::buffer_range, 14u> buffer_ranges = {};
         for (size_t index = 0u; index < samplers.size(); ++index) {
           sampler_handles[index] = {reinterpret_cast<uintptr_t>(samplers[index])};
@@ -3308,10 +4144,10 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
             for (size_t index = 0u; index < buffers.size(); ++index) {
               ranges[index] = {
                   .buffer = {reinterpret_cast<uintptr_t>(buffers[index])},
-                  .offset = static_cast<uint64_t>(first_constants[index]) * 16u,
+                  .offset = static_cast<uint64_t>(first_constants[index]) * D3D11_COMMONSHADER_CONSTANT_BUFFER_COMPONENTS * sizeof(uint32_t),
                   .size = buffers[index] == nullptr
                               ? UINT64_MAX
-                              : static_cast<uint64_t>(constant_counts[index]) * 16u,
+                              : static_cast<uint64_t>(constant_counts[index]) * D3D11_COMMONSHADER_CONSTANT_BUFFER_COMPONENTS * sizeof(uint32_t),
               };
               if (buffers[index] != nullptr) {
                 buffers[index]->Release();
@@ -3394,90 +4230,96 @@ inline CommandListState* GetCurrentState(reshade::api::command_list* cmd_list) {
   if (!snapshot.has_value()) return nullptr;
 
   thread_local CommandListState compatibility_state;
-  const auto& state = snapshot->state;
-  compatibility_state.render_targets.assign(state.render_targets.begin(), state.render_targets.end());
-  compatibility_state.depth_stencil = state.depth_stencil;
-  if (state.UsesFixedRasterLists()) {
-    compatibility_state.viewports.clear();
-    for (const auto& viewport : state.fixed_viewports.values()) {
-      compatibility_state.viewports.push_back(viewport);
+  std::visit([&](const auto& state) {
+    compatibility_state.render_targets.assign(state.render_targets.begin(), state.render_targets.end());
+    compatibility_state.depth_stencil = state.depth_stencil;
+    if (state.UsesFixedRasterLists()) {
+      compatibility_state.viewports.clear();
+      for (const auto& viewport : state.fixed_viewports.values()) {
+        compatibility_state.viewports.push_back(viewport);
+      }
+      compatibility_state.scissor_rects.clear();
+      for (const auto& rect : state.fixed_scissor_rects.values()) {
+        compatibility_state.scissor_rects.push_back(rect);
+      }
+    } else {
+      compatibility_state.viewports.assign(state.viewports.begin(), state.viewports.end());
+      compatibility_state.scissor_rects.assign(state.scissor_rects.begin(), state.scissor_rects.end());
     }
-    compatibility_state.scissor_rects.clear();
-    for (const auto& rect : state.fixed_scissor_rects.values()) {
-      compatibility_state.scissor_rects.push_back(rect);
+    compatibility_state.graphics_pipeline_layout = state.graphics_pipeline_layout;
+    compatibility_state.compute_pipeline_layout = state.compute_pipeline_layout;
+    if (const auto found = state.dynamic_states.find(
+            reshade::api::dynamic_state::primitive_topology);
+        found != state.dynamic_states.end()) {
+      compatibility_state.primitive_topology = static_cast<reshade::api::primitive_topology>(found->second);
+    } else {
+      compatibility_state.primitive_topology = reshade::api::primitive_topology::undefined;
     }
-  } else {
-    compatibility_state.viewports.assign(state.viewports.begin(), state.viewports.end());
-    compatibility_state.scissor_rects.assign(state.scissor_rects.begin(), state.scissor_rects.end());
-  }
-  compatibility_state.graphics_pipeline_layout = state.graphics_pipeline_layout;
-  compatibility_state.compute_pipeline_layout = state.compute_pipeline_layout;
-  if (const auto found = state.dynamic_states.find(
-          reshade::api::dynamic_state::primitive_topology);
-      found != state.dynamic_states.end()) {
-    compatibility_state.primitive_topology = static_cast<reshade::api::primitive_topology>(found->second);
-  } else {
-    compatibility_state.primitive_topology = reshade::api::primitive_topology::undefined;
-  }
-  const auto materialize_dynamic_state = [&](reshade::api::dynamic_state dynamic_state,
-                                             uint32_t default_value,
-                                             uint32_t* value) {
-    const auto found = state.dynamic_states.find(dynamic_state);
-    *value = (found != state.dynamic_states.end() ? found->second : default_value);
-  };
-  materialize_dynamic_state(
-      reshade::api::dynamic_state::blend_constant,
-      0u,
-      &compatibility_state.blend_constant);
-  materialize_dynamic_state(
-      reshade::api::dynamic_state::sample_mask,
-      0xFFFFFFFFu,
-      &compatibility_state.sample_mask);
-  materialize_dynamic_state(
-      reshade::api::dynamic_state::front_stencil_reference_value,
-      0u,
-      &compatibility_state.front_stencil_reference_value);
-  materialize_dynamic_state(
-      reshade::api::dynamic_state::back_stencil_reference_value,
-      0u,
-      &compatibility_state.back_stencil_reference_value);
-  compatibility_state.pipelines.clear();
-  state.ForEachPipelineBind(PipelineBindPoint::UNKNOWN, [&](const PipelineBind& bind) {
-    compatibility_state.pipelines.insert_or_assign(bind.stages, bind.pipeline);
-  });
-  compatibility_state.descriptor_tables.clear();
-  const auto materialize_descriptor_tables = [&](reshade::api::shader_stage stages,
-                                                 reshade::api::pipeline_layout layout,
-                                                 const DescriptorTableSlots& tables,
-                                                 bool known,
-                                                 std::vector<reshade::api::descriptor_table>* output) {
-    std::vector<reshade::api::descriptor_table> compatibility_tables(tables.begin(), tables.end());
-    if (output != nullptr) {
-      *output = compatibility_tables;
-    }
-    if (!known) return;
-    compatibility_state.descriptor_tables.insert_or_assign(
-        stages,
-        std::pair{layout, std::move(compatibility_tables)});
-  };
-  materialize_descriptor_tables(
-      reshade::api::shader_stage::all_graphics,
-      state.graphics_pipeline_layout,
-      state.graphics_descriptor_tables,
-      state.graphics_descriptor_tables_known,
-      &compatibility_state.graphics_descriptor_tables);
-  materialize_descriptor_tables(
-      reshade::api::shader_stage::all_compute,
-      state.compute_pipeline_layout,
-      state.compute_descriptor_tables,
-      state.compute_descriptor_tables_known,
-      &compatibility_state.compute_descriptor_tables);
-  materialize_descriptor_tables(
-      reshade::api::shader_stage::all_ray_tracing,
-      state.ray_tracing_pipeline_layout,
-      state.ray_tracing_descriptor_tables,
-      state.ray_tracing_descriptor_tables_known,
-      nullptr);
+    const auto materialize_dynamic_state = [&](reshade::api::dynamic_state dynamic_state,
+                                               uint32_t default_value,
+                                               uint32_t* value) {
+      const auto found = state.dynamic_states.find(dynamic_state);
+      *value = (found != state.dynamic_states.end() ? found->second : default_value);
+    };
+    materialize_dynamic_state(
+        reshade::api::dynamic_state::blend_constant,
+        0u,
+        &compatibility_state.blend_constant);
+    materialize_dynamic_state(
+        reshade::api::dynamic_state::sample_mask,
+        0xFFFFFFFFu,
+        &compatibility_state.sample_mask);
+    materialize_dynamic_state(
+        reshade::api::dynamic_state::front_stencil_reference_value,
+        0u,
+        &compatibility_state.front_stencil_reference_value);
+    materialize_dynamic_state(
+        reshade::api::dynamic_state::back_stencil_reference_value,
+        0u,
+        &compatibility_state.back_stencil_reference_value);
+    compatibility_state.pipelines.clear();
+    state.ForEachPipelineBind(PipelineBindPoint::UNKNOWN, [&](const PipelineBind& bind) {
+      compatibility_state.pipelines.insert_or_assign(bind.stages, bind.pipeline);
+    });
+    compatibility_state.descriptor_tables.clear();
+    const auto materialize_descriptor_tables = [&](reshade::api::shader_stage stages,
+                                                   reshade::api::pipeline_layout layout,
+                                                   const auto& tables,
+                                                   bool known,
+                                                   std::vector<reshade::api::descriptor_table>* output) {
+      std::vector<reshade::api::descriptor_table> compatibility_tables;
+      for (const auto& [index, table] : tables.entries()) {
+        compatibility_tables.resize(index + 1u);
+        compatibility_tables[index] = table;
+      }
+      if (output != nullptr) {
+        *output = compatibility_tables;
+      }
+      if (!known) return;
+      compatibility_state.descriptor_tables.insert_or_assign(
+          stages,
+          std::pair{layout, std::move(compatibility_tables)});
+    };
+    materialize_descriptor_tables(
+        reshade::api::shader_stage::all_graphics,
+        state.graphics_pipeline_layout,
+        state.graphics_descriptor_tables,
+        state.graphics_descriptor_tables_known,
+        &compatibility_state.graphics_descriptor_tables);
+    materialize_descriptor_tables(
+        reshade::api::shader_stage::all_compute,
+        state.compute_pipeline_layout,
+        state.compute_descriptor_tables,
+        state.compute_descriptor_tables_known,
+        &compatibility_state.compute_descriptor_tables);
+    materialize_descriptor_tables(
+        reshade::api::shader_stage::all_ray_tracing,
+        state.ray_tracing_pipeline_layout,
+        state.ray_tracing_descriptor_tables,
+        state.ray_tracing_descriptor_tables_known,
+        nullptr);
+  },
+             snapshot->state);
   return &compatibility_state;
 }
 
@@ -3486,22 +4328,35 @@ static bool attached = false;
 static void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
-      if (attached) return;
       attached = true;
-      renodx::utils::pipeline::EnableShaderHashTracking();
+      if (use_snapshot || use_pipeline_tracking) {
+        renodx::utils::pipeline::EnableShaderHashTracking();
+      }
       renodx::utils::pipeline::Use(fdw_reason);
-      renodx::utils::pipeline_layout::Use(fdw_reason);
-      if (shared.RegisterModule()) {
+      if (use_snapshot || use_push_constants || use_push_descriptors || use_descriptor_tables) {
+        renodx::utils::pipeline_layout::Use(fdw_reason);
+      }
+      if (shared.RegisterModule([](SharedData& data) {
+            data.use_snapshot |= use_snapshot;
+            data.use_pipeline_tracking |= use_pipeline_tracking;
+            data.use_render_target_tracking |= use_render_target_tracking;
+            data.use_dynamic_state_tracking |= use_dynamic_state_tracking;
+            data.use_viewport_scissor_tracking |= use_viewport_scissor_tracking;
+            data.use_input_assembler_tracking |= use_input_assembler_tracking;
+            data.use_push_constants |= use_push_constants;
+            data.use_push_descriptors |= use_push_descriptors;
+            data.use_descriptor_tables |= use_descriptor_tables;
+          })) {
         reshade::log::message(reshade::log::level::info, "State attached.");
       }
       shared.RegisterEvent<reshade::addon_event::init_command_list>(OnInitCommandList);
       shared.RegisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-      shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
-      shared.RegisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
-      shared.RegisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass);
-      shared.RegisterEvent<reshade::addon_event::bind_pipeline_states>(OnBindPipelineStates);
-      shared.RegisterEvent<reshade::addon_event::bind_viewports>(OnBindViewports);
-      shared.RegisterEvent<reshade::addon_event::bind_scissor_rects>(OnBindScissorRects);
+      shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil, use_snapshot || use_render_target_tracking);
+      shared.RegisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass, use_snapshot || use_render_target_tracking);
+      shared.RegisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass, use_snapshot || use_render_target_tracking);
+      shared.RegisterEvent<reshade::addon_event::bind_pipeline_states>(OnBindPipelineStates, use_snapshot || use_dynamic_state_tracking);
+      shared.RegisterEvent<reshade::addon_event::bind_viewports>(OnBindViewports, use_snapshot || use_viewport_scissor_tracking);
+      shared.RegisterEvent<reshade::addon_event::bind_scissor_rects>(OnBindScissorRects, use_snapshot || use_viewport_scissor_tracking);
       // ReShade 6.8 allocates broken D3D9 Draw-UP buffers when either input-
       // assembler event has any subscribers. D3D9 snapshots use native getters,
       // so avoid registering the events at all on that backend.
@@ -3513,14 +4368,15 @@ static void Use(DWORD fdw_reason) {
       vertex_and_index_buffer_events_registered =
           _wcsicmp(std::filesystem::path(reshade_module_path).filename().c_str(), L"d3d9.dll") != 0;
       if (vertex_and_index_buffer_events_registered) {
-        shared.RegisterEvent<reshade::addon_event::bind_vertex_buffers>(OnBindVertexBuffers);
-        shared.RegisterEvent<reshade::addon_event::bind_index_buffer>(OnBindIndexBuffer);
+        shared.RegisterEvent<reshade::addon_event::bind_vertex_buffers>(OnBindVertexBuffers, use_snapshot || use_input_assembler_tracking);
+        shared.RegisterEvent<reshade::addon_event::bind_index_buffer>(OnBindIndexBuffer, use_snapshot || use_input_assembler_tracking);
       }
-      shared.RegisterEvent<reshade::addon_event::push_constants>(OnPushConstants);
-      shared.RegisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors);
-      shared.RegisterEvent<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
+      shared.RegisterEvent<reshade::addon_event::push_constants>(OnPushConstants, use_snapshot || use_push_constants);
+      shared.RegisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors, use_snapshot || use_push_descriptors);
+      shared.RegisterEvent<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables,
+                                                                         use_snapshot || use_descriptor_tables || use_push_constants || use_push_descriptors);
       shared.RegisterEvent<reshade::addon_event::reset_command_list>(OnResetCommandList);
-      pipeline::RegisterOnBindCallback(OnBindPipeline);
+      pipeline::RegisterOnBindCallback(OnBindPipeline, use_snapshot || use_pipeline_tracking);
 
       break;
     }
@@ -3546,7 +4402,9 @@ static void Use(DWORD fdw_reason) {
       shared.UnregisterEvent<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
       shared.UnregisterEvent<reshade::addon_event::reset_command_list>(OnResetCommandList);
       shared.UnregisterModule();
-      renodx::utils::pipeline_layout::Use(fdw_reason);
+      if (use_snapshot || use_push_constants || use_push_descriptors || use_descriptor_tables) {
+        renodx::utils::pipeline_layout::Use(fdw_reason);
+      }
       renodx::utils::pipeline::Use(fdw_reason);
 
       break;

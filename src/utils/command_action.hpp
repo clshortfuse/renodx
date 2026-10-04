@@ -373,17 +373,22 @@ inline bool RunCallbacks(CommandContext<Arguments> context) {
   if (has_shader_registrations) {
     static thread_local std::vector<std::pair<const void*, const void*>> called_shader_callbacks;
     size_t called_shader_callback_count = 0u;
+    reshade::api::pipeline last_queried_pipeline = {0u};
+    const cross_addon::vector<PipelineRegistration>* pipeline_matches = nullptr;
     const auto run_stage = [&](reshade::api::pipeline_stage stage) {
       renodx::utils::state::PipelineBind bound_bind;
       const auto pipeline = renodx::utils::state::GetBoundShaderPipeline(
           context.cmd_list, stage, &context.bound_state_cache, &bound_bind);
       if (pipeline.handle == 0u) return false;
       // The node stays stable while the bound pipeline lives; registration updates must not race this draw.
-      const cross_addon::vector<PipelineRegistration>* pipeline_matches = nullptr;
-      data->registrations_by_pipeline.if_contains(pipeline.handle, [&](const auto& entry) {
-        const auto& [pipeline_handle, matches] = entry;
-        pipeline_matches = &matches;
-      });
+      if (pipeline != last_queried_pipeline) {
+        last_queried_pipeline = pipeline;
+        pipeline_matches = nullptr;
+        data->registrations_by_pipeline.if_contains(pipeline.handle, [&](const auto& entry) {
+          const auto& [pipeline_handle, matches] = entry;
+          pipeline_matches = &matches;
+        });
+      }
       if (pipeline_matches == nullptr) return false;
       for (const auto& match : *pipeline_matches) {
         if (match.stage != stage) continue;
@@ -738,6 +743,10 @@ inline void Unregister(Callback&& callback) {
 }
 
 inline void Use(DWORD fdw_reason) {
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    state::use_pipeline_tracking = true;
+  }
+  state::Use(fdw_reason);
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (internal::shared.RegisterModule()) {

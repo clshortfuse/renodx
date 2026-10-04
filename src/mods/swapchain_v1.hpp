@@ -3606,6 +3606,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::swapchain::Use(fdw_reason);
   if (swapchain_proxy_revert_state) {
+    renodx::utils::state::use_snapshot = true;
     renodx::utils::state::Use(fdw_reason);
   }
   if (use_resource_cloning) {

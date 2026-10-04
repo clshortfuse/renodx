@@ -9339,6 +9339,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::trace::Use(fdw_reason);
       renodx::utils::constants::Use(fdw_reason);
       renodx::utils::descriptor::Use(fdw_reason);
+      renodx::utils::state::use_pipeline_tracking = true;
+      renodx::utils::state::use_descriptor_tables = true;
       renodx::utils::state::Use(fdw_reason);
       renodx::utils::pipeline_layout::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);

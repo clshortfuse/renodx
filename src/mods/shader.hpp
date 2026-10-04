@@ -2029,8 +2029,14 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
     const auto custom_pipeline = custom_shader_info->get_replacement_pipeline != nullptr
                                      ? custom_shader_info->get_replacement_pipeline(context.cmd_list)
                                      : reshade::api::pipeline{0u};
+    reshade::api::pipeline resolved_replacement = {0u};
+    auto resolved_stages = static_cast<reshade::api::pipeline_stage>(0u);
+    bool replacement_ready = false;
     if (custom_pipeline.handle == 0u) {
-      utils::shader::BuildReplacementPipeline(state.pipeline);
+      replacement_ready = utils::shader::WithReplacementPipeline(state.pipeline, [&](auto replacement, auto stages) {
+        resolved_replacement = replacement;
+        resolved_stages = stages;
+      });
     }
 
     // Perform Push
@@ -2089,7 +2095,14 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
       context.cmd_list->bind_pipeline(state.applied_stage, custom_pipeline);
       applied_replacement = true;
     } else {
-      applied_replacement = utils::shader::ApplyReplacement(context.cmd_list, &state);
+      if (replacement_ready) {
+        if (resolved_replacement.handle == 0u) {
+          applied_replacement = true;
+        } else if (utils::bitwise::HasFlag(resolved_stages, state.stage)) {
+          context.cmd_list->bind_pipeline(state.applied_stage, resolved_replacement);
+          applied_replacement = true;
+        }
+      }
     }
 
     if (!custom_shader_info->views.empty()) {
@@ -2469,6 +2482,8 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
       if (custom_shader.index != -1) using_counted_shaders = true;
     }
     renodx::utils::shader::use_replace_on_bind = !(using_custom_replace || using_custom_inject);
+    renodx::utils::state::use_pipeline_tracking = true;
+    renodx::utils::state::use_snapshot |= revert_constant_buffer_ranges;
     renodx::utils::state::Use(fdw_reason);
   }
 

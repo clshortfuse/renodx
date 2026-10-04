@@ -462,8 +462,8 @@ static bool WithReplacementPipeline(const reshade::api::pipeline& pipeline, F&& 
   reshade::api::pipeline_subobject* subobjects = nullptr;
   uint32_t subobject_count = 0u;
   bool resolved = false;
-  pipeline::UpdatePipelineInfo(pipeline, [&](auto& info) {
-    auto& details = info.details;
+  pipeline::GetPipelineInfo(pipeline, [&](const auto& info) {
+    const auto& details = info.details;
     if (details.destroyed) return;
     generation = info.generation;
     revision = details.replacement_revision;
@@ -1055,6 +1055,7 @@ static void Use(DWORD fdw_reason) {
       }
       renodx::utils::pipeline::Use(fdw_reason);
       renodx::utils::pipeline_layout::Use(fdw_reason);
+      renodx::utils::state::use_pipeline_tracking = true;
       renodx::utils::state::Use(fdw_reason);
       internal::shared.RegisterModule([](internal::SharedData& data) {
         if (!use_replace_on_create) {

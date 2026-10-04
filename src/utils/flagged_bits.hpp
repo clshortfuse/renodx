@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -61,23 +62,46 @@ class FlaggedBits {
       length -= take;
     }
   }
+  struct BitRange {
+    std::size_t first;
+    std::size_t count;
+  };
+  class RangeIterator {
+   public:
+    using value_type = BitRange;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept = std::input_iterator_tag;
+    RangeIterator() = default;
+    explicit RangeIterator(const FlaggedBits* owner) : owner_(owner), end_(0u) { ++*this; }
+    value_type operator*() const { return {.first = first_, .count = end_ - first_}; }
+    RangeIterator& operator++() {
+      first_ = owner_->FindNext(0u, end_);
+      end_ = first_;
+      while (end_ < Count) {
+        const auto offset = end_ % WORD_BITS;
+        const auto run = static_cast<std::size_t>(std::countr_one(static_cast<Word>(owner_->words_[end_ / WORD_BITS] >> offset)));
+        end_ += run;
+        if (run != WORD_BITS - offset) break;
+      }
+      return *this;
+    }
+    RangeIterator operator++(int) {
+      auto previous = *this;
+      ++*this;
+      return previous;
+    }
+    bool operator==([[maybe_unused]] std::default_sentinel_t sentinel) const { return first_ == Count; }
+
+   private:
+    const FlaggedBits* owner_ = nullptr;
+    std::size_t first_ = Count;
+    std::size_t end_ = Count;
+  };
+  auto ranges() const& { return std::ranges::subrange{RangeIterator{this}, std::default_sentinel}; }
+  auto ranges() const&& = delete;
   template <typename Callback>
   void forEachRange(Callback&& callback) const {
-    std::size_t first = 0;
-    std::size_t end = 0;
-    while (end < Count) {
-      const auto next = FindNext(0u, end);
-      if (next == Count) break;
-      first = next;
-      end = next;
-      do {
-        const auto offset = end % WORD_BITS;
-        const auto run = static_cast<std::size_t>(std::countr_one(static_cast<Word>(words_[end / WORD_BITS] >> offset)));
-        end += run;
-        if (run != WORD_BITS - offset) break;
-      } while (end < Count);
-      callback(first, end - first);
-    }
+    for (const auto [first, count] : ranges()) callback(first, count);
   }
   void reset(std::size_t index) {
     assert(index < Count);

@@ -1266,6 +1266,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       renodx::utils::device_upgrade::Use(fdw_reason);
     }
     if (swapchain_proxy_revert_state) {
+      renodx::utils::state::use_snapshot = true;
       renodx::utils::state::Use(fdw_reason);
     }
     renodx::utils::resource::upgrade::Use(fdw_reason);

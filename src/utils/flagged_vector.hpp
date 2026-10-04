@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -72,6 +73,49 @@ class FlaggedVector {
   bool has(std::size_t index) const {
     return index < size_ && getBlock(index / BlockSize).has(index % BlockSize);
   }
+  struct PopulatedRange {
+    std::size_t first;
+    std::span<const T> values;
+  };
+  class RangeIterator {
+   public:
+    using value_type = PopulatedRange;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept = std::input_iterator_tag;
+
+    RangeIterator() = default;
+    explicit RangeIterator(const FlaggedVector* owner) : owner_(owner), range_(owner->inline_.flags().ranges().begin()) { skipEmptyBlocks(); }
+    value_type operator*() const {
+      const auto [first, count] = *range_;
+      return {.first = (block_ * BlockSize) + first,
+              .values = {std::addressof(owner_->getBlock(block_).get(first)), count}};
+    }
+    RangeIterator& operator++() {
+      ++range_;
+      skipEmptyBlocks();
+      return *this;
+    }
+    RangeIterator operator++(int) {
+      auto previous = *this;
+      ++*this;
+      return previous;
+    }
+    bool operator==(std::default_sentinel_t sentinel) const { return range_ == sentinel; }
+
+   private:
+    void skipEmptyBlocks() {
+      while (range_ == std::default_sentinel && (block_ + 1u) * BlockSize < owner_->size_) {
+        range_ = owner_->getBlock(++block_).flags().ranges().begin();
+      }
+    }
+    const FlaggedVector* owner_ = nullptr;
+    std::size_t block_ = 0u;
+    typename FlaggedBits<BlockSize>::RangeIterator range_;
+  };
+  // Spans borrow storage, stop at block boundaries, and are invalidated by
+  // storage relocation. Do not mutate membership while iterating.
+  auto ranges() const& { return std::ranges::subrange{RangeIterator{this}, std::default_sentinel}; }
+  auto ranges() const&& = delete;
   T& get(std::size_t index) {
     assert(has(index));
     return getBlock(index / BlockSize).get(index % BlockSize);

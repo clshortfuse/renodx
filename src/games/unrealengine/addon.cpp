@@ -1193,6 +1193,8 @@ bool OnDispatch(
 }
 
 void Use(DWORD fdw_reason) {
+  renodx::utils::state::use_pipeline_tracking = true;
+  renodx::utils::state::use_descriptor_tables = true;
   renodx::utils::descriptor::trace_descriptor_tables = true;  // RIP FPS
 
   renodx::utils::pipeline_layout::Use(fdw_reason);
