@@ -4288,12 +4288,12 @@ void OnPresent(
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
       const float previous_internal_lut_check = InternalLutCheck;
-        if(sneakyBuilder || InternalLutCheck == 4.f){
+        /*if(sneakyBuilder || InternalLutCheck == 4.f){
             isTonemappedCheck = 1.f;
-            //renodx::utils::settings::UpdateSetting("isTonemappedCheck", isTonemappedCheck);
-            reshade::set_config_value(nullptr, "renodx", "isTonemappedCheck", "1");
-            //renodx::utils::settings::SaveGlobalSettings();
-        }
+            renodx::utils::settings::UpdateSetting("isTonemappedCheck", isTonemappedCheck);
+            //reshade::set_config_value(nullptr, "renodx", "isTonemappedCheck", "1");
+            renodx::utils::settings::SaveGlobalSettings();
+        }*/
         if(lutSampler == lutBuilder){
           InternalLutCheck = 3.f;
         } else if(lutSampler > lutBuilder){
@@ -4305,12 +4305,12 @@ void OnPresent(
           InternalLutCheck = isTonemappedCheck != 0.f ? 4.f : 0.f;
           sneakyBuilder = false;
         }
-        if(isTonemappedCheck == 1.f && InternalLutCheck != 4.f){
+        /*if(isTonemappedCheck == 1.f && InternalLutCheck != 4.f){
             isTonemappedCheck = 0.f;
-            //renodx::utils::settings::UpdateSetting("isTonemappedCheck", isTonemappedCheck);
-            //renodx::utils::settings::SaveGlobalSettings();
-            reshade::set_config_value(nullptr, "renodx", "isTonemappedCheck", "0");
-        }
+            renodx::utils::settings::UpdateSetting("isTonemappedCheck", isTonemappedCheck);
+            renodx::utils::settings::SaveGlobalSettings();
+            //reshade::set_config_value(nullptr, "renodx", "isTonemappedCheck", "0");
+        }*/
         UpdateDumpUberSchedule(previous_internal_lut_check);
         shader_injection.countOld = fmax(1.f, countMid - countOffset);
         shader_injection.count2Old = fmax(1.f, count2Mid - count2Offset);
