@@ -70,9 +70,10 @@ void main(
   r0.xy = r0.xy * cb1[136].xy + cb1[135].xy;
   r0.xy = cb1[139].zw * r0.xy;
   r1.xyz = colorTexture.Sample(s7_s, r0.zw).xyz;
+  r1.xyz = ScaleSceneInverse(r1.xyz);
 
   float3 unclamped = r1.xyz;
-  r1.xyz = saturate(MaxChTonemapToOne(unclamped));
+  r1.xyz = MaxChTonemapToOne(unclamped);
 
   r0.z = 63 * r1.z;
   r0.w = floor(r0.z);
@@ -202,7 +203,9 @@ void main(
   o0.xyz = renodx::tonemap::UpgradeToneMap(
       unclamped,
       MaxChTonemapToOne(unclamped),
-      MaxChTonemapToOne(o0.xyz),
+      o0.xyz,
       1.f);
+
+  o0.xyz = ScaleScene(o0.xyz);
   return;
 }
