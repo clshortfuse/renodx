@@ -39,6 +39,11 @@ struct ShaderInjectData {
   float random;
   float hasLoadedTitleMenu;
   bool is_swapchain_write;
+
+  // Swap chain output state, refreshed from the swap chain that exists (OnInitSwapchain).
+  // Two floats, so the constant buffer stays 8 rows and C++/HLSL layouts keep matching.
+  float swap_chain_output_preset;       // 1 = HDR10 (PQ, BT.2020), 2 = scRGB (linear, BT.709)
+  float swap_chain_output_dither_bits;  // 0 = off, else the bit depth the output is stored at
 };
 
 #ifndef __cplusplus

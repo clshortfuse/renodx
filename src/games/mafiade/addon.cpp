@@ -550,7 +550,26 @@ void OnPresetOff() {
 
 bool fired_on_init_swapchain = false;
 
+// Presentation output (per-game setting, mirrors ffxiv's "Presentation Output").
+// The value is only available after settings::Use(), so it is applied from DllMain, not here.
+renodx::utils::settings::Setting* output_mode_setting = nullptr;
+float active_output_mode = 0.f;
+
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  // Read the output mode off the swap chain that was really created instead of off the
+  // "Swap Chain Format" setting: that setting only applies once the swap chain is recreated, and
+  // the shaders must never encode for a format that is not there yet.
+  {
+    const auto back_buffer = swapchain->get_back_buffer(0);
+    auto* device = swapchain->get_device();
+    if (device != nullptr && back_buffer.handle != 0u) {
+      const auto format = device->get_resource_desc(back_buffer).texture.format;
+      const bool is_hdr10 = format == reshade::api::format::r10g10b10a2_unorm
+                            || format == reshade::api::format::r10g10b10a2_typeless;
+      shader_injection.swap_chain_output_preset = is_hdr10 ? 1.f : 2.f;
+    }
+  }
+
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
@@ -578,6 +597,59 @@ void AddAdvancedSettings() {
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
           settings.push_back(setting);
+
+  // Presentation output, per-game (mirrors ffxiv's "Presentation Output" setting).
+  // The format is applied in DllMain once settings::Use() has loaded the persisted value; the
+  // shaders themselves follow the swap chain that really exists (see OnInitSwapchain).
+  {
+    output_mode_setting = new renodx::utils::settings::Setting{
+        .key = "outputMode",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Presentation Output",
+        .section = "Tone Mapping",
+        .tooltip = "Selects the presentation format used after restarting the game. "
+                   "HDR10 is required by Intel XeFG frame generation, which rejects the FP16 scRGB "
+                   "swap chain.",
+        .labels = {
+            "scRGB (FP16)",
+            "HDR10 (10-bit PQ)",
+        },
+        .on_change_value = [](float, float current) { renodx::mods::swapchain::SetUseHDR10(current >= 0.5f); },
+    };
+    settings.push_back(output_mode_setting);
+  }
+
+  {
+    auto* restart_hint = new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Restart the game to apply the presentation output change.",
+        .section = "Tone Mapping",
+        .tint = 0xFF5F5F,
+        .is_visible = []() { return output_mode_setting->GetValue() != active_output_mode; },
+    };
+    settings.push_back(restart_hint);
+  }
+
+  {
+    auto* output_dither_setting = new renodx::utils::settings::Setting{
+        .key = "OutputDither",
+        .binding = &shader_injection.swap_chain_output_dither_bits,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Output Dither",
+        .section = "Output",
+        .tooltip = "Dithers the 10-bit HDR10 output so gradients cannot band. "
+                   "Unused by the scRGB swap chain, which is FP16.",
+        .labels = {
+            "Off",
+            "On",
+        },
+        .parse = [](float value) { return value == 0.f ? 0.f : 10.f; },
+        .is_visible = []() { return output_mode_setting->GetValue() >= 0.5f; },
+    };
+    settings.push_back(output_dither_setting);
+  }
 }
 
 }  // namespace
@@ -628,6 +700,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+
+  if (fdw_reason == DLL_PROCESS_ATTACH && output_mode_setting != nullptr) {
+    // Persisted value is only available after settings::Use(); apply it before the swap chain exists.
+    active_output_mode = output_mode_setting->GetValue();
+    renodx::mods::swapchain::SetUseHDR10(active_output_mode >= 0.5f);
+  }
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::utils::random::Use(fdw_reason);
