@@ -1,6 +1,8 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
 
 cbuffer cb0 : register(b0) {
   float4 View_000[4] : packoffset(c000.x);
@@ -346,7 +348,7 @@ cbuffer cb0 : register(b0) {
   float4 View_4832 : packoffset(c302.x);
   float4 View_4848 : packoffset(c303.x);
   float4 View_4864 : packoffset(c304.x);
-  float View_4880 : packoffset(c305.x);
+  int View_4880 : packoffset(c305.x);
   float View_4884 : packoffset(c305.y);
   float View_4888 : packoffset(c305.z);
   float View_4892 : packoffset(c305.w);
@@ -1167,14 +1169,18 @@ cbuffer cb2 : register(b2) {
   float4 Primitive_656 : packoffset(c041.x);
   float3 Primitive_672 : packoffset(c042.x);
   int Primitive_684 : packoffset(c042.w);
+  float4 Primitive_688 : packoffset(c043.x);
+  float4 Primitive_704 : packoffset(c044.x);
 };
 
 cbuffer cb3 : register(b3) {
-  float4 Material_000[2] : packoffset(c000.x);
-  float4 Material_032[1] : packoffset(c002.x);
+  float4 Material_000[12] : packoffset(c000.x);
+  float4 Material_192[5] : packoffset(c012.x);
 };
 
 SamplerState s0 : register(s0);
+
+SamplerState s1 : register(s1);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
 uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
@@ -1185,170 +1191,191 @@ float4 main(
   linear float4 TEXCOORD11_centroid : TEXCOORD11_centroid,
   linear float4 COLOR : COLOR,
   linear float4 TEXCOORD : TEXCOORD,
+  linear float3 TEXCOORD_9 : TEXCOORD9,
   precise noperspective float4 SV_Position : SV_Position,
   nointerpolation bool SV_IsFrontFace : SV_IsFrontFace
 ) : SV_Target {
   float4 SV_Target;
-  float _55;
-  float _59;
   float _60;
-  float _61;
-  float _70;
-  float _71;
-  float _72;
-  float _106;
-  float _107;
-  float _108;
-  float _165;
-  float _166;
-  float _167;
-  float _168;
-  float _312;
-  float _313;
-  float _314;
-  float _341;
+  float _64;
+  float _65;
+  float _66;
+  float _67;
+  float _68;
+  float _69;
+  float _78;
+  float _79;
+  float _80;
+  float _114;
+  float _115;
+  float _116;
+  float _298;
+  float _299;
+  float _300;
+  float _301;
+  float _445;
+  float _446;
+  float _447;
+  float _474;
+  float _475;
+  float _476;
+  float4 _83;
+  float _117;
+  float _118;
+  float _119;
+  float _148;
+  float _149;
+  float _150;
+  float _179;
+  float _183;
+  float _212;
+  float _216;
+  float _260;
+  float _261;
+  float _262;
+  float _263;
+  float _295;
+  float _334;
   float _342;
   float _343;
-  float4 _75;
-  float _109;
-  float _110;
-  float _111;
-  float _127;
-  float _128;
-  float _129;
-  float _130;
-  float _162;
-  float _201;
-  float _209;
-  float _210;
-  float _211;
-  float _212;
-  float _217;
-  float _218;
-  float _219;
-  float _232;
-  float _239;
-  float _240;
-  float _241;
-  float _242;
-  float _243;
-  float _244;
-  float _245;
-  float _252;
-  float _262;
-  float _269;
-  float _285;
-  float _286;
-  float _287;
-  float _288;
-  float _301;
-  float _336;
-  _55 = mad(SV_Position.z, (View_704[2].w), mad(SV_Position.y, (View_704[1].w), ((View_704[0].w) * SV_Position.x))) + (View_704[3].w);
-  _59 = ((mad(SV_Position.z, (View_704[2].x), mad(SV_Position.y, (View_704[1].x), ((View_704[0].x) * SV_Position.x))) + (View_704[3].x)) / _55) - View_1120.x;
-  _60 = ((mad(SV_Position.z, (View_704[2].y), mad(SV_Position.y, (View_704[1].y), ((View_704[0].y) * SV_Position.x))) + (View_704[3].y)) / _55) - View_1120.y;
-  _61 = ((mad(SV_Position.z, (View_704[2].z), mad(SV_Position.y, (View_704[1].z), ((View_704[0].z) * SV_Position.x))) + (View_704[3].z)) / _55) - View_1120.z;
-  if ((Material_032[0].x) < 0.5f) {
-    _70 = (COLOR.x * COLOR.x);
-    _71 = (COLOR.y * COLOR.y);
-    _72 = (COLOR.z * COLOR.z);
+  float _344;
+  float _345;
+  float _350;
+  float _351;
+  float _352;
+  float _365;
+  float _372;
+  float _373;
+  float _374;
+  float _375;
+  float _376;
+  float _377;
+  float _378;
+  float _385;
+  float _395;
+  float _402;
+  float _418;
+  float _419;
+  float _420;
+  float _421;
+  float _434;
+  float _469;
+  _60 = mad(SV_Position.z, (View_704[2].w), mad(SV_Position.y, (View_704[1].w), ((View_704[0].w) * SV_Position.x))) + (View_704[3].w);
+  _64 = ((mad(SV_Position.z, (View_704[2].x), mad(SV_Position.y, (View_704[1].x), ((View_704[0].x) * SV_Position.x))) + (View_704[3].x)) / _60) - View_1120.x;
+  _65 = ((mad(SV_Position.z, (View_704[2].y), mad(SV_Position.y, (View_704[1].y), ((View_704[0].y) * SV_Position.x))) + (View_704[3].y)) / _60) - View_1120.y;
+  _66 = ((mad(SV_Position.z, (View_704[2].z), mad(SV_Position.y, (View_704[1].z), ((View_704[0].z) * SV_Position.x))) + (View_704[3].z)) / _60) - View_1120.z;
+  _67 = TEXCOORD_9.x - View_1120.x;
+  _68 = TEXCOORD_9.y - View_1120.y;
+  _69 = TEXCOORD_9.z - View_1120.z;
+  if ((Material_192[0].x) < 0.5f) {
+    _78 = (COLOR.x * COLOR.x);
+    _79 = (COLOR.y * COLOR.y);
+    _80 = (COLOR.z * COLOR.z);
   } else {
-    _70 = COLOR.x;
-    _71 = COLOR.y;
-    _72 = COLOR.z;
+    _78 = COLOR.x;
+    _79 = COLOR.y;
+    _80 = COLOR.z;
   }
-  _75 = t0.SampleBias(s0, float2(TEXCOORD.x, TEXCOORD.y), View_2388, int2(0, 0));
-  if ((Material_032[0].x) > 0.5f) {
-    _106 = max(((exp2(log2(max(_75.x, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-    _107 = max(((exp2(log2(max(_75.y, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-    _108 = max(((exp2(log2(max(_75.z, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+  _83 = t0.SampleBias(s0, float2(TEXCOORD.x, TEXCOORD.y), View_2388, int2(0, 0));
+  if ((Material_192[0].x) > 0.5f) {
+    _114 = max(((exp2(log2(max(_83.x, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    _115 = max(((exp2(log2(max(_83.y, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    _116 = max(((exp2(log2(max(_83.z, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
   } else {
-    _106 = _75.x;
-    _107 = _75.y;
-    _108 = _75.z;
+    _114 = _83.x;
+    _115 = _83.y;
+    _116 = _83.z;
   }
-  _109 = _106 * _70;
-  _110 = _107 * _71;
-  _111 = _108 * _72;
-  _127 = saturate(_75.w * COLOR.w);
-  _128 = max(((((Material_000[1].x) - _109) * (Material_032[0].y)) + _109), 0.0f);
-  _129 = max(((((Material_000[1].y) - _110) * (Material_032[0].y)) + _110), 0.0f);
-  _130 = max(((((Material_000[1].z) - _111) * (Material_032[0].y)) + _111), 0.0f);
+  _117 = _114 * _78;
+  _118 = _115 * _79;
+  _119 = _116 * _80;
+  _148 = ((SV_Position.x - View_2144.x) * View_2160.z) - (Material_000[3].x);
+  _149 = (1.0f - ((SV_Position.y - View_2144.y) * View_2160.w)) - (Material_000[3].y);
+  _150 = _83.w * COLOR.w;
+  _179 = mad(_69, (Primitive_096[2].x), mad(_68, (Primitive_096[1].x), ((Primitive_096[0].x) * _67))) + (Primitive_096[3].x);
+  _183 = mad(_69, (Primitive_096[2].y), mad(_68, (Primitive_096[1].y), ((Primitive_096[0].y) * _67))) + (Primitive_096[3].y);
+  _212 = saturate(((1.0f - saturate(((_183 - (Material_000[4].y)) - (Material_000[3].y)) / (Material_000[8].y))) - saturate((((-0.0f - _183) - (Material_000[4].y)) + (Material_000[3].y)) / (Material_000[8].w))) * ((1.0f - saturate((((-0.0f - _179) - (Material_000[4].x)) + (Material_000[3].x)) / (Material_000[8].x))) - saturate(((_179 - (Material_000[4].x)) - (Material_000[3].x)) / (Material_000[8].z))));
+  _216 = (_212 * _212) * (3.0f - (_212 * 2.0f));
+  _260 = select((Primitive_688.x > 0.0f), saturate(Primitive_688.y), 1.0f) * saturate(saturate((Material_192[4].x) * (((float4)(t1.SampleBias(s1, float2(((_179 - (Material_000[10].x)) / (Material_000[11].x)), (1.0f - ((_183 - (Material_000[10].y)) / (Material_000[11].y)))), View_2388, int2(0, 0)))).x)) * select(((bool)(abs((Material_192[2].w) + -0.5f) > 9.999999747378752e-06f) && (bool)((Material_192[2].w) >= 0.5f)), select(((bool)(_149 > (Material_000[4].y)) || ((bool)((bool)(_148 > (Material_000[4].x)) || ((bool)((bool)(_148 < (-0.0f - (Material_000[4].x))) || (bool)(_149 < (-0.0f - (Material_000[4].y)))))))), 0.0f, _150), (select(((bool)(abs(Material_192[2].z) > 9.999999747378752e-06f) && (bool)((Material_192[2].z) >= 0.0f)), (1.0f - _216), _216) * _150)));
+  _261 = max(((((Material_000[1].x) - _117) * (Material_192[0].y)) + _117), 0.0f);
+  _262 = max(((((Material_000[1].y) - _118) * (Material_192[0].y)) + _118), 0.0f);
+  _263 = max(((((Material_000[1].z) - _119) * (Material_192[0].y)) + _119), 0.0f);
   [branch]
   if (View_2336 > 0.0f) {
-    if ((bool)(abs(_61 - Primitive_080.z) > (Primitive_304.z + 1.0f)) || ((bool)((bool)(abs(_59 - Primitive_080.x) > (Primitive_304.x + 1.0f)) || (bool)(abs(_60 - Primitive_080.y) > (Primitive_304.y + 1.0f))))) {
-      _162 = float((bool)(bool)(frac(dot(float3(_59, _60, _61), float3(0.5770000219345093f, 0.5770000219345093f, 0.5770000219345093f)) * 0.0020000000949949026f) > 0.5f));
-      _165 = 1.0f;
-      _166 = (1.0f - _162);
-      _167 = 1.0f;
-      _168 = _162;
+    if ((bool)(abs(_66 - Primitive_080.z) > (Primitive_304.z + 1.0f)) || ((bool)((bool)(abs(_64 - Primitive_080.x) > (Primitive_304.x + 1.0f)) || (bool)(abs(_65 - Primitive_080.y) > (Primitive_304.y + 1.0f))))) {
+      _295 = float((bool)(bool)(frac(dot(float3(_64, _65, _66), float3(0.5770000219345093f, 0.5770000219345093f, 0.5770000219345093f)) * 0.0020000000949949026f) > 0.5f));
+      _298 = 1.0f;
+      _299 = (1.0f - _295);
+      _300 = 1.0f;
+      _301 = _295;
     } else {
-      _165 = _127;
-      _166 = _128;
-      _167 = _129;
-      _168 = _130;
+      _298 = _260;
+      _299 = _261;
+      _300 = _262;
+      _301 = _263;
     }
   } else {
-    _165 = _127;
-    _166 = _128;
-    _167 = _129;
-    _168 = _130;
+    _298 = _260;
+    _299 = _261;
+    _300 = _262;
+    _301 = _263;
   }
   [branch]
   if (!(TranslucentBasePass_4768 == 0)) {
     [branch]
     if (TranslucentBasePass_4784 == 0.0f) {
-      _201 = (((TranslucentBasePass_4772 + 1.0f) * 0.009900989942252636f) * (TranslucentBasePass_4776 - TranslucentBasePass_4780)) + TranslucentBasePass_4780;
-      _209 = (((TranslucentBasePass_4840 + 1.0f) * 0.009900989942252636f) * (TranslucentBasePass_4832 - TranslucentBasePass_4836)) + TranslucentBasePass_4836;
-      _210 = (_201 * _166) * _209;
-      _211 = (_201 * _167) * _209;
-      _212 = (_201 * _168) * _209;
-      _217 = max((_210 - TranslucentBasePass_4828), 0.0f);
-      _218 = max((_211 - TranslucentBasePass_4828), 0.0f);
-      _219 = max((_212 - TranslucentBasePass_4828), 0.0f);
-      _232 = TranslucentBasePass_4812 * -1.4426950216293335f;
-      _239 = 1.0f - exp2(_232 * ((_210 - _217) + (_217 / (_217 + 1.0f))));
-      _240 = 1.0f - exp2(_232 * ((_211 - _218) + (_218 / (_218 + 1.0f))));
-      _241 = 1.0f - exp2(_232 * ((_212 - _219) + (_219 / (_219 + 1.0f))));
-      _242 = _239 * TranslucentBasePass_4788;
-      _243 = _240 * TranslucentBasePass_4788;
-      _244 = _241 * TranslucentBasePass_4788;
-      _245 = TranslucentBasePass_4796 * TranslucentBasePass_4792;
-      _252 = TranslucentBasePass_4804 * TranslucentBasePass_4800;
-      _262 = TranslucentBasePass_4808 * TranslucentBasePass_4800;
-      _269 = TranslucentBasePass_4804 / TranslucentBasePass_4808;
-      _285 = saturate(((saturate(((((_242 + _245) * _239) + _252) / (((_242 + TranslucentBasePass_4792) * _239) + _262)) - _269) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
-      _286 = saturate(((saturate(((((_243 + _245) * _240) + _252) / (((_243 + TranslucentBasePass_4792) * _240) + _262)) - _269) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
-      _287 = saturate(((saturate(((((_244 + _245) * _241) + _252) / (((_244 + TranslucentBasePass_4792) * _241) + _262)) - _269) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
-      _288 = dot(float3(_285, _286, _287), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
-      _301 = 1.0f / TranslucentBasePass_4820;
-      _312 = exp2(log2(saturate(lerp(_288, _285, TranslucentBasePass_4824))) * _301);
-      _313 = exp2(log2(saturate(lerp(_288, _286, TranslucentBasePass_4824))) * _301);
-      _314 = exp2(log2(saturate(lerp(_288, _287, TranslucentBasePass_4824))) * _301);
+      _334 = (((TranslucentBasePass_4772 + 1.0f) * 0.009900989942252636f) * (TranslucentBasePass_4776 - TranslucentBasePass_4780)) + TranslucentBasePass_4780;
+      _342 = (((TranslucentBasePass_4840 + 1.0f) * 0.009900989942252636f) * (TranslucentBasePass_4832 - TranslucentBasePass_4836)) + TranslucentBasePass_4836;
+      _343 = (_334 * _299) * _342;
+      _344 = (_334 * _300) * _342;
+      _345 = (_334 * _301) * _342;
+      _350 = max((_343 - TranslucentBasePass_4828), 0.0f);
+      _351 = max((_344 - TranslucentBasePass_4828), 0.0f);
+      _352 = max((_345 - TranslucentBasePass_4828), 0.0f);
+      _365 = TranslucentBasePass_4812 * -1.4426950216293335f;
+      _372 = 1.0f - exp2(_365 * ((_343 - _350) + (_350 / (_350 + 1.0f))));
+      _373 = 1.0f - exp2(_365 * ((_344 - _351) + (_351 / (_351 + 1.0f))));
+      _374 = 1.0f - exp2(_365 * ((_345 - _352) + (_352 / (_352 + 1.0f))));
+      _375 = _372 * TranslucentBasePass_4788;
+      _376 = _373 * TranslucentBasePass_4788;
+      _377 = _374 * TranslucentBasePass_4788;
+      _378 = TranslucentBasePass_4796 * TranslucentBasePass_4792;
+      _385 = TranslucentBasePass_4804 * TranslucentBasePass_4800;
+      _395 = TranslucentBasePass_4808 * TranslucentBasePass_4800;
+      _402 = TranslucentBasePass_4804 / TranslucentBasePass_4808;
+      _418 = saturate(((saturate(((((_375 + _378) * _372) + _385) / (((_375 + TranslucentBasePass_4792) * _372) + _395)) - _402) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
+      _419 = saturate(((saturate(((((_376 + _378) * _373) + _385) / (((_376 + TranslucentBasePass_4792) * _373) + _395)) - _402) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
+      _420 = saturate(((saturate(((((_377 + _378) * _374) + _385) / (((_377 + TranslucentBasePass_4792) * _374) + _395)) - _402) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
+      _421 = dot(float3(_418, _419, _420), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
+      _434 = 1.0f / TranslucentBasePass_4820;
+      _445 = exp2(log2(saturate(lerp(_421, _418, TranslucentBasePass_4824))) * _434);
+      _446 = exp2(log2(saturate(lerp(_421, _419, TranslucentBasePass_4824))) * _434);
+      _447 = exp2(log2(saturate(lerp(_421, _420, TranslucentBasePass_4824))) * _434);
     } else {
-      _312 = _166;
-      _313 = _167;
-      _314 = _168;
+      _445 = _299;
+      _446 = _300;
+      _447 = _301;
     }
     [branch]
     if (TranslucentBasePass_4784 == 1.0f) {
-      _336 = ((((TranslucentBasePass_4776 - TranslucentBasePass_4780) * saturate(TranslucentBasePass_4772 * 0.009999999776482582f)) + TranslucentBasePass_4780) * 0.012500000186264515f) * (((TranslucentBasePass_4832 - TranslucentBasePass_4836) * saturate(TranslucentBasePass_4840 * 0.009999999776482582f)) + TranslucentBasePass_4836);
-      _341 = (_336 * _312);
-      _342 = (_336 * _313);
-      _343 = (_336 * _314);
+      _469 = ((((TranslucentBasePass_4776 - TranslucentBasePass_4780) * saturate(TranslucentBasePass_4772 * 0.009999999776482582f)) + TranslucentBasePass_4780) * 0.012500000186264515f) * (((TranslucentBasePass_4832 - TranslucentBasePass_4836) * saturate(TranslucentBasePass_4840 * 0.009999999776482582f)) + TranslucentBasePass_4836);
+      _474 = (_469 * _445);
+      _475 = (_469 * _446);
+      _476 = (_469 * _447);
     } else {
-      _341 = _312;
-      _342 = _313;
-      _343 = _314;
+      _474 = _445;
+      _475 = _446;
+      _476 = _447;
     }
   } else {
-    _341 = _166;
-    _342 = _167;
-    _343 = _168;
+    _474 = _299;
+    _475 = _300;
+    _476 = _301;
   }
-  SV_Target.x = (-0.0f - min((-0.0f - _341), 0.0f));
-  SV_Target.y = (-0.0f - min((-0.0f - _342), 0.0f));
-  SV_Target.z = (-0.0f - min((-0.0f - _343), 0.0f));
-  SV_Target.w = _165;
+  SV_Target.x = (-0.0f - min((-0.0f - _474), 0.0f));
+  SV_Target.y = (-0.0f - min((-0.0f - _475), 0.0f));
+  SV_Target.z = (-0.0f - min((-0.0f - _476), 0.0f));
+  SV_Target.w = _298;
   SV_Target.w *= HUD_OPACITY;
   return SV_Target;
 }

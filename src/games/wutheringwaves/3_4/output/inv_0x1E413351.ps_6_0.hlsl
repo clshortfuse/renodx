@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 Texture2D<float4> t0 : register(t0);
 
 Texture2D<float4> t1 : register(t1);
@@ -456,7 +456,7 @@ float4 main(
   SV_Target.x = ((cb0_108x * (lerp(_717, _720, _684))) + _666);
   SV_Target.y = ((cb0_108x * (lerp(_718, _721, _684))) + _667);
   SV_Target.z = (((lerp(_719, _722, _684)) * cb0_108x) + _668);
-  SV_Target.rgb = wuwa::ApplyDisplayMap(SV_Target.rgb);
+  SV_Target.rgb = wuwa::ApplyDisplayMap(SV_Target.rgb, SV_Position.xy);
   SV_Target.w = (dot(float3(_581, _580, _579), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f)));
   CLAMP_IF_SDR(SV_Target.w);
   return SV_Target;
