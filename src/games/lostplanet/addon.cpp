@@ -12,6 +12,8 @@
 #include <embed/0x98F668B5.h>
 #include <embed/0xB2AD4F48.h>
 #include <embed/0xC1C7045A.h>
+#include <embed/0xA9D10579.h>
+#include <embed/0xA13C22A5.h>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -29,6 +31,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x7EC02107),  // output
     CustomShaderEntry(0xC1C7045A),  // matrix
     CustomShaderEntry(0x98F668B5),  // clamper
+
+    // Current Lost Planet Colonies Steam build
+    CustomShaderEntry(0xA9D10579),  // Gamma/output
+    CustomShaderEntry(0xA13C22A5),  // FilterColorCorrect / RenoDX tonemap stage
 };
 
 ShaderInjectData shader_injection;
