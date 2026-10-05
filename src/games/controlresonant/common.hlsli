@@ -47,21 +47,6 @@ static const float3 CUSTOM_PRIMARIES_LUMINANCE_WEIGHTS = float3(
     0.982367808f,
     0.000086432f);
 
-static const float3 CUSTOM_PRIMARIES_EXPANSION_WEIGHTS = float3(
-    0.216121886f,
-    0.351328095f,
-    0.432550020f);
-
-float3 ToSecondaryCustomPrimaries(float3 color, float primaries_scale) {
-  const float neutral = dot(color, CUSTOM_PRIMARIES_EXPANSION_WEIGHTS);
-  return lerp(neutral.xxx, color, rcp(primaries_scale));
-}
-
-float3 FromSecondaryCustomPrimaries(float3 color, float primaries_scale) {
-  const float neutral = dot(color, CUSTOM_PRIMARIES_EXPANSION_WEIGHTS);
-  return lerp(neutral.xxx, color, primaries_scale);
-}
-
 float3 CompressCustomPrimariesRadial(float3 color, float fit_strength = 1.f) {
   const float3 lower_rgb = max(-color, 0.f);
   const float lower_scale = renodx::math::Max(lower_rgb);
@@ -87,6 +72,29 @@ float3 CompressCustomPrimariesRadial(float3 color, float fit_strength = 1.f) {
   const float3 fitted = mad(color - y, radial_scale, y);
 
   return lerp(clipped, fitted, fit_strength);
+}
+
+// BT.709 expanded uniformly around D65 until red reaches Z = 0.
+// Clipping gamut only; input and returned color are linear BT.709.
+static const float3x3 BT709_TO_XYZ_EXPANDED_BT709_MAT = float3x3(
+    0.9340213211f, 0.0328342863f, 0.0331443926f,
+    0.0177500401f, 0.9491055673f, 0.0331443926f,
+    0.0177500401f, 0.0328342863f, 0.9494156737f);
+
+static const float3x3 XYZ_EXPANDED_BT709_TO_BT709_MAT = float3x3(
+    1.0720077997f, -0.0358346779f, -0.0361731218f,
+    -0.0193720358f, 1.0555451576f, -0.0361731218f,
+    -0.0193720358f, -0.0358346779f, 1.0552067137f);
+
+float3 ApplyXYZExpandedBT709GamutClip(float3 color, float strength = 1.f) {
+  if (strength == 0.f) {
+    return color;
+  }
+
+  const float3 expanded_color = mul(BT709_TO_XYZ_EXPANDED_BT709_MAT, color);
+  const float3 clipped_color = mul(XYZ_EXPANDED_BT709_TO_BT709_MAT, max(expanded_color, 0.f));
+
+  return lerp(color, clipped_color, strength);
 }
 
 float3 FixNegativeLuminanceBT2020(float3 color) {
