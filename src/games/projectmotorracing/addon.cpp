@@ -247,6 +247,10 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
     renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
     renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
     renodx::utils::settings::UpdateSetting("fxBloom", 50.f);
 }
 
