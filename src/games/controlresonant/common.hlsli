@@ -22,30 +22,30 @@ float3 ClampBT2020ToLMS(float3 color) {
   return renodx::color::bt2020::from::LMS(lms);
 }
 
-// D65-normalized custom working gamut, expanded to fully enclose BT.2020.
-// R: -26.00° from D65 for stronger red -> orange highlight flight.
-// G: +102.99° from D65, retaining the original green highlight trajectory.
-// B: -121.17° from D65, pushed near the zero-Y boundary to increase blue/purple highlight blowout.
-// Luminance weights are the XYZ Y row; expansion weights are the D65 barycentric weights used for radial secondary-primary scaling.
+// D65-normalized custom working gamut enclosing BT.2020.
+// R: -22.00° from D65 at the original radius, between the -26° and -20° tests.
+// G: +102.99° from D65, unchanged.
+// B: -121.17° from D65, unchanged near the zero-Y boundary.
+// Luminance weights are the XYZ Y row.
 static const float3x3 CUSTOM_PRIMARIES_TO_XYZ_MAT = float3x3(
-    0.612550128f, 0.188342167f, 0.149537757f,
-    0.017545760f, 0.982367808f, 0.000086432f,
-    0.026749645f, -0.102940791f, 1.164997638f);
+    0.612967501f, 0.182980916f, 0.154481636f,
+    0.045506479f, 0.954404231f, 0.000089290f,
+    -0.014696686f, -0.100010531f, 1.203513710f);
 
 static const float3x3 BT2020_TO_CUSTOM_PRIMARIES_MAT = float3x3(
-    0.962911598f, 0.003151047f, 0.033926831f,
-    0.250217071f, 0.690103475f, 0.059679623f,
-    0.000000000f, 0.085002920f, 0.915213009f);
+    0.962911598f, 0.003151046f, 0.033926831f,
+    0.229335471f, 0.710230844f, 0.060434168f,
+    0.030816078f, 0.082383413f, 0.887009192f);
 
 static const float3x3 CUSTOM_PRIMARIES_TO_BT2020_MAT = float3x3(
-    1.038516933f, 0.000000002f, -0.038497693f,
-    -0.379593390f, 1.460791126f, -0.081184447f,
-    0.035255778f, -0.135674985f, 1.100182040f);
+    1.039789708f, 0.000000002f, -0.039770468f,
+    -0.335327217f, 1.419208998f, -0.083868493f,
+    -0.004979475f, -0.131812931f, 1.136555237f);
 
 static const float3 CUSTOM_PRIMARIES_LUMINANCE_WEIGHTS = float3(
-    0.017545760f,
-    0.982367808f,
-    0.000086432f);
+    0.045506479f,
+    0.954404231f,
+    0.000089290f);
 
 float3 CompressCustomPrimariesRadial(float3 color, float fit_strength = 1.f) {
   const float3 lower_rgb = max(-color, 0.f);
