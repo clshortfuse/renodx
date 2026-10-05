@@ -186,7 +186,27 @@ float3 Ap1AcesExtended(float3 color, int curve, float DSG) {
 }
 
 // Stephen Hill
-float3 SHAcesTonemap(float3 color, float pre_exposure = 1.f, float post_exposure = 1.f){
+float3 SHAces(float3 color, float pre_exposure = 1.f, float post_exposure = 1.f){
+  // sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
+  const float3x3 ACESInputMat = {
+    { 0.59719, 0.35458, 0.04823 },
+    { 0.07600, 0.90834, 0.01566 },
+    { 0.02840, 0.13383, 0.83777 }
+  };
+  // ODT_SAT => XYZ => D60_2_D65 => sRGB
+  const float3x3 ACESOutputMat = {
+    { 1.60475, -0.53108, -0.07367 },
+    { -0.10208, 1.10813, -0.00605 },
+    { -0.00327, -0.07276, 1.07602 }
+  };
+  color = pre_exposure * color;
+  color = mul(ACESInputMat, color);
+  color = (color * (color + 0.0245786f) - 0.000090537f) / (color * (0.983729f * color + 0.4329510f) + 0.238081f);
+  color = mul(ACESOutputMat, color);
+  return post_exposure * color;
+}
+
+float3 SHAcesExtended(float3 color, float pre_exposure = 1.f, float post_exposure = 1.f){
   bool extended = RENODX_TONE_MAP_TYPE != 0.f;
   // sRGB => XYZ => D65_2_D60 => AP1 => RRT_SAT
   const float3x3 ACESInputMat = {
@@ -203,12 +223,7 @@ float3 SHAcesTonemap(float3 color, float pre_exposure = 1.f, float post_exposure
   color = pre_exposure * color;
   color = mul(ACESInputMat, color);
   float3 sdr_curve = (color * (color + 0.0245786f) - 0.000090537f) / (color * (0.983729f * color + 0.4329510f) + 0.238081f);
-  if(!extended){
-    return sdr_curve;
-  } else {
-    //color = color > 0.47399 ? 0.733076360295 * color + 0.0081270771627 : sdr_curve;
-    color = renodx::math::Select(color > 0.47399, 0.733076360295 * color + 0.0081270771627, sdr_curve);
-  }
+  color = renodx::math::Select(color > 0.47399, 0.733076360295 * color + 0.0081270771627, sdr_curve);
   color = mul(ACESOutputMat, color);
   color = post_exposure * color;
   return color;

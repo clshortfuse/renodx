@@ -271,3 +271,18 @@ float3 Ap1AcesTonemap(float3 ap0_untonemapped, int curve = 0, float DSG = 0.9811
   }
   return output_color;
 }
+
+float3 SHAcesTonemap(float3 color, float pre_exposure = 1.f, float post_exposure = 1.f){
+  if(RENODX_TONE_MAP_TYPE == 1.f){return color;}
+  bool extended = RENODX_TONE_MAP_TYPE != 0.f;
+  float3 sdr_color = SHAces(color, pre_exposure, post_exposure);
+  float3 output_color;
+  [branch]
+  if (!extended) {
+    output_color = sdr_color;
+  } else {
+    float3 hdr_color = SHAcesExtended(color, pre_exposure, post_exposure);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+  }
+  return output_color;
+}
