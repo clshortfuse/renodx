@@ -7,12 +7,6 @@ float ConditionalOverrideGameBrightness(float original_paper_white, int hdr_enab
              : RENODX_DIFFUSE_WHITE_NITS / 80.f;
 }
 
-float ApplyVanillaSDRAgXAsymptote(RemedyAgXParameters params) {
-  return pow(
-      params.tone_scale.parameters.output_pivot + params.tone_scale.shoulder_scale,
-      params.tone_scale.parameters.output_power);
-}
-
 float3 CInfinityTransition(float3 position) {
   position = saturate(position);
   return rcp(1.f + exp2((1.f - 2.f * position) / (position * (1.f - position))));
@@ -201,6 +195,12 @@ struct RemedyAgXCurveParameters {
   float linear_tangent_slope;
 };
 
+float ApplyVanillaSDRAgXAsymptote(RemedyAgXCurveParameters params) {
+  return pow(
+      params.tone_scale.parameters.output_pivot + params.tone_scale.shoulder_scale,
+      params.tone_scale.parameters.output_power);
+}
+
 RemedyAgXCurveParameters GetRemedyAgXCurveParameters(RemedyAgXParameters params) {
   RemedyAgXCurveParameters curve;
   curve.tone_scale = params.tone_scale;
@@ -329,12 +329,67 @@ float3 ApplyRemedyAgXBlend(float3 sdr, float3 extended, RemedyAgXBlendParameters
   return lower / denominator;
 }
 
-float3 ApplyVanillaPlusAgXWithOpponentExpansion(
-    float3 untonemapped, RemedyAgXParameters params, float hdr_clip_input = 100.f, float opponent_strength = 1.f) {
+float3 ApplyVanillaPlusOpponentExpansionLMS(
+    float3 sdr_lms,
+    float sdr_yf,
+    float hdr_yf,
+    RemedyAgXCurveParameters params,
+    float opponent_strength) {
   const float3 d65_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
-  const float d65_yf = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_YF;
   const float alpha_l = renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_L;
   const float alpha_m = renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_M;
+
+  // Remove common cone amplitude before pow(); it cancels when Yf is restored.
+  float3 source_cones = max(sdr_lms, 0.f) / d65_lms;
+  const float cone_scale = renodx::math::Max(source_cones);
+
+  if (!(cone_scale > 0.f)) {
+    return sdr_lms;
+  }
+
+  source_cones /= cone_scale;
+
+  const float source_cone_yf = alpha_l * source_cones.x + alpha_m * source_cones.y;
+
+  if (!(source_cone_yf > 0.f)) {
+    return sdr_lms;
+  }
+
+  // Strength 0 preserves the SDR tone map's cone ratios and only changes luminance.
+  const float3 luminance_lms = (source_cones / source_cone_yf) * d65_lms * hdr_yf;
+
+  if (opponent_strength == 0.f || hdr_yf == sdr_yf) {
+    return luminance_lms;
+  }
+
+  const float sdr_asymptote = ApplyVanillaSDRAgXAsymptote(params);
+  const float sdr_highlight_range_stops = log2(sdr_asymptote / params.output_pivot_linear);
+
+  if (!(sdr_highlight_range_stops > 0.f)) {
+    return luminance_lms;
+  }
+
+  // Scale the cone-ratio response in gain/stop space.
+  const float hdr_gain_stops = log2(hdr_yf) - log2(sdr_yf);
+  const float cone_response_power = exp2(opponent_strength * hdr_gain_stops / sdr_highlight_range_stops);
+
+  const float3 powered_cones = pow(source_cones, cone_response_power);
+  const float powered_yf = alpha_l * powered_cones.x + alpha_m * powered_cones.y;
+
+  if (!(powered_yf > 0.f)) {
+    return luminance_lms;
+  }
+
+  const float3 opponent_lms = (powered_cones / powered_yf) * d65_lms * hdr_yf;
+
+  return !any(isnan(opponent_lms)) && !any(isinf(opponent_lms))
+             ? opponent_lms
+             : luminance_lms;
+}
+
+float3 ApplyVanillaPlusAgXWithOpponentExpansion(
+    float3 untonemapped, RemedyAgXParameters params, float hdr_clip_input = 100.f, float opponent_strength = 2.f) {
+  const float d65_yf = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_YF;
 
   const RemedyAgXCurveParameters curve_params = GetRemedyAgXCurveParameters(params);
   const float output_power = curve_params.tone_scale.parameters.output_power;
@@ -383,54 +438,10 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
     return sdr_color;
   }
 
-  // Remove common cone amplitude before pow(); it cancels when Yf is restored.
-  float3 source_cones = max(raw_sdr_lms, 0.f) / d65_lms;
-  const float cone_scale = renodx::math::Max(source_cones);
+  const float3 output_lms =
+      ApplyVanillaPlusOpponentExpansionLMS(raw_sdr_lms, sdr_yf, hdr_yf, curve_params, opponent_strength);
 
-  if (!(cone_scale > 0.f)) {
-    return sdr_color;
-  }
-
-  source_cones /= cone_scale;
-
-  const float source_cone_yf = alpha_l * source_cones.x + alpha_m * source_cones.y;
-
-  if (!(source_cone_yf > 0.f)) {
-    return sdr_color;
-  }
-
-  const float3 luminance_lms = (source_cones / source_cone_yf) * d65_lms * hdr_yf;
-
-  // Strength 0 preserves the SDR tone map's cone ratios and only changes luminance.
-  if (opponent_strength == 0.f || hdr_yf == sdr_yf) {
-    return renodx::color::bt2020::from::LMS(luminance_lms);
-  }
-
-  const float sdr_asymptote = ApplyVanillaSDRAgXAsymptote(params);
-  const float sdr_highlight_range_stops = log2(sdr_asymptote / curve_params.output_pivot_linear);
-
-  if (!(sdr_highlight_range_stops > 0.f)) {
-    return renodx::color::bt2020::from::LMS(luminance_lms);
-  }
-
-  // Scale the actual cone-ratio response rather than extrapolating its final LMS result.
-  const float hdr_gain_stops = log2(hdr_yf) - log2(sdr_yf);
-  const float cone_response_power = exp2(opponent_strength * hdr_gain_stops / sdr_highlight_range_stops);
-
-  const float3 powered_cones = pow(source_cones, cone_response_power);
-  const float powered_yf = alpha_l * powered_cones.x + alpha_m * powered_cones.y;
-
-  if (!(powered_yf > 0.f)) {
-    return renodx::color::bt2020::from::LMS(luminance_lms);
-  }
-
-  const float3 opponent_lms = (powered_cones / powered_yf) * d65_lms * hdr_yf;
-
-  if (any(isnan(opponent_lms)) || any(isinf(opponent_lms))) {
-    return renodx::color::bt2020::from::LMS(luminance_lms);
-  }
-
-  return renodx::color::bt2020::from::LMS(opponent_lms);
+  return renodx::color::bt2020::from::LMS(output_lms);
 }
 
 float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters params) {
