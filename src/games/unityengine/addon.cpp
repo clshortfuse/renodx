@@ -1392,6 +1392,7 @@ const ShaderItem INITIAL_SHADERS[] = {
 	  UberHDGammaOnDraw(0x5AA3D681),
       UberHDGammaOnDraw(0x5B5616C8),
 	  UberHDLinearOnDraw(0x5C913D88),
+      UberHDLinearOnDraw(0x5CE91599),
 	  UberHDLinearOnDraw(0x5FFE3248),
 	  UberHDGammaOnDraw(0x6B9C2610),
 	  UberHDLinearOnDraw(0x6C71F0B5),
@@ -1410,6 +1411,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDLinearOnDraw(0x7FAFD139),
     UberHDGammaOnDraw(0x8FF6134C),
 	  UberHDLinearOnDraw(0x9B813389),
+      UberHDLinearOnDraw(0x9BB9B471),
 	  UberHDLinearOnDraw(0x9CFC6AFA),
 	  UberHDLinearOnDraw(0x9DF20CC3),
 	  UberHDLinearOnDraw(0x10D74361),
@@ -1552,6 +1554,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x6D550A49, &CountLinear),  // PS1 Post Processing
     CustomShaderEntryCallback(0x3513581C, &Count),
     CustomShaderEntryCallback(0x457A0F57, &Count),
+    CustomShaderEntryCallback(0x7DAF1E07, &Count),
     CustomShaderEntryCallback(0x700A4C32, &Count),    // ShaderGraphs ScreenFxShader
     CustomShaderEntryCallback(0x2D1C3A64, &Count),    // Beat Saber Main effect
     CustomShaderEntryCallback(0xD44C30D0, &Count),    // Beat Saber Main effect
