@@ -9,7 +9,6 @@ struct ShaderInjectData {
   float graphics_white_nits;
 
   float tone_map_type;
-  float tone_map_highlight_compression;
   float tone_map_highlights;
   float tone_map_contrast_highlights;
 
@@ -36,9 +35,7 @@ cbuffer shader_injection : register(b0, space50) {
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
 
 #define TONE_MAP_TYPE                      shader_injection.tone_map_type
-#define TONE_MAP_HIGHLIGHT_COMPRESSION     shader_injection.tone_map_highlight_compression
 #define TONE_MAP_GAMUT_CLIP                shader_injection.tone_map_gamut_clip
-#define TONE_MAP_SECONDARY_PRIMARIES_SCALE 3.f
 
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS  shader_injection.tone_map_contrast_highlights
