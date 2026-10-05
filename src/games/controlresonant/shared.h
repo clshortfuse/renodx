@@ -22,7 +22,6 @@ struct ShaderInjectData {
   float tone_map_flare;
 
   float tone_map_gamut_clip;
-  // float tone_map_secondary_primaries_scale;
 };
 
 #ifndef __cplusplus
