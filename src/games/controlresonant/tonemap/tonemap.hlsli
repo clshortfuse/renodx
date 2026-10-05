@@ -329,11 +329,11 @@ float3 ApplyRemedyAgXBlend(float3 sdr, float3 extended, RemedyAgXBlendParameters
   return lower / denominator;
 }
 
-float ApplyOpponentResponse(float opponent_drive, float response_gain) {
-  const float magnitude = abs(opponent_drive);
+float2 ApplyOpponentContrastResponse(float2 opponent_contrast, float response_gain) {
+  const float2 magnitude = abs(opponent_contrast);
 
-  // Divisive response: weak opponent drives receive more gain while strong drives saturate.
-  return opponent_drive * response_gain * (1.f + magnitude) / mad(response_gain, magnitude, 1.f);
+  // Divisive response: weak opponent contrasts receive more gain than strong contrasts.
+  return opponent_contrast * response_gain * (1.f + magnitude) / mad(response_gain, magnitude, 1.f);
 }
 
 float3 ApplyVanillaPlusOpponentResponseLMS(
@@ -350,20 +350,20 @@ float3 ApplyVanillaPlusOpponentResponseLMS(
     return sdr_lms;
   }
 
-  const float hdr_gain = hdr_yf / sdr_yf;
-  const float3 luminance_lms = sdr_lms * hdr_gain;
+  const float luminance_gain = hdr_yf / sdr_yf;
+  const float3 luminance_lms = sdr_lms * luminance_gain;
 
   // Strength 0 preserves the SDR tone map's cone ratios and only changes luminance.
   [branch]
-  if (opponent_response_strength == 0.f || hdr_gain == 1.f) {
+  if (opponent_response_strength == 0.f || luminance_gain == 1.f) {
     return luminance_lms;
   }
 
   const float adaptation_yf = params.output_pivot_linear;
   const float3 adaptation_lms = d65_lms * adaptation_yf;
-  const float3 source_q = sdr_lms / adaptation_lms;
+  const float3 adaptation_relative_lms = sdr_lms / adaptation_lms;
 
-  if (any(source_q <= 0.f)) {
+  if (any(adaptation_relative_lms <= 0.f)) {
     return luminance_lms;
   }
 
@@ -374,36 +374,41 @@ float3 ApplyVanillaPlusOpponentResponseLMS(
     return luminance_lms;
   }
 
-  // Let HDR luminance expansion drive the post-receptoral opponent response.
-  const float hdr_gain_stops = log2(hdr_gain);
-  const float response_gain =
-      exp2(opponent_response_strength * hdr_gain_stops / highlight_range_stops);
-
   const float source_relative_yf = sdr_yf / adaptation_yf;
   const float target_relative_yf = hdr_yf / adaptation_yf;
 
-  // Adaptation-relative L-M and S-(L+M) opponent drives.
-  float rg_response = (source_q.x - source_q.y) * hdr_gain;
-  float by_response = (source_q.z - source_relative_yf) * hdr_gain;
+  const float2 source_opponent_signal = float2(
+      adaptation_relative_lms.x - adaptation_relative_lms.y,
+      adaptation_relative_lms.z - source_relative_yf);
 
-  rg_response = ApplyOpponentResponse(rg_response, response_gain);
-  by_response = ApplyOpponentResponse(by_response, response_gain);
+  const float2 source_opponent_contrast = source_opponent_signal * rcp(source_relative_yf);
 
-  // Keep the reconstructed cone responses physically nonnegative.
-  rg_response = clamp(
-      rg_response,
+  // Let the luminance change drive post-receptoral opponent gain.
+  const float luminance_gain_stops = log2(luminance_gain);
+  const float response_gain =
+      exp2(opponent_response_strength * luminance_gain_stops / highlight_range_stops);
+
+  const float2 response_contrast =
+      ApplyOpponentContrastResponse(source_opponent_contrast, response_gain);
+
+  float2 opponent_response = response_contrast * target_relative_yf;
+
+  // Keep reconstructed cone responses nonnegative.
+  opponent_response.x = clamp(
+      opponent_response.x,
       -target_relative_yf / alpha_m,
       target_relative_yf / alpha_l);
-  by_response = max(by_response, -target_relative_yf);
+  opponent_response.y = max(opponent_response.y, -target_relative_yf);
 
-  const float q_l = target_relative_yf + alpha_m * rg_response;
-  const float q_m = target_relative_yf - alpha_l * rg_response;
-  const float q_s = target_relative_yf + by_response;
+  const float3 response_relative_lms = float3(
+      target_relative_yf + alpha_m * opponent_response.x,
+      target_relative_yf - alpha_l * opponent_response.x,
+      target_relative_yf + opponent_response.y);
 
-  const float3 opponent_lms = float3(q_l, q_m, q_s) * adaptation_lms;
+  const float3 response_lms = response_relative_lms * adaptation_lms;
 
-  return !any(isnan(opponent_lms)) && !any(isinf(opponent_lms))
-             ? opponent_lms
+  return !any(isnan(response_lms)) && !any(isinf(response_lms))
+             ? response_lms
              : luminance_lms;
 }
 
@@ -475,7 +480,7 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
 }
 
 float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters params) {
-  float3 color = ApplyVanillaPlusAgXWithOpponentExpansion(untonemapped, params, 72.f, 2.f);
+  float3 color = ApplyVanillaPlusAgXWithOpponentExpansion(untonemapped, params, 72.f, 1.f);
 
   color = ApplyAnchoredSaturationGrading(
       color,
