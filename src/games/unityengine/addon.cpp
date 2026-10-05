@@ -64,6 +64,7 @@ bool sneakyBuilder = false;
 float InternalLutCheck = 0.f;
 bool finalBlitCheck;
 bool isD3D12 = false;
+bool upgradeSmolLUT = false;
 
 ShaderInjectData shader_injection;
 
@@ -757,11 +758,13 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDRPOnDraw(0xB81F1E24),
     UberHDRPOnDraw(0xC6B954D6),
     UberHDRPOnDraw(0xC6F22BEE),
+    UberHDRPOnDraw(0xC8C1E9BE),
     UberHDRPOnDraw(0xC52310D2),
     UberHDRPOnDraw(0xCF6E0603),
     UberHDRPOnDraw(0xD6B5AD4A),
     UberHDRPOnDraw(0xD36BB165),
     UberHDRPOnDraw(0xDB01F22E),
+    UberHDRPOnDraw(0xDB2BB8B9),
     UberHDRPOnDraw(0xE6B97032),
     UberHDRPOnDraw(0xE363E5C8),
     UberHDRPOnDraw(0xE12729AC),
@@ -770,6 +773,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDRPOnDraw(0xF8BA0FA2),
     UberHDRPOnDraw(0xF110C44D),
     UberHDRPOnDraw(0xFA609710),
+    UberHDRPOnDraw(0xFDA38F79),
     UberHDRPOnDraw(0xFDF96092),
     UberHDRPOnDraw(0xEFE2ADAE),
       // final pass
@@ -792,6 +796,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CountLinearOnDraw(0x5A977943),
     CountLinearOnDraw(0x5AE952EB),
     CountLinearOnDraw(0x6D3B4FF0),
+    CountLinearOnDraw(0x8D0853DB),
     CountLinearOnDraw(0x08F6AF40),
     CountLinearOnDraw(0x9A3E0141),
     CountLinearOnDraw(0x9BDBCC02),
@@ -1786,6 +1791,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x98451591, &CountLinear),
     CustomShaderEntryCallback(0xFF7EA06B, &CountLinearTonemap1Clamped),
     CustomShaderEntryCallback(0x8B3EF05B, &CountLinearTonemap1),
+    CustomShaderEntryCallback(0xA483B8E0, &CountLinearTonemap1),
     CustomShaderEntryCallback(0x90BF03E1, &CountLinearTonemap1),
     CustomShaderEntryCallback(0x98ADAF37, &CountLinearTonemap1),
     CustomShaderEntryCallback(0xA664DBC2, &CountLinearTonemap1),
@@ -2408,6 +2414,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     //CustomShaderEntryCallback(0xC224A268, &CountLinearTonemap35),
     //CustomShaderEntryCallback(0xCD56DC9B, &CountLinearTonemap35),
     CustomShaderEntryCallback(0x2E1F9ED4, &CountLinearTonemap35),
+    CustomShaderEntryCallback(0x1A3FC41D, &CountLinearTonemap35),
     CustomShaderEntryCallback(0x107ACDC1, &CountLinearTonemap35),
     CustomShaderEntryCallback(0xC25D14FB, &CountLinearTonemap35),
     CustomShaderEntryCallback(0x59FA5E75, &CountLinearTonemap35),
@@ -3291,7 +3298,8 @@ void AddGamePatches() {
   } else if (filename == "Dimhaven Enigmas.exe" || filename == "Dimhaven - The Lost Source.exe" || filename == "Carpenter.exe") {
     AddIndex0Upgrade();
   } else if (filename == "OPUS_ Prism Peak.exe"){
-    AddSmolInternalLutUpgrade();
+    //AddSmolInternalLutUpgrade();
+    upgradeSmolLUT = true;
     AddIndex0Upgrade();
   } else if (filename == "Solateria.exe"){
     g_upgrade_internal_lut = 0.f;
@@ -3299,7 +3307,8 @@ void AddGamePatches() {
   } else if (filename == "LightmatterSub.exe"){
     AddLISBtSUpgrades();
   } else if (filename == "Tales of Xillia Remastered.exe" || filename == "CONSTANCE.exe") {
-    AddSmolInternalLutUpgrade();
+    //AddSmolInternalLutUpgrade();
+    upgradeSmolLUT = true;
   } else if(filename == "Ultros.exe" || filename == "Batbarian Testament of the Primordials.exe"
     || filename == "nslt.exe" || filename == "AuRevoir.exe" || filename == "ShootasBloodAndTeef.exe"
   || filename == "Copycat.exe" || filename == "Make Way.exe" || filename == "Digimon World Next Order.exe"
@@ -4210,13 +4219,31 @@ void OnInitDevice(reshade::api::device* device) {
           .dimensions = {1024,32},
           .usage_include = reshade::api::resource_usage::render_target,
       });
-  } else if(g_upgrade_internal_lut == 1.f) {
+      if(upgradeSmolLUT){
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {256,16},
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+      }
+  } else {
+    if(g_upgrade_internal_lut == 1.f){
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .dimensions = {.width=1024, .height=32},
           .usage_include = reshade::api::resource_usage::render_target,
       });
+    }
+    if (upgradeSmolLUT){
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_typeless,
+          .dimensions = {256,16},
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+    }
   }
 }
 

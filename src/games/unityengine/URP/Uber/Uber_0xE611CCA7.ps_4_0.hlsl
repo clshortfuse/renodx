@@ -67,7 +67,7 @@ void main(
   r0.yzw = r1.xyz + -r2.xyz;
   r0.xyz = r0.xxx * r0.yzw + r2.xyz;
   } else {
-    r0.xyz = renodx::lut::SampleTetrahedral(t3, r0.xyz, cb0[137].z + 1u);
+    r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.xyz, cb0[137].z + 1u);
   }
   if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
     r0.xyz = GradeAndDisplayMap(r0.xyz);
