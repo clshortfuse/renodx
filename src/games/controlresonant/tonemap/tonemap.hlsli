@@ -114,20 +114,20 @@ float3 ApplyAnchoredTonalGrading(
   return renodx::math::CopySign(graded_normalized, signed_normalized) * anchor_out;
 }
 
-// Linear RGB grading: weights must match the RGB space and sum to 1; anchor_y must be positive.
+// Linear BT.2020 grading; anchor_y must be positive.
 // grading_source drives highlight detection independently of the color being adjusted.
 // anchor_y is the input luminance anchor of grading_source, not the output color's anchor.
 float3 ApplyAnchoredSaturationGrading(
     float3 color, float3 grading_source,
     float anchor_y,
-    float3 luminance_weights,
     float saturation, float highlight_saturation, float dechroma) {
   [branch]
   if (saturation == 1.f && highlight_saturation == 1.f && dechroma == 0.f) {
     return color;
   }
 
-  float effective_saturation = saturation;
+  const float3 anchor_lms = renodx::color::lms::from::BT2020(anchor_y.xxx);
+  float effective_purity_scale = saturation;
 
   [branch]
   if (dechroma != 0.f || highlight_saturation != 1.f) {
@@ -135,27 +135,37 @@ float3 ApplyAnchoredSaturationGrading(
     static const float HIGHLIGHT_ROLLOFF_CUBIC_BLEND = 0.5f;
     static const float HIGHLIGHT_PURITY_STRENGTH = 2.f / 3.f;
 
-    float source_relative_y = max(dot(grading_source, luminance_weights) / anchor_y, 0.f);
-    float rolloff_position = saturate(log2(max(source_relative_y, 1.f)) * INVERSE_HIGHLIGHT_RANGE_STOPS);
+    float source_relative_yf = max(
+        renodx::color::yf::from::LMS(renodx::color::lms::from::BT2020(grading_source) / anchor_lms)
+            / renodx::color::yf::from::LMS(1.f.xxx),
+        0.f);
+    float rolloff_position = saturate(log2(max(source_relative_yf, 1.f)) * INVERSE_HIGHLIGHT_RANGE_STOPS);
     float rolloff_position_squared = rolloff_position * rolloff_position;
 
     float rolloff = rolloff_position_squared * rolloff_position * mad(rolloff_position, mad(6.f, rolloff_position, -15.f), 10.f);
 
     [branch]
     if (dechroma != 0.f) {
-      effective_saturation *= mad(-dechroma, rolloff, 1.f);
+      effective_purity_scale *= mad(-dechroma, rolloff, 1.f);
     }
 
     [branch]
     if (highlight_saturation != 1.f) {
       float highlight_rolloff = rolloff * rolloff * mad(HIGHLIGHT_ROLLOFF_CUBIC_BLEND, rolloff, 1.f - HIGHLIGHT_ROLLOFF_CUBIC_BLEND);
 
-      effective_saturation *= mad(highlight_saturation - 1.f, highlight_rolloff * HIGHLIGHT_PURITY_STRENGTH, 1.f);
+      effective_purity_scale *= mad(highlight_saturation - 1.f, highlight_rolloff * HIGHLIGHT_PURITY_STRENGTH, 1.f);
     }
   }
 
-  // Do not clamp Y or RGB: retain signed colors and HDR headroom.
-  return lerp(dot(color, luminance_weights).xxx, color, effective_saturation);
+  [branch]
+  if (effective_purity_scale == 1.f) return color;
+
+  // Fixed-Yf MB chromaticity interpolation toward the anchor, evaluated in LMS
+  // without dividing by pixel Yf. This also retains signed and zero-Yf states.
+  return renodx::color::bt2020::from::LMS(
+      renodx::tonemap::psychov::psycho30_ApplyAdaptiveRelativePurity(
+          renodx::color::lms::from::BT2020(color), anchor_lms, effective_purity_scale)
+      * anchor_lms);
 }
 
 float3 RejectNonPositiveBT709Luminance(float3 color) {
@@ -391,6 +401,7 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
 
   const float3 luminance_lms = (source_cones / source_cone_yf) * d65_lms * hdr_yf;
 
+  // Strength 0 preserves the SDR tone map's cone ratios and only changes luminance.
   if (opponent_strength == 0.f || hdr_yf == sdr_yf) {
     return renodx::color::bt2020::from::LMS(luminance_lms);
   }
@@ -402,9 +413,9 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
     return renodx::color::bt2020::from::LMS(luminance_lms);
   }
 
-  // Smooth bidirectional cone-ratio response driven by the actual SDR -> HDR luminance gain.
+  // Scale the actual cone-ratio response rather than extrapolating its final LMS result.
   const float hdr_gain_stops = log2(hdr_yf) - log2(sdr_yf);
-  const float cone_response_power = exp2(hdr_gain_stops / sdr_highlight_range_stops);
+  const float cone_response_power = exp2(opponent_strength * hdr_gain_stops / sdr_highlight_range_stops);
 
   const float3 powered_cones = pow(source_cones, cone_response_power);
   const float powered_yf = alpha_l * powered_cones.x + alpha_m * powered_cones.y;
@@ -419,18 +430,16 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
     return renodx::color::bt2020::from::LMS(luminance_lms);
   }
 
-  const float3 output_lms = lerp(luminance_lms, opponent_lms, opponent_strength);
-  return renodx::color::bt2020::from::LMS(output_lms);
+  return renodx::color::bt2020::from::LMS(opponent_lms);
 }
 
 float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters params) {
-  float3 color = ApplyVanillaPlusAgXWithOpponentExpansion(untonemapped, params, 72.f, 1.f);
+  float3 color = ApplyVanillaPlusAgXWithOpponentExpansion(untonemapped, params, 72.f, 2.f);
 
   color = ApplyAnchoredSaturationGrading(
       color,
       renodx::color::bt2020::from::BT709(untonemapped),
       params.input_pivot_linear,
-      renodx::color::BT2020_TO_XYZ_MAT[1],
       RENODX_TONE_MAP_SATURATION,
       RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
       RENODX_TONE_MAP_DECHROMA);
@@ -473,18 +482,17 @@ float3 ApplyRenoDXCustomizedToneMap(float3 untonemapped, RemedyAgXParameters par
   color = mul(CUSTOM_PRIMARIES_TO_BT2020_MAT, color);
 
   static const float SATURATION = 1.1875f;
-  static const float DECHROMA = 25.f / 100.f;
+  static const float DECHROMA = 50.f / 100.f;
   color = ApplyAnchoredSaturationGrading(
       color,
       renodx::color::bt2020::from::BT709(untonemapped),
       params.input_pivot_linear,
-      renodx::color::BT2020_TO_XYZ_MAT[1],
       RENODX_TONE_MAP_SATURATION * SATURATION,
       RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
       lerp(DECHROMA, 1.f, RENODX_TONE_MAP_DECHROMA));
 
   color = FixNegativeLuminanceBT2020(color);
-  color = CompressBT2020Radial(color, 0.5f, 8.f);
+  color = CompressBT2020Radial(color, 0.8f, 8.f);
 
   return renodx::color::bt709::from::BT2020(color);
 }
