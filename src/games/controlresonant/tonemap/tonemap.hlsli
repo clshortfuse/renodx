@@ -331,8 +331,6 @@ float3 ApplyRemedyAgXBlend(float3 sdr, float3 extended, RemedyAgXBlendParameters
 
 float2 ApplyOpponentContrastResponse(float2 opponent_contrast, float response_gain) {
   const float2 magnitude = abs(opponent_contrast);
-
-  // Divisive response: weak opponent contrasts receive more gain than strong contrasts.
   return opponent_contrast * response_gain * (1.f + magnitude) / mad(response_gain, magnitude, 1.f);
 }
 
@@ -340,8 +338,7 @@ float3 ApplyVanillaPlusOpponentResponseLMS(
     float3 sdr_lms,
     float sdr_yf,
     float hdr_yf,
-    RemedyAgXCurveParameters params,
-    float opponent_response_strength) {
+    RemedyAgXCurveParameters params) {
   const float3 d65_lms = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
   const float alpha_l = renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_L;
   const float alpha_m = renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_M;
@@ -350,62 +347,51 @@ float3 ApplyVanillaPlusOpponentResponseLMS(
     return sdr_lms;
   }
 
-  const float luminance_gain = hdr_yf / sdr_yf;
+  const float luminance_gain = renodx::math::DivideSafe(hdr_yf, sdr_yf, 1.f);
   const float3 luminance_lms = sdr_lms * luminance_gain;
 
-  // Strength 0 preserves the SDR tone map's cone ratios and only changes luminance.
-  [branch]
-  if (opponent_response_strength == 0.f || luminance_gain == 1.f) {
+  if (luminance_gain == 1.f || any(sdr_lms <= 0.f)) {
     return luminance_lms;
   }
 
   const float adaptation_yf = params.output_pivot_linear;
-  const float3 adaptation_lms = d65_lms * adaptation_yf;
-  const float3 adaptation_relative_lms = sdr_lms / adaptation_lms;
-
-  if (any(adaptation_relative_lms <= 0.f)) {
-    return luminance_lms;
-  }
-
   const float sdr_asymptote = ApplyVanillaSDRAgXAsymptote(params);
-  const float highlight_range_stops = log2(sdr_asymptote / adaptation_yf);
+  const float highlight_range_stops =
+      log2(renodx::math::DivideSafe(sdr_asymptote, adaptation_yf, 1.f));
 
   if (!(highlight_range_stops > 0.f)) {
     return luminance_lms;
   }
 
-  const float source_relative_yf = sdr_yf / adaptation_yf;
-  const float target_relative_yf = hdr_yf / adaptation_yf;
+  // Yf-normalized adaptation-relative cone responses.
+  const float3 normalized_lms =
+      renodx::math::DivideSafe(sdr_lms, d65_lms * sdr_yf, 0.f);
 
-  const float2 source_opponent_signal = float2(
-      adaptation_relative_lms.x - adaptation_relative_lms.y,
-      adaptation_relative_lms.z - source_relative_yf);
+  const float2 source_opponent_contrast = float2(
+      normalized_lms.x - normalized_lms.y,
+      normalized_lms.z - 1.f);
 
-  const float2 source_opponent_contrast = source_opponent_signal * rcp(source_relative_yf);
-
-  // Let the luminance change drive post-receptoral opponent gain.
   const float luminance_gain_stops = log2(luminance_gain);
   const float response_gain =
-      exp2(opponent_response_strength * luminance_gain_stops / highlight_range_stops);
+      exp2(luminance_gain_stops * rcp(highlight_range_stops));
 
-  const float2 response_contrast =
+  float2 response_contrast =
       ApplyOpponentContrastResponse(source_opponent_contrast, response_gain);
 
-  float2 opponent_response = response_contrast * target_relative_yf;
-
   // Keep reconstructed cone responses nonnegative.
-  opponent_response.x = clamp(
-      opponent_response.x,
-      -target_relative_yf / alpha_m,
-      target_relative_yf / alpha_l);
-  opponent_response.y = max(opponent_response.y, -target_relative_yf);
+  response_contrast.x = clamp(
+      response_contrast.x,
+      -rcp(alpha_m),
+      rcp(alpha_l));
+  response_contrast.y = max(response_contrast.y, -1.f);
 
-  const float3 response_relative_lms = float3(
-      target_relative_yf + alpha_m * opponent_response.x,
-      target_relative_yf - alpha_l * opponent_response.x,
-      target_relative_yf + opponent_response.y);
+  const float3 response_normalized_lms = float3(
+      1.f + alpha_m * response_contrast.x,
+      1.f - alpha_l * response_contrast.x,
+      1.f + response_contrast.y);
 
-  const float3 response_lms = response_relative_lms * adaptation_lms;
+  const float3 response_lms =
+      response_normalized_lms * d65_lms * hdr_yf;
 
   return !any(isnan(response_lms)) && !any(isinf(response_lms))
              ? response_lms
@@ -415,8 +401,7 @@ float3 ApplyVanillaPlusOpponentResponseLMS(
 float3 ApplyVanillaPlusAgXWithOpponentExpansion(
     float3 untonemapped,
     RemedyAgXParameters params,
-    float hdr_clip_input = 100.f,
-    float opponent_response_strength = 2.f) {
+    float hdr_clip_input = 100.f) {
   const float d65_yf = renodx::tonemap::psychov::PSYCHO30_D65_WHITE_YF;
 
   const RemedyAgXCurveParameters curve_params = GetRemedyAgXCurveParameters(params);
@@ -447,8 +432,8 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
   const float3 extended_gamma = pow(max(extended_linear, 0.f), inverse_output_power);
   const float3 extended_color = pow(max(mul(params.gamut.outset, extended_gamma), 0.f), output_power);
 
-  const float3 raw_sdr_lms = renodx::color::lms::from::BT2020(sdr_color);
-  const float sdr_yf = renodx::color::yf::from::LMS(raw_sdr_lms) / d65_yf;
+  const float3 sdr_lms = renodx::color::lms::from::BT2020(sdr_color);
+  const float sdr_yf = renodx::color::yf::from::LMS(sdr_lms) / d65_yf;
   const float extended_yf = renodx::color::yf::from::BT2020(extended_color) / d65_yf;
 
   if (!(sdr_yf > 0.f) || !(extended_yf > 0.f) || !(params.hdr_ratio > 0.f)) {
@@ -469,18 +454,14 @@ float3 ApplyVanillaPlusAgXWithOpponentExpansion(
     return sdr_color;
   }
 
-  const float3 output_lms = ApplyVanillaPlusOpponentResponseLMS(
-      raw_sdr_lms,
-      sdr_yf,
-      hdr_yf,
-      curve_params,
-      opponent_response_strength);
+  const float3 output_lms =
+      ApplyVanillaPlusOpponentResponseLMS(sdr_lms, sdr_yf, hdr_yf, curve_params);
 
   return renodx::color::bt2020::from::LMS(output_lms);
 }
 
 float3 ApplyRenoDXVanillaPlusToneMap(float3 untonemapped, RemedyAgXParameters params) {
-  float3 color = ApplyVanillaPlusAgXWithOpponentExpansion(untonemapped, params, 72.f, 1.f);
+  float3 color = ApplyVanillaPlusAgXWithOpponentExpansion(untonemapped, params, 72.f);
 
   color = ApplyAnchoredSaturationGrading(
       color,
