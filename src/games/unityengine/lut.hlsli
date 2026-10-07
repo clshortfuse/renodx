@@ -87,7 +87,12 @@ float3 liftGammaGainScaling(float3 lifted, float3 original, float3 lift, float3 
     }
     float lifted_y = renodx::color::y::from::BT709(abs(lifted_linear));
     float unclamped_y = renodx::color::y::from::BT709(abs(unclamped_linear));
-    float3 scaled_linear = lifted_linear * renodx::math::DivideSafe(unclamped_y, lifted_y, 1.f);
+    float3 scaled_linear;
+    if(lifted_y > unclamped_y){
+    scaled_linear = lifted_linear * renodx::math::DivideSafe(unclamped_y, lifted_y, 1.f);
+    } else {
+      return lifted;
+    }
     float3 output = lerp(lifted_linear, scaled_linear, CUSTOM_INTERNAL_LUT_SCALING);
   if(encoding == 2){
     output = renodx::color::srgb::EncodeSafe(output);

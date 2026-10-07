@@ -38,37 +38,37 @@ struct ShaderInjectData {
   float colorGradeLUTSampling;
   float colorGradeUserLUTStrength;
   float colorGradeUserLUTScaling;
-  float colorGradeColorSpace;
+  float colorGradeGamutCompression;
 
+  float colorGradeColorSpace;
   float fxBloom;
   float fxLens;
   float fxDoF;
-  float fxVignette;
 
+  float fxVignette;
   float fxCA;
   float fxNoise;
   float fxFilmGrain;
-  float fxFilmGrainType;
 
+  float fxFilmGrainType;
   float fxHdrBoost;
   float random;
   float countOld;
-  float countNew;
 
+  float countNew;
   float count2Old;
   float count2New;
   float blitCopyHack;
-  float gammaSpace;
 
+  float gammaSpace;
   float isClamped;
   float swapchainProxy;
   float rolloffUI;
-  float processing_use_scrgb;
 
+  float processing_use_scrgb;
   float isTonemapped;
   float padding02;
   float padding03;
-  float padding04;
 };
 
 #ifndef __cplusplus
@@ -107,6 +107,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_LUT_SAMPLE                             shader_injection.colorGradeLUTSampling
 #define CUSTOM_USER_LUT_STRENGTH                      shader_injection.colorGradeUserLUTStrength
 #define CUSTOM_USER_LUT_SCALING                       shader_injection.colorGradeUserLUTScaling
+#define CUSTOM_USER_GAMUT_COMPRESSION                 shader_injection.colorGradeGamutCompression
 #define CUSTOM_COLOR_SPACE                            shader_injection.colorGradeColorSpace
 
 #define CUSTOM_BLOOM                                  shader_injection.fxBloom

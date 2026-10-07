@@ -5,7 +5,7 @@
 #include "./uc2.hlsli"
 
 void GamutCompression(inout float3 color, inout float compression_scale, bool srgb = false) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) { return;
+  if (RENODX_TONE_MAP_TYPE == 0.f || CUSTOM_USER_GAMUT_COMPRESSION == 0.f) { return;
   } else {
     if (srgb) {
       color = renodx::color::srgb::DecodeSafe(color);  
@@ -20,7 +20,7 @@ void GamutCompression(inout float3 color, inout float compression_scale, bool sr
 }
 
 void GamutDecompression(inout float3 color, float compression_scale, bool srgb = false) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) { return;
+  if (RENODX_TONE_MAP_TYPE == 0.f || CUSTOM_USER_GAMUT_COMPRESSION == 0.f) { return;
   } else {
     if (srgb) {
       color = renodx::color::srgb::DecodeSafe(color);

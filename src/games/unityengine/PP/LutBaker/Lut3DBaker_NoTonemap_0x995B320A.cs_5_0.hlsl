@@ -60,11 +60,6 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.xyz = pow(abs(r0.xyz), cb0[8].xyz);
     r0.xyz = r1.xyz * r0.xyz;
     r0.xyz = liftGammaGainScaling(r0.xyz, preLGG, cb0[7].xyz, cb0[8].xyz, cb0[9].xyz);
-    //float3 preClamp = r0.xyz;
-    /*bool isWCG = r0.x < 0.0 || r0.y < 0.0 || r0.z < 0.0;
-    if(RENODX_TONE_MAP_TYPE != 0.f){
-      r0.xyz = isWCG ? renodx::color::bt2020::from::BT709(r0.xyz) : r0.xyz;
-    }*/
     GamutCompression(r0.xyz, compression_scale);
     // Do NOT feed negative values to RgbToHsv or they'll wrap around
     r0.xyz = max(float3(0,0,0), r0.xyz);
@@ -121,15 +116,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r0.yzw = saturate(float3(-1,-1,-1) + abs(r0.yzw));
     r0.yzw = float3(-1,-1,-1) + r0.yzw;
     r0.yzw = r2.zzz * r0.yzw + float3(1,1,1);
-    // Saturation(r0.gba, cb0[3].g * r0.r)
+    //  Saturation(r0.gba, cb0[3].g * r0.r)
     r1.yzw = r1.xxx * r0.yzw;
     r0.x = dot(cb0[3].yy, r0.xx);
     r1.y = dot(r1.yzw, float3(0.2126729,0.7151522,0.0721750));
     r0.yzw = r1.xxx * r0.yzw + -r1.yyy;
     r0.xyz = r0.xxx * r0.yzw + r1.yyy;
-    /*if(RENODX_TONE_MAP_TYPE != 0.f){
-      r0.xyz = isWCG ? renodx::color::bt709::from::BT2020(r0.xyz) : r0.xyz;
-    }*/
     GamutDecompression(r0.xyz, compression_scale);
     r0.xyz = lerp(preCG, r0.xyz, CUSTOM_INTERNAL_LUT_STRENGTH);
     r0.w = 1;
