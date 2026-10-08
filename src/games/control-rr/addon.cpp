@@ -16,6 +16,9 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <shared_mutex>
 #include <sstream>
@@ -66,6 +69,10 @@ float denoiser_setting = 2.f;
 float rr_preset_setting = 1.f;  // index into {D, E, F}
 float sr_preset_setting = 0.f;  // index into {Default, J, K, L, M}
 float rr_responsivity_setting = 0.f;  // constant DLSSD.ResponsivityMask; 0 = not sent
+#ifdef CONTROL_RR_DEV
+float albedo_guide_setting = 1.f;  // captured material-pass albedo as the diffuse guide
+float true_ndv_setting = 1.f;      // specular guide Fresnel from the real view angle
+#endif
 
 // Specular motion vectors use the reflection pass's per-ray hit arrays and
 // are supplied through GBuffer.SpecularMvec. Enabled by default, with no UI toggle.
@@ -184,6 +191,73 @@ void UpdateOddResolutionLabels() {
   fix << ".";
   odd_resolution_advice->label = fix.str();
 }
+
+// In-game settings the mod depends on, read from the game's renderer.ini.
+// Control rewrites the file the moment a setting is applied, so polling its
+// write time keeps the warnings live. Requirements measured 2026-10-05 with a
+// per-pass health check:
+//   m_eDLSSQuality 0                  - no DLSS call, nothing to hook
+//   m_eSSAOQuality 0                  - SSAO resolve (albedo source) skipped
+//   m_eRTReflectionQuality 0          - reflection pass, specular DLF (camera
+//                                       matrices) AND the SSAO resolve skipped
+//   m_eRTIndirectDiffuseQuality 0     - diffuse DLF (G-buffer source) skipped
+//   m_eSSRQuality 1 (Medium)          - SSAO resolve skipped; 0 and 2 are fine,
+//                                       presumably a different shader variant
+//   m_ePostProcessQuality below 2     - every pass still runs, but the image
+//                                       looks visibly rougher under RR (user
+//                                       observation, cause not investigated)
+// -1 = key missing / file unreadable: no warning shown.
+std::atomic<int> ini_post_process = -1;
+std::atomic<int> ini_dlss = -1;
+std::atomic<int> ini_ssao = -1;
+std::atomic<int> ini_ssr = -1;
+std::atomic<int> ini_rt_reflection = -1;
+std::atomic<int> ini_rt_indirect = -1;
+
+int ReadIniInt(const std::string& text, const char* key) {
+  const std::string quoted = std::string("\"") + key + "\"";
+  const size_t at = text.find(quoted);
+  if (at == std::string::npos) return -1;
+  const size_t colon = text.find(':', at + quoted.size());
+  if (colon == std::string::npos) return -1;
+  char* end = nullptr;
+  const long value = std::strtol(text.c_str() + colon + 1, &end, 10);
+  return (end == text.c_str() + colon + 1) ? -1 : static_cast<int>(value);
+}
+
+void RefreshGameSettings() {
+  static ULONGLONG last_check = 0;
+  const ULONGLONG now = GetTickCount64();
+  if (now - last_check < 1000) return;
+  last_check = now;
+
+  static std::filesystem::path path = [] {
+    wchar_t exe[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    return std::filesystem::path(exe).parent_path() / L"renderer.ini";
+  }();
+  static std::filesystem::file_time_type last_write = {};
+  std::error_code error;
+  const auto write_time = std::filesystem::last_write_time(path, error);
+  if (error || write_time == last_write) return;
+
+  std::ifstream file(path, std::ios::binary);
+  if (!file) return;
+  const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  // The game may be mid-write; try again next second rather than show
+  // warnings from a half-written file.
+  if (text.find('}') == std::string::npos) return;
+  last_write = write_time;
+
+  ini_dlss = ReadIniInt(text, "m_eDLSSQuality");
+  ini_ssao = ReadIniInt(text, "m_eSSAOQuality");
+  ini_ssr = ReadIniInt(text, "m_eSSRQuality");
+  ini_rt_reflection = ReadIniInt(text, "m_eRTReflectionQuality");
+  ini_rt_indirect = ReadIniInt(text, "m_eRTIndirectDiffuseQuality");
+  ini_post_process = ReadIniInt(text, "m_ePostProcessQuality");
+}
+
+bool IniOff(const std::atomic<int>& value) { return value.load() == 0; }
 
 #ifdef CONTROL_RR_DEV
 // Every 2D texture the game creates, counted by size. At an ODD render width
@@ -318,6 +392,10 @@ void OnPresentApplyOnce(
     rr::SetRrPreset(RR_PRESET_VALUES[static_cast<int>(rr_preset_setting)]);
     rr::SetSrPreset(SR_PRESET_VALUES[static_cast<int>(sr_preset_setting)]);
     rr::responsivity_value = rr_responsivity_setting;
+#ifdef CONTROL_RR_DEV
+    rr::albedo_guide_enabled = albedo_guide_setting != 0.f;
+    rr::true_ndv_enabled = true_ndv_setting != 0.f;
+#endif
     std::stringstream s;
     s << "control-rr: consumers at boot - RR " << (rr::rr_enabled ? "ON" : "off")
       << ", FG bridge " << (sl_hdr10::enabled.load() ? "ON" : "off");
@@ -329,6 +407,7 @@ void OnPresentApplyOnce(
   UpdateOddResolutionLabels();
   UpdateRrFailureLabel();
   UpdateSrFailureLabel();
+  RefreshGameSettings();
   // belt and braces alongside the LoadLibrary hooks
   rr::TryArmFromLoadedModules();
 }
@@ -1109,6 +1188,61 @@ void OnDestroyResource(reshade::api::device*, reshade::api::resource resource) {
 // ---------------------------------------------------------------------------
 
 renodx::utils::settings::Settings settings = {
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "DLSS is off in the game's Graphics settings, so this mod has nothing to work with."
+                 " Fix: turn DLSS on in the game's Graphics menu.",
+        .section = "Ray Tracing",
+        .tint = 0xFF0000,
+        .is_visible = []() { return RawRtEnabled() && IniOff(ini_dlss); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Ray Traced Indirect Diffuse Lighting is off. Ray Reconstruction needs it and cannot start"
+                 " without it. Fix: turn it on in the game's Graphics menu.",
+        .section = "Ray Tracing",
+        .tint = 0xFF0000,
+        .is_visible = []() { return RrEnabled() && IniOff(ini_rt_indirect); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Ray Traced Reflections is off. Reflections lose their motion vectors and the albedo"
+                 " guides stop updating. Fix: turn it on in the game's Graphics menu.",
+        .section = "Ray Tracing",
+        .tint = 0xFF0000,
+        .is_visible = []() { return RrEnabled() && IniOff(ini_rt_reflection); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "SSAO is off. Ray Reconstruction reads its albedo guides from the SSAO pass."
+                 " Fix: turn SSAO on in the game's Graphics menu.",
+        .section = "Ray Tracing",
+        .tint = 0xFF0000,
+        .is_visible = []() { return RrEnabled() && IniOff(ini_ssao); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Screen Space Reflections is on Medium, which stops the SSAO pass the albedo guides come"
+                 " from. The game hides this setting while ray traced reflections are on."
+                 " Fix: in the game's Graphics menu turn Ray Traced Reflections off, set Screen Space"
+                 " Reflections to High, then turn Ray Traced Reflections back on."
+                 " Selecting the High render preset (not the ray tracing preset) also fixes it.",
+        .section = "Ray Tracing",
+        .tint = 0xFF0000,
+        .is_visible = []() { return RrEnabled() && ini_ssr.load() == 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Post-processing Quality is below High, which looks noticeably rougher with Ray"
+                 " Reconstruction. Fix: set Post-processing Quality to High in the game's Graphics menu"
+                 " (Auto is only High on the High render preset).",
+        .section = "Ray Tracing",
+        .tint = 0xFFAA00,
+        .is_visible = []() {
+          const int value = ini_post_process.load();
+          return RrEnabled() && value >= 0 && value < 2;
+        },
+    },
     odd_resolution_warning = new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Odd render resolution detected.",
@@ -1200,6 +1334,31 @@ renodx::utils::settings::Settings settings = {
         .on_change_value = [](float, float value) { rr::responsivity_value = value; },
     },
 #ifdef CONTROL_RR_DEV
+    new renodx::utils::settings::Setting{
+        .key = "AlbedoGuide",
+        .binding = &albedo_guide_setting,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Captured diffuse albedo guide (dev)",
+        .section = "Ray Tracing",
+        .tooltip = "ON: RR's diffuse albedo is the real per-pixel albedo captured"
+                   " from the material pass (albedo.hpp). OFF: the old guide, the"
+                   " material table's specular colour. Live; the capture itself"
+                   " always runs. See the log for 'control-rr albedo:' lines.",
+        .on_change_value = [](float, float value) { rr::albedo_guide_enabled = value != 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "TrueNdV",
+        .binding = &true_ndv_setting,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "True view angle for specular guide (dev)",
+        .section = "Ray Tracing",
+        .tooltip = "ON: the specular albedo guide's Fresnel uses the real per-pixel"
+                   " view direction (depth + the captured ClipToView), like the"
+                   " game. OFF: the old |n.z| approximation. Live.",
+        .on_change_value = [](float, float value) { rr::true_ndv_enabled = value != 0.f; },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Dump frame + census",
@@ -1355,6 +1514,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // In-process RR: watch for the NGX runtime and detour its D3D12
       // exports (CreateFeature/EvaluateFeature). See rr.hpp.
       rr::InstallLoaderHooks();
+      // Material-pass diffuse albedo capture (albedo.hpp): patches the
+      // material pixel shaders at pipeline creation and binds a second
+      // render target at their draws.
+      control_albedo::Install();
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchainLog);
       reshade::register_event<reshade::addon_event::init_device>(OnInitDeviceApply);
@@ -1375,6 +1538,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_DETACH:
       control_diag::Mark("process.detach", reinterpret_cast<uint64_t>(lpv_reserved));
       rr::UninstallHooks();
+      control_albedo::Uninstall();
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchainLog);
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDeviceApply);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDeviceApply);

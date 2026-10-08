@@ -49,6 +49,7 @@
 
 #include "../../utils/path.hpp"
 #include "../../utils/platform.hpp"
+#include "./albedo.hpp"
 
 namespace rr {
 
@@ -185,13 +186,25 @@ inline void SetStatus(Status new_status, const char* reason) {
 
 // ---------------------------------------------------------------------------
 // Guide decode pass. NGX hands us a native command list outside ReShade's
-// wrapper, so this is raw D3D12: root signature [0] 4x 32-bit constants
-// (b0), [1] table {t0..t3, u0..u2}, static sampler s0, matching the
-// bindings declared in rrg.cs_5_0.hlsl.
+// wrapper, so this is raw D3D12: root signature [0] 20x 32-bit constants
+// (b0: 4 uints + ClipToView), [1] table {t0..t5, u0..u2}, static sampler
+// s0, matching the bindings declared in rrg.cs_5_0.hlsl. t4 is the
+// material-pass albedo capture (albedo.hpp), t5 the game's
+// depth for the true view angle; dummies when absent.
 // ---------------------------------------------------------------------------
 
 class RrgPass {
  public:
+  // b0 layout, mirrored in rrg.cs_5_0.hlsl
+  struct Constants {
+    uint32_t invert_roughness;
+    uint32_t flags;
+    uint32_t width;
+    uint32_t height;
+    float clip_to_view[16];
+  };
+  static_assert(sizeof(Constants) == 20 * 4, "root constant count");
+
   bool Init(ID3D12Device* device) {
     if (initialized_) return true;
     device_ = device;
@@ -209,18 +222,18 @@ class RrgPass {
 
     D3D12_DESCRIPTOR_RANGE ranges[2] = {};
     ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    ranges[0].NumDescriptors = 4;
+    ranges[0].NumDescriptors = 6;
     ranges[0].BaseShaderRegister = 0;
     ranges[0].OffsetInDescriptorsFromTableStart = 0;
     ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     ranges[1].NumDescriptors = 3;
     ranges[1].BaseShaderRegister = 0;
-    ranges[1].OffsetInDescriptorsFromTableStart = 4;
+    ranges[1].OffsetInDescriptorsFromTableStart = 6;
 
     D3D12_ROOT_PARAMETER params[2] = {};
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[0].Constants.ShaderRegister = 0;
-    params[0].Constants.Num32BitValues = 4;
+    params[0].Constants.Num32BitValues = sizeof(Constants) / 4;
     params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[1].DescriptorTable.NumDescriptorRanges = 2;
@@ -320,13 +333,18 @@ class RrgPass {
       case DXGI_FORMAT_R16G16_TYPELESS: return DXGI_FORMAT_R16G16_FLOAT;
       case DXGI_FORMAT_R32G32B32A32_TYPELESS: return DXGI_FORMAT_R32G32B32A32_FLOAT;
       case DXGI_FORMAT_R10G10B10A2_TYPELESS: return DXGI_FORMAT_R10G10B10A2_UNORM;
+      case DXGI_FORMAT_R32_TYPELESS: return DXGI_FORMAT_R32_FLOAT;
+      case DXGI_FORMAT_D32_FLOAT: return DXGI_FORMAT_R32_FLOAT;
       default: return format;
     }
   }
 
+  // depth + clip_to_view are optional (nullptr): the shader then falls back
+  // to the |n.z| view-angle approximation for the specular guide.
   void Dispatch(ID3D12GraphicsCommandList* cmd_list,
                 ID3D12Resource* gbuffer1, ID3D12Resource* gbuffer2,
-                ID3D12Resource* material, ID3D12Resource* envbrdf,
+                ID3D12Resource* material, ID3D12Resource* envbrdf, ID3D12Resource* albedo,
+                ID3D12Resource* depth, const float* clip_to_view,
                 ID3D12Resource* out_nr, ID3D12Resource* out_diffuse, ID3D12Resource* out_spec,
                 uint32_t width, uint32_t height) {
     ring_ = (ring_ + 1) % kRingSize;
@@ -366,6 +384,8 @@ class RrgPass {
       device_->CreateShaderResourceView(resource, &srv, cpu(2));
     }
     make_tex_srv(envbrdf, 3);
+    make_tex_srv(albedo, 4);
+    make_tex_srv(depth, 5);
 
     auto make_uav = [&](ID3D12Resource* resource, uint32_t slot) {
       D3D12_UNORDERED_ACCESS_VIEW_DESC uav = {};
@@ -373,21 +393,28 @@ class RrgPass {
       uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
       device_->CreateUnorderedAccessView(resource, nullptr, &uav, cpu(slot));
     };
-    make_uav(out_nr, 4);
-    make_uav(out_diffuse, 5);
-    make_uav(out_spec, 6);
+    make_uav(out_nr, 6);
+    make_uav(out_diffuse, 7);
+    make_uav(out_spec, 8);
 
-    uint32_t flags = 0;
-    if (gbuffer2 != nullptr && material != nullptr) flags |= 1u;
-    if (envbrdf != nullptr) flags |= 2u;
+    Constants constants = {};
     // GBuffer1.z is GLOSS (dump-verified) — RR wants roughness, so invert
-    const uint32_t constants[4] = {1u, flags, width, height};
+    constants.invert_roughness = 1u;
+    if (gbuffer2 != nullptr && material != nullptr) constants.flags |= 1u;
+    if (envbrdf != nullptr) constants.flags |= 2u;
+    if (albedo != nullptr) constants.flags |= 4u;  // captured albedo replaces the material-colour guess
+    if (depth != nullptr && clip_to_view != nullptr) {
+      constants.flags |= 8u;  // true view angle for the specular guide
+      memcpy(constants.clip_to_view, clip_to_view, sizeof(constants.clip_to_view));
+    }
+    constants.width = width;
+    constants.height = height;
 
     ID3D12DescriptorHeap* heaps[] = {heap_};
     cmd_list->SetDescriptorHeaps(1, heaps);
     cmd_list->SetComputeRootSignature(root_signature_);
     cmd_list->SetPipelineState(pipeline_);
-    cmd_list->SetComputeRoot32BitConstants(0, 4, constants, 0);
+    cmd_list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4, &constants, 0);
     D3D12_GPU_DESCRIPTOR_HANDLE gpu = heap_->GetGPUDescriptorHandleForHeapStart();
     gpu.ptr += static_cast<UINT64>(base) * descriptor_size_;
     cmd_list->SetComputeRootDescriptorTable(1, gpu);
@@ -395,7 +422,7 @@ class RrgPass {
   }
 
  private:
-  static constexpr uint32_t kSlots = 7;  // 4 SRV + 3 UAV
+  static constexpr uint32_t kSlots = 9;  // 6 SRV + 3 UAV
   static constexpr uint32_t kRingSize = 4;
 
   bool initialized_ = false;
@@ -709,6 +736,13 @@ inline uint32_t specmv_texture_height = 0;
 // ---------------------------------------------------------------------------
 
 inline std::atomic<float> responsivity_value = 0.f;
+// Always on; dev builds expose both as overlay toggles for A/B.
+// Feed the material-pass albedo capture (albedo.hpp) as the diffuse guide
+// instead of the material table's specular colour.
+inline std::atomic<bool> albedo_guide_enabled = true;
+// Specular guide's Fresnel from the true per-pixel view angle
+// (depth + ClipToView) instead of |n.z|.
+inline std::atomic<bool> true_ndv_enabled = true;
 inline ID3D12Resource* mask_texture = nullptr;
 inline ID3D12Resource* mask_upload = nullptr;
 inline uint32_t mask_width = 0;
@@ -1527,6 +1561,17 @@ inline bool ConsumeFreshMatrices(SpecMvConstants& constants) {
   return true;
 }
 
+// Same freshness rule, but does NOT mark the set consumed: the guide decode
+// runs before the spec-MV pass on the same evaluate and must not steal its
+// matrices.
+inline bool PeekFreshClipToView(float* clip_to_view) {
+  const std::lock_guard lock(matrix_mutex);
+  const uint64_t update = matrix_updates.load();
+  if (!mat_valid || update == matrix_last_consumed) return false;
+  memcpy(clip_to_view, mat_clip_to_view, 64);
+  return true;
+}
+
 #ifdef CONTROL_RR_DEV
 // ---------------------------------------------------------------------------
 // Diagnostic dump — our decoded guides plus the game's own RR inputs, written to
@@ -1967,9 +2012,21 @@ inline NVSDK_NGX_Result NVSDK_CONV HookedEvaluateFeature(
     out_states[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
   }
 
+  ID3D12Resource* albedo = nullptr;
+  ID3D12Resource* ndv_depth = nullptr;
+  float ndv_clip_to_view[16];
+  const float* ndv_matrix = nullptr;
+  if (albedo_guide_enabled.load()) {
+    albedo = control_albedo::AcquireForRead(cmd_list, eval_width, eval_height);
+  }
+  if (true_ndv_enabled.load() && PeekFreshClipToView(ndv_clip_to_view)) {
+    const_cast<NVSDK_NGX_Parameter*>(params)->Get(NVSDK_NGX_Parameter_Depth, &ndv_depth);
+    if (ndv_depth != nullptr) ndv_matrix = ndv_clip_to_view;
+  }
   rrg_pass.Dispatch(cmd_list, gbuffer1, guide_gbuffer2.load(), guide_material.load(),
-                    guide_envbrdf.load(), out_nr, out_diffuse, out_spec,
-                    eval_width, eval_height);
+                    guide_envbrdf.load(), albedo, ndv_matrix != nullptr ? ndv_depth : nullptr, ndv_matrix,
+                    out_nr, out_diffuse, out_spec, eval_width, eval_height);
+  control_albedo::ReleaseAfterRead(cmd_list);
   control_diag::Mark("rr.guide_dispatch.complete");
 
   D3D12_RESOURCE_BARRIER barriers[6] = {};

@@ -6,29 +6,41 @@
 // control-rr: Control G-buffer -> DLSS-RR guide buffers.
 //
 // GBuffer1 (RGBA8): stereographic normal in x/y/w bits, z = gloss.
-// GBuffer2 (RGBA8): y = tint factor, z/w = 16-bit material index.
-// MaterialData (uint2 table): .x packs [R][G][B][brdf] bytes.
+// GBuffer2 (RGBA8): y = specular-map intensity, z/w = 16-bit material index.
+// MaterialData (uint2 table): .x packs [R][G][B][brdf] bytes — the
+//   material's SPECULAR colour (vSpecularColor_uBRDF in the game's
+//   reflection data; deferredlight feeds it to Schlick as F0).
 // EnvBRDF (LUT): indexed by (N.V, gloss), returns scale/bias for specular.
+// Albedo (RGBA16F): the material pass's diffuse albedo, captured by
+//   albedo.hpp. Control never stores it otherwise — it exists
+//   only inside the material shaders, so without the capture the diffuse
+//   guide falls back to the specular colour above.
 // Decodes match the game's own
 // (dlf_spatial_spec.hlsli DecodeNormal; the LSAO resolve shader 0x3233A377).
 //
 // Outputs (all RGBA16F):
 //   GuideNR      xyz = view-space normal, w = roughness (packed mode)
-//   GuideDiffuse rgb = diffuse albedo
+//   GuideDiffuse rgb = diffuse albedo (captured), else specular colour
 //   GuideSpec    rgb = specular albedo (EnvBRDF approx, N.V ~ |n.z|)
 
 cbuffer Params : register(b0)
 {
     uint InvertRoughness; // 1 = roughness = 1 - gloss
-    uint Flags;           // bit0 = material+gbuffer2 valid, bit1 = envbrdf valid
+    uint Flags;           // bit0 = material+gbuffer2 valid, bit1 = envbrdf valid,
+                          // bit2 = albedo capture valid, bit3 = depth + ClipToView valid
     uint Width;
     uint Height;
+    // g_mClipToView as the game stores it (row-vector convention, v * M);
+    // same declaration and use as specmv.cs_5_0.hlsl. Only read with bit3.
+    row_major float4x4 ClipToView;
 };
 
 Texture2D<float4> GBuffer1 : register(t0);
 Texture2D<float4> GBuffer2 : register(t1);
 StructuredBuffer<uint2> MaterialData : register(t2);
 Texture2D<float4> EnvBRDF : register(t3);
+Texture2D<float4> Albedo : register(t4);
+Texture2D<float> Depth : register(t5);  // game HW depth (the evaluate's input)
 
 SamplerState LinearClamp : register(s0);
 
@@ -83,13 +95,37 @@ void main(uint3 tid : SV_DispatchThreadID)
 
         if ((Flags & 2u) != 0u)
         {
-            // spec albedo = albedo * EnvBRDF.x + EnvBRDF.y (LSAO resolve);
-            // N.V approximated by |n.z| (view-space normals, forward ~ z)
-            float ndv = saturate(abs(n.z));
+            // spec albedo = F0 * EnvBRDF.x + EnvBRDF.y (LSAO resolve). The
+            // game's N.V is dot(n, -normalize(viewPos)) with viewPos rebuilt
+            // from depth through ClipToView (LSAO resolve 0x3233A377, the
+            // same reconstruction specmv.cs_5_0.hlsl uses). Without depth
+            // or matrices fall back to |n.z|: exact at screen centre, off
+            // toward the edges.
+            float ndv;
+            if ((Flags & 8u) != 0u)
+            {
+                float z = Depth.Load(int3(tid.xy, 0));
+                float2 uv = (float2(tid.xy) + 0.5) / float2(Width, Height);
+                float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+                float4 v = mul(float4(ndc, z, 1.0), ClipToView);
+                float3 view_pos = v.xyz / v.w;
+                ndv = saturate(dot(n, -normalize(view_pos)));
+            }
+            else
+            {
+                ndv = saturate(abs(n.z));
+            }
             float2 env = EnvBRDF.SampleLevel(LinearClamp, float2(ndv, gloss), 0.0).xy;
             spec = diffuse * env.x + env.y;
             spec = (brdf == 3u) ? float3(0, 0, 0) : spec;
         }
+    }
+
+    if ((Flags & 4u) != 0u)
+    {
+        // real per-pixel diffuse albedo from the material pass; pixels no
+        // material draw touched (sky) read the cleared target = black
+        diffuse = Albedo.Load(int3(tid.xy, 0)).rgb;
     }
 
     GuideDiffuse[tid.xy] = float4(diffuse, 1.0);
