@@ -991,6 +991,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberLinearOnDraw(0x3816ADE8),
     UberLinearOnDraw(0x9BD5D660),
     UberLinearOnDraw(0xA57C372D),
+    UberLinearOnDraw(0xA58EE260),
     UberLinearOnDraw(0x943DD65F),
     UberLinearOnDraw(0x6BC3D81A),
     UberGammaOnDraw(0x6BFABBE2),
@@ -1355,6 +1356,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberTonemapGammaOnDraw(0x822AE84C),
     UberTonemapLinearOnDraw(0x02985F48),
     UberTonemapGammaOnDraw(0x03F17B55),
+    UberTonemapGammaOnDraw(0x3F583C34),
     UberTonemapGammaOnDraw(0x8516BF4C),
     UberTonemapLinearOnDraw(0x82804C2E),
     UberTonemapLinearOnDraw(0xDB1A9E91),
@@ -1627,6 +1629,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x2749CA46, &CountTonemap1),   // Bloom
     CustomShaderEntryCallback(0xE0FF806B, &CountLinearTonemap1Clamped), // LUT2DStrip
     CustomShaderEntryCallback(0xB7461FF9, &Count), // Texture Overlay
+    CustomShaderEntryCallback(0x2996E58A, &Count), // Dof TiltShiftHdrLensBlur
     /*CustomShaderEntry(0x6CA6AD34),  // FinalVisualAdjustments
     CustomShaderEntry(0x3D4B34E8),*/
     //CustomShaderEntry(0x25AD4F0D),
@@ -1818,6 +1821,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x6968824B, &CountLinearTonemap1Clamped),
       // SC Post Effect
     //CustomShaderEntry(0x65F50A96),    // LUT
+    CustomShaderEntryCallback(0x3EAF1BAE, &CountLinearTonemap1Clamped),
       // Video Glitches
     CustomShaderEntryCallback(0xE0B71ABA, &CountLinear),  // Broken Screen
     CustomShaderEntryCallback(0x6D9A07CE, &CountLinear),  // something
@@ -2147,6 +2151,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDLinearOnDraw(0x13E3E9C2),
     UberHDLinearOnDraw(0x18DC6A24),
     UberHDLinearOnDraw(0x19B5C9D3),
+    UberHDGammaOnDraw(0x20CA354A),
     UberHDGammaOnDraw(0x30B1D393),
     UberHDGammaOnDraw(0x30E315A6),
     UberHDLinearOnDraw(0x32AFF662),
