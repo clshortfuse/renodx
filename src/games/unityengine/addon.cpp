@@ -1485,6 +1485,7 @@ const ShaderItem INITIAL_SHADERS[] = {
 	  UberHDLinearOnDraw(0xBE6E7005),
     UberHDLinearOnDraw(0xBE37E21E),
 	  UberHDLinearOnDraw(0xC01E64C3),
+      UberHDLinearOnDraw(0xC5A1CC6C),
 	  UberHDLinearOnDraw(0xC5D7F1A1),
       UberHDLinearOnDraw(0xC9A67BB4),
     UberHDLinearOnDraw(0xC9B217F6),
@@ -1521,6 +1522,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDGammaOnDraw(0x24A850DA),
     UberHDLinearOnDraw(0x29B597F9),
     UberHDLinearOnDraw(0x34E2CD45),
+    UberHDLinearOnDraw(0x36ECA545),
     UberHDGammaOnDraw(0x4424716A),
     UberHDGammaOnDraw(0xF0DB2F63),
 	UberHDLinearOnDraw(0x8C592D8D),
@@ -1682,6 +1684,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0xBBE32223, &CountClamped),               // Noise and Grain
     CustomShaderEntryCallback(0x9954D6B3, &Clamped),               // Noise and Grain
     CustomShaderEntryCallback(0xFFC39101, &CountClamped),               // Noise and Grain
+    CustomShaderEntryCallback(0x4EBF0EA3, &CountClamped),               // Noise and Grain
     CustomShaderEntryCallback(0x9591A1F5, &Count),               // Noise Shader RGB
     CustomShaderEntryCallback(0xD3A987FC, &Count),               // Noise Shader RGB
     CustomShaderEntryCallback(0xED7E59E5, &CountTonemap1),               // Image Filter
