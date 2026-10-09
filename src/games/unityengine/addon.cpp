@@ -1537,6 +1537,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     LutBuilderNoTonemapOnDraw(0x6C531A2E), // SadCatStudios_ColorGradingLut
     UberHDLinearOnDraw(0xFF079BBC), // SadCatStudios_FinalBlit
     CustomShaderEntryCallback(0xC4B616D2, &CountLinear),    // ShaderGraphs_MetaSourceCombine
+    CustomShaderEntryCallback(0x927E0696, &CountLinear),    // ShaderGraphs_SG_VHS
     CustomShaderEntryCallback(0xB0E8F20C, &CountLinearTonemap1),    // ShaderGraphs_FullScreenLUT
     UberHDGammaOnDraw(0x3875CEA0),
     UberHDGammaOnDraw(0xE375BBC4),
@@ -3470,8 +3471,7 @@ const std::unordered_map<
             "Carpenter.exe",
             {
                 {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_NONE},
-                {"Upgrade_R10G10B10A2_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
-                {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
         {
