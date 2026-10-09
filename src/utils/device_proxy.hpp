@@ -1480,6 +1480,9 @@ static void OnPresent(
   }
 
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
+  if (hwnd == nullptr) {
+    return;
+  }
   auto* new_device = GetDeviceProxy(host_resource_desc, hwnd);
   if (new_device == nullptr) {
     reshade::log::message(reshade::log::level::warning, "utils::device_proxy::OnPresent(GetDeviceProxy returned null)");
