@@ -24,7 +24,7 @@ float3 extendedTonemap(float3 color){
     GamutCompression(color, compression_scale);
     float3 hdr_color = color > 0.57525 ? 0.822236061199 * color + 0.114853983913 : vanillaTonemap(color);
     GamutDecompression(hdr_color, compression_scale);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
 }
 return output_color;
 }

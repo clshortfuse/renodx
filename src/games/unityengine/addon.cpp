@@ -1034,6 +1034,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberLinearOnDraw(0x8B0129A4),
     UberLinearOnDraw(0x08CFBDB7),
     UberLinearOnDraw(0x969ECAC4),
+    UberLinearOnDraw(0x979B042D),
     UberLinearOnDraw(0x309787A8),
     UberLinearOnDraw(0x7F1E137D),
     UberLinearOnDraw(0xA0F1B778),
@@ -1558,6 +1559,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDLinearOnDraw(0x99B7B0BF), // SadCatStudios_FinalBlit
     CustomShaderEntryCallback(0x459D4153, &CountLinear),    // Colour Correction
     CustomShaderEntryCallback(0xB0826385, &CountLinear),
+    CustomShaderEntryCallback(0xABDCCA9E, &CountLinear),
     CustomShaderEntryCallback(0x6D550A49, &CountLinear),  // PS1 Post Processing
     CustomShaderEntryCallback(0x3513581C, &Count),
     CustomShaderEntryCallback(0x457A0F57, &Count),
@@ -1571,6 +1573,8 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0xB0E8A766, &CountTonemap1),    // PostProcess
     CustomShaderEntryCallback(0x850F1FE0, &CountTonemap1),    // Unlit Fullscreen Overlay
     //CustomShaderEntry(0x144BC65C),
+    CustomShaderEntryCallback(0x046DE397, &Count),
+    CustomShaderEntryCallback(0xD40A5EAD, &Count),
     CustomShaderEntryCallback(0x4C1E450F, &Count),    // RetroPixelPro
     CustomShaderEntryCallback(0x918C7E0C, &Count),    // ScreenRender
     CustomShaderEntryCallback(0x4C6C9444, &Count),    // Blend MorganTweak
@@ -2321,17 +2325,20 @@ const ShaderItem INITIAL_SHADERS[] = {
     CountLinearTonemap1OnDraw(0x83B430B4),
     CountGammaTonemap1OnDraw(0x83F6DE09),
     CountLinearTonemap1OnDraw(0x92C3775F),
+    CountGammaTonemap1OnDraw(0x654F1BA0),
     // 0x2365EDDF
     CountLinearTonemap1OnDraw(0x4757CDEB),
     CountGammaTonemap1OnDraw(0x6946B0AB),
     CountLinearTonemap1OnDraw(0x93281DC0),
     CountLinearTonemap1OnDraw(0x455563C6),
+    CountGammaTonemap1OnDraw(0x4618281F),
     CountGammaTonemap1OnDraw(0x79295705),
     // 0xA1EA3B3E
     CountLinearTonemap1OnDraw(0xA8773EA9),
     CountGammaTonemap1OnDraw(0xB0A46956),
     CountLinearTonemap1OnDraw(0xB47EF759),
     CountLinearTonemap1OnDraw(0xBA534ADB),
+    CountGammaTonemap1OnDraw(0xBBD3799A),
     CountGammaTonemap1OnDraw(0xBFCFF9BC),
     CountGammaTonemap1OnDraw(0xC7B8A4A1),
     CountLinearTonemap1OnDraw(0xC25C244C),
@@ -2716,12 +2723,25 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapSDRify",
-        .binding = &shader_injection.toneMapSDRify,
+        .key = "toneMapSDRHue",
+        .binding = &shader_injection.toneMapSDRHue,
         .default_value = 100.f,
-        .label = "SDR Hue & Chrominance",
+        .label = "SDR Hue",
         .section = "Tone Mapping",
-        .tooltip = "Used to SDR-ify highlights.",
+        .tooltip = "Applies SDR Hue to HDR output.",
+        .tint = 0x38F6FC,
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 2.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "toneMapSDRChrominance",
+        .binding = &shader_injection.toneMapSDRChrominance,
+        .default_value = 100.f,
+        .label = "SDR Chrominance",
+        .section = "Tone Mapping",
+        .tooltip = "Applies SDR Chrominance (=saturation/blowout) to HDR output.",
         .tint = 0x38F6FC,
         .min = 0.f,
         .max = 100.f,
@@ -3054,8 +3074,9 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::UpdateSetting("toneMapType", 2.f);
           renodx::utils::settings::UpdateSetting("toneMapScaling", 2.f);
-          renodx::utils::settings::UpdateSetting("toneMapSDRClip", 5.f);
-          renodx::utils::settings::UpdateSetting("toneMapSDRify", 99.f);
+          renodx::utils::settings::UpdateSetting("toneMapSDRClip", 1.5f);
+          renodx::utils::settings::UpdateSetting("toneMapSDRHue", 100.f);
+          renodx::utils::settings::UpdateSetting("toneMapSDRChrominance", 100.f);
           renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
           renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
           renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);

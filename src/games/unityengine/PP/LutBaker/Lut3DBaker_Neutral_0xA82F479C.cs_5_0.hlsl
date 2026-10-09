@@ -207,7 +207,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     if (RENODX_TONE_MAP_TYPE == 0.f) {
       r0.yzw = min(float3(1, 1, 1), r3.xyz);
     } else {
-      r3.xyz = CorrectHueAndChrominanceOKLAB(r3.xyz, renodx::tonemap::ReinhardPiecewise(r3.xyz, RENODX_TONE_MAP_SDR_CLIP), RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+      r3.xyz = CorrectHueAndChrominanceOKLAB(r3.xyz, renodx::tonemap::ReinhardPiecewise(r3.xyz, RENODX_TONE_MAP_SDR_CLIP), RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
       r0.yzw = r3.xyz;
     }
     r0.yzw = max(r0.yzw, r4.xyz);

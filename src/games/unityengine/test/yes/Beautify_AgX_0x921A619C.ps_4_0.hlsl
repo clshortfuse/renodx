@@ -61,7 +61,7 @@ float3 AgXTonemap(float3 color, float pre_exposure, float post_exposure, float g
     float3 hdr_color = AgXtended(color);
     GamutDecompression(hdr_color, compression_scale);
     hdr_color = renodx::math::SignPow(hdr_color, gamma);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
     output_color *= post_exposure;
   }
   return output_color;

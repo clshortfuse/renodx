@@ -179,7 +179,7 @@ float3 Bt709AcesTonemap(float3 color, float exposure = 1.f) {
     1.46658788438 * exposed_color + 0.00821561635884,
      (exposed_color * (a * exposed_color + b)) / (exposed_color * (c * exposed_color + d) + e));
     GamutDecompression(hdr_color, compression_scale);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
   }
   return output_color;
 }
@@ -197,7 +197,7 @@ float3 Uncharted2Tonemap(float3 color, float A, float B, float C, float D, float
     GamutCompression(color, compression_scale);
     float3 hdr_color = uncharted2Extended(color, A, B, C, D, E, F, W);
     GamutDecompression(hdr_color, compression_scale);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
 }
 return output_color;
 }
@@ -215,7 +215,7 @@ float3 NeutralTonemap(float3 color,  float A = 0.2f, float B = 0.29f, float C = 
     GamutCompression(color, compression_scale);
     float3 hdr_color = NeutralExtended(color, A, B, C, D, E, F, whiteLevel, whiteClip);
     GamutDecompression(hdr_color, compression_scale);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
 }
 return output_color;
 }
@@ -233,7 +233,7 @@ float3 CustomTonemap(float3 color, float3 curve, float4 toeSegmentA, float2 toeS
     GamutCompression(color, compression_scale);
     float3 hdr_color = CustomExtended(color, curve, toeSegmentA, toeSegmentB, midSegmentA, midSegmentB, shoSegmentA, shoSegmentB);
     GamutDecompression(hdr_color, compression_scale);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
 }
 return output_color;
 }
@@ -267,7 +267,7 @@ float3 Ap1AcesTonemap(float3 ap0_untonemapped, int curve = 0, float DSG = 0.9811
     output_color = saturate(sdr_color);
   } else {
     float3 hdr_color = Ap1AcesExtended(ap0_untonemapped, curve, DSG);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
   }
   return output_color;
 }
@@ -282,7 +282,7 @@ float3 SHAcesTonemap(float3 color, float pre_exposure = 1.f, float post_exposure
     output_color = sdr_color;
   } else {
     float3 hdr_color = SHAcesExtended(color, pre_exposure, post_exposure);
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
   }
   return output_color;
 }

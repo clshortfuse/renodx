@@ -1,3 +1,5 @@
+#include "../../common.hlsli"
+
 Texture2D<float4> t0 : register(t0);
 cbuffer cb1 : register(b1){
   float4 cb1[1];
@@ -176,6 +178,7 @@ void main(
   r1.xy = (uint2)r1.xy;
   r1.zw = float2(0,0);
   r1.xyzw = t0.Load(r1.xyz).xyzw;
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f) {
   r2.xyz = r1.xyz * r1.xyz;
   r2.xyz = r2.xyz * r0.www;
   r3.xyz = r1.xyz + r1.xyz;
@@ -190,7 +193,14 @@ void main(
   r0.xyz = r0.xyz + -r1.xyz;
   r0.w = cb1[0].w + -cb1[0].y;
   r0.w = cb1[0].z * r0.w + cb1[0].y;
-  o0.xyz = r0.www * r0.xyz + r1.xyz;
+  r0.xyz = r0.www * r0.xyz * CUSTOM_FILM_GRAIN + r1.xyz;
+  } else {
+    r0.xyz = applyFilmGrain(r1.xyz, v1.xy);
+  }
+  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+    r0.xyz = PostToneMapScale(r0.xyz);
+  }
+  o0.xyz = r0.xyz;
   o0.w = 1;
   return;
 }

@@ -94,7 +94,7 @@ void main(
     r0.xyz = saturate(vanillaReinhard(r0.xyz));
   } else {
     r0.xyz = vanillaReinhardExtended(r0.xyz);
-    r0.xyz = CorrectHueAndChrominanceOKLAB(r0.xyz, vanillaReinhard(r0.xyz), RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    r0.xyz = CorrectHueAndChrominanceOKLAB(r0.xyz, vanillaReinhard(r0.xyz), RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
     GamutCompression(r0.xyz, compression_scale);
     NeutwoMaxCh(r0.xyz, max_channel_scale);
   }

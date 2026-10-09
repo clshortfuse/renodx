@@ -351,7 +351,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
     r1.x = dot(float3(1.70505095, -0.621792018, -0.0832588673), r0.xyz);
     r1.y = dot(float3(-0.130256414, 1.14080465, -0.0105483187), r0.xyz);
     r1.z = dot(float3(-0.024003353, -0.128968969, 1.15297234), r0.xyz);
-    r1.xyz = CorrectHueAndChrominanceOKLAB(r1.xyz, sdrTonemappedBt709, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    r1.xyz = CorrectHueAndChrominanceOKLAB(r1.xyz, sdrTonemappedBt709, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
   }
   float3 preLUT = r1.xyz;
   float compression_scale;

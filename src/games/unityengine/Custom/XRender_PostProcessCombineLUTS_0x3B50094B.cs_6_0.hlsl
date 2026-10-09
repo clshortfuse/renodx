@@ -406,7 +406,7 @@ void main(
     _810 = mad(-0.010548318736255169f, _796, mad(1.140804648399353f, _795, (_794 * -0.13025641441345215f)));
     _811 = mad(1.1529723405838013f, _796, mad(-0.1289689689874649f, _795, (_794 * -0.024003352969884872f)));
     float3 extendedTonemapBt709 = float3(_809, _810, _811);
-    extendedTonemapBt709 = CorrectHueAndChrominanceOKLAB(extendedTonemapBt709, sdrTonemappedBt709, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    extendedTonemapBt709 = CorrectHueAndChrominanceOKLAB(extendedTonemapBt709, sdrTonemappedBt709, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
     _809 = extendedTonemapBt709.x;
     _810 = extendedTonemapBt709.y;
     _811 = extendedTonemapBt709.z;

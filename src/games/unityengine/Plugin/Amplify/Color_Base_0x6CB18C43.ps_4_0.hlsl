@@ -17,7 +17,7 @@ float3 Tonemap(float3 color) {
     output_color = saturate(sdr_color);
   } else {
     float3 hdr_color = color > 0.3679 ? color * 0.692186396868 + 0.0531582277248 : sdr_color;
-    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    output_color = CorrectHueAndChrominanceOKLAB(hdr_color, sdr_color, RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
   }
   return output_color;
 }

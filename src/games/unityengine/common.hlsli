@@ -37,7 +37,7 @@ float3 GradeAndDisplayMap(float3 color) {
     color = max(0.f, color);
   } else {
     if(CUSTOM_IS_TONEMAPPED == 0.f){
-    color = CorrectHueAndChrominanceOKLAB(color, renodx::tonemap::ReinhardPiecewise(color, RENODX_TONE_MAP_SDR_CLIP, 0.99f), RENODX_TONE_MAP_SDRIFY, RENODX_TONE_MAP_SDRIFY);
+    color = CorrectHueAndChrominanceOKLAB(color, renodx::tonemap::ReinhardPiecewise(color, RENODX_TONE_MAP_SDR_CLIP, 0.99f), RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
     }
     color = HDRBoost(color, CUSTOM_HDR_BOO0ST);
   }
