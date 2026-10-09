@@ -351,12 +351,12 @@ float3 Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
       strength);
 }
 
-float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float display_peak_nits, bool hdr_enabled) {
+float3 BuildToneMapLUTOutput(
+    float3 untonemapped_ap1, float vanilla_exposure, float vanilla_display_peak_nits, bool hdr_enabled) {
   untonemapped_ap1 /= 100.f;
 
-  // The game uses twice the SDR exposure by default when HDR is enabled.
-  float diffuse_white_nits = (exposure / 64.f) * 203.f;
-  float target_peak_ratio = display_peak_nits / diffuse_white_nits;
+  float diffuse_white_nits = RENODX_DIFFUSE_WHITE_NITS;
+  float target_peak_ratio = RENODX_PEAK_WHITE_NITS / diffuse_white_nits;
   float3 tonemapped_bt709;
 
   if (RENODX_TONE_MAP_TYPE == 2.f) {
