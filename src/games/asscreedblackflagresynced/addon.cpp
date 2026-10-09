@@ -17,15 +17,20 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
 #include "shared.h"
 
 namespace {
+
+constexpr float FALLBACK_PEAK_NITS = 1000.f;
 
 ShaderInjectData shader_injection;
 
 std::atomic_bool tone_map_lut_invalidated = false;
 std::atomic_bool ui_lut_invalidated = false;
 float applied_tone_map_type = 1.f;
+float applied_peak_nits = FALLBACK_PEAK_NITS;
+float applied_game_nits = 203.f;
 float applied_ui_nits = 203.f;
 
 void SetToneMapLutInvalidated(bool invalidated) {
@@ -37,7 +42,9 @@ void SetUiLutInvalidated(bool invalidated) {
 }
 
 bool ToneMapLutValuesDirty() {
-  return shader_injection.tone_map_type != applied_tone_map_type;
+  return shader_injection.tone_map_type != applied_tone_map_type
+         || shader_injection.peak_white_nits != applied_peak_nits
+         || shader_injection.diffuse_white_nits != applied_game_nits;
 }
 
 bool UiLutValuesDirty() {
@@ -54,6 +61,8 @@ void RefreshUiLutDirtyState() {
 
 void MarkToneMapLutApplied() {
   applied_tone_map_type = shader_injection.tone_map_type;
+  applied_peak_nits = shader_injection.peak_white_nits;
+  applied_game_nits = shader_injection.diffuse_white_nits;
   RefreshToneMapLutDirtyState();
 }
 
@@ -64,6 +73,8 @@ void MarkUiLutApplied() {
 
 void InitializeAppliedValues() {
   applied_tone_map_type = shader_injection.tone_map_type;
+  applied_peak_nits = shader_injection.peak_white_nits;
+  applied_game_nits = shader_injection.diffuse_white_nits;
   applied_ui_nits = shader_injection.graphics_white_nits;
 }
 
@@ -119,13 +130,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Adjust game brightness using the in-game exposure setting\n"
-                             "- Adjust peak brightness using the in-game peak setting"),
-        .section = "Tone Mapping",
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.",
+        .label = "Toggle in-game HDR setting or restart game to apply tone mapping changes.",
         .section = "Tone Mapping",
         .tint = 0xFF0000,
         .is_visible = []() { return tone_map_lut_invalidated.load(std::memory_order_relaxed); },
@@ -140,6 +145,31 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type. Toggle in-game HDR setting or restart game to take effect.",
         .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Enhanced)"},
+        .on_change_value = &OnToneMapLutControlledSettingChanged,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapPeakNits",
+        .binding = &shader_injection.peak_white_nits,
+        .default_value = FALLBACK_PEAK_NITS,
+        .label = "Peak Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets peak white in nits. Toggle in-game HDR or restart the game to apply.",
+        .min = 48.f,
+        .max = 10000.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .on_change_value = &OnToneMapLutControlledSettingChanged,
+        .is_logarithmic = true,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapGameNits",
+        .binding = &shader_injection.diffuse_white_nits,
+        .default_value = 203.f,
+        .label = "Game Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets 100% white in nits. Toggle in-game HDR or restart the game to apply.",
+        .min = 48.f,
+        .max = 500.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .on_change_value = &OnToneMapLutControlledSettingChanged,
     },
     new renodx::utils::settings::Setting{
@@ -377,9 +407,30 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
+  static bool peak_nits_default_initialized = false;
+  if (swapchain == nullptr || peak_nits_default_initialized) return;
+  if (!renodx::utils::swapchain::IsHDRColorSpace(swapchain)) return;
+
+  auto* peak_nits_setting = renodx::utils::settings::FindSetting("ToneMapPeakNits");
+  if (peak_nits_setting == nullptr) return;
+
+  peak_nits_default_initialized = true;
+  const auto detected_peak_nits = renodx::utils::swapchain::GetPeakNits(swapchain);
+  const bool was_using_default = peak_nits_setting->IsUsingDefault();
+  peak_nits_setting->default_value =
+      (detected_peak_nits.has_value() && *detected_peak_nits > 0.f ? *detected_peak_nits : FALLBACK_PEAK_NITS);
+  if (was_using_default) {
+    peak_nits_setting->Set(peak_nits_setting->default_value)->Write();
+    RefreshToneMapLutDirtyState();
+  }
+}
+
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
+      {"ToneMapPeakNits", renodx::utils::settings::FindSetting("ToneMapPeakNits")->default_value},
+      {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"LocalExposureStrength", 100.f},
       {"LocalExposureShoulder", 100.f},
@@ -418,8 +469,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&OnPresetChangedInvalidateIfChanged);
         initialized = true;
       }
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);
       break;
   }
