@@ -467,8 +467,8 @@ bool CountGammaTonemap35(reshade::api::command_list* cmd_list) {
 bool UberHDRP(reshade::api::command_list* cmd_list) {
   count2Mid += 1.f;
   shader_injection.count2New += 1.f;
-  countMid += 1.f;
-  shader_injection.countNew += 1.f;
+  //countMid += 1.f;
+  //shader_injection.countNew += 1.f;
   gammaSpace = 0.f;
   gammaSpaceLock = true;
   forceDetect = true;
@@ -3600,6 +3600,15 @@ const std::unordered_map<
             "LEGO Party.exe",
             {
                 {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
+            "Lethal Company.exe",
+            {
+                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_ANY},
+                {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_ANY},
+                {"Scaling_Offset", 4.f},
+                {"Tonemap_Offset", 4.f},
             },
         },
         {

@@ -29,7 +29,7 @@ void main(
   r0.z = t1.Load(r0.xyzw).x;
   r0.xyw = t0.Load(r0.xyww).xyz;
   o0.xyz = r0.xyw;
-  if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
+  if (CUSTOM_COUNT_OLD <= CUSTOM_COUNT_NEW) {
     o0.xyz = PostToneMapScale(o0.xyz);
   }
   o0.w = cb0[5].x == 1.0 ? r0.z : 1;

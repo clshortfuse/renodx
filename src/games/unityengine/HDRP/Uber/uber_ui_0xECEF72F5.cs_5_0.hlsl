@@ -27,6 +27,9 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r1.zw = min(r1.xy, r1.zw);
   r0.xy = cb0[50].xy * r1.zw;
   r2.xyz = t0.SampleLevel(s0_s, r0.xyz, 0).xyz;
+  if (CUSTOM_COUNT_OLD < CUSTOM_COUNT_NEW) {
+    r2.xyz = InvertToneMapScale(r2.xyz);
+  }
   if (cb1[7].z != 0) {
     r1.zw = cb0[50].xy * r1.xy;
     r1.zw = r1.zw * cb1[11].xy + float2(0.5,0.5);
