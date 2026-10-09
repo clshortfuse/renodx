@@ -114,6 +114,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+// Keep vanilla shadows and midtones; fade the HDR upgrade in with scene luminance
+#define RENODX_TONE_MAP_PASS_AUTOCORRECTION     1.f
 
 #include "../../shaders/renodx.hlsl"
 

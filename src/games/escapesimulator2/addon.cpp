@@ -23,6 +23,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x7F27D36D),  // HDRP LutBuilder3D (grading + ACES tonemap)
     CustomShaderEntry(0xD8403A20),  // HDRP FXAA
     CustomShaderEntry(0xCA174510),  // HDRP FinalPass (RCAS sharpening)
+    CustomShaderEntry(0x652503E8),  // Matcap item shader (opaque)
 };
 
 ShaderInjectData shader_injection;

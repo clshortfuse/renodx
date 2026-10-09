@@ -251,8 +251,9 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r1.xyz = float3(0.179999992,0.179999992,0.179999992) * r0.xyz;
   }
   r0.xyz = max(float3(0,0,0), r1.xyz);
-  // RenoDX: graded ACEScg scene color before the vanilla ACES tonemap
-  float3 untonemapped = renodx::color::bt709::from::AP1(r0.xyz);
+  // RenoDX: graded ACEScg scene color before the vanilla ACES tonemap.
+  // The vanilla ACES fit maps 0.18 to 0.110; match that exposure so highlights continue from the vanilla midtones.
+  float3 untonemapped = renodx::color::bt709::from::AP1(r0.xyz) * (0.110f / 0.18f);
   r1.y = dot(float3(0.695452213,0.140678704,0.163869068), r0.xyz);
   r1.z = dot(float3(0.0447945632,0.859671116,0.0955343172), r0.xyz);
   r1.w = dot(float3(-0.00552588282,0.00402521016,1.00150073), r0.xyz);
@@ -388,7 +389,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   if (RENODX_TONE_MAP_TYPE != 0) {
     r0.xyz = renodx::draw::ToneMapPass(untonemapped, r0.xyz);
   }
-  r0.xyz = renodx::draw::RenderIntermediatePass(r0.xyz);
+  // HDRP caches this LUT in some rooms, so RenderIntermediatePass runs per frame in FinalPass instead.
   // Uber post takes sqrt() of the LUT sample and writes R11G11B10F: no negative channels
   r0.xyz = max(0, r0.xyz);
   r0.w = 1;

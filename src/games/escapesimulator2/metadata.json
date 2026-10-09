@@ -17,7 +17,7 @@
     "hdrp"
   ],
   "notes": [
-    "Tone mapping and color grading changes are baked into the grading LUT; in rooms that cache the LUT they apply the next time a room loads.",
+    "Tone mapper, peak brightness, and color grading changes are baked into the grading LUT; in rooms that cache the LUT they apply the next time a room loads. Game brightness, UI brightness, and gamma correction apply immediately.",
     "DLSS is untested."
   ],
   "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2879840/header.jpg",

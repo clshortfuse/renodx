@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // HDRP FinalPass: FidelityFX RCAS sharpening + after-post-process composite
 Texture2DArray<float4> t2 : register(t2);
 
@@ -86,6 +88,8 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   r2.z = 0;
   r1.xyzw = t1.SampleLevel(s0_s, r2.xyz, 0).xyzw;
+  // RenoDX: scene brightness/gamma applied here every frame because the grading LUT can be cached
+  r0.xyz = renodx::draw::RenderIntermediatePass(r0.xyz);
   o0.xyz = r1.www * r0.xyz + r1.xyz;
   r0.xy = cb1[50].xy * v1.xy;
   r0.xy = (uint2)r0.xy;
