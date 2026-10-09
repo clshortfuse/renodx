@@ -3500,6 +3500,8 @@ const std::unordered_map<
             "Carpenter.exe",
             {
                 {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_NONE},
+                {"Upgrade_R10G10B10A2_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
                 {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
