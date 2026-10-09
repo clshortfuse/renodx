@@ -18,36 +18,49 @@ float SinkingStarEvaluateVanillaToneMap(float input_value, float tone_map_curve)
   const float input = max(0.f, input_value);
 
   if (tone_map_curve == 0.f || tone_map_curve == 3.f) {
+    // Normalize the Hable curve with the game's white scale.
     const float numerator = (input * 0.15f + 0.05f) * input + 0.002f;
     const float denominator = (input * 0.15f + 0.5f) * input + 0.06f;
     return saturate((numerator / denominator - 0.03333333134651184f) * 1.6641758680343628f);
   }
 
   if (tone_map_curve == 1.f || tone_map_curve == 4.f) {
+    // Evaluate the Narkowicz fit with the game's coefficients.
     return saturate(((input * 2.51f + 0.03f) * input)
                     / ((input * 2.43f + 0.59f) * input + 0.14f));
   }
 
   if (tone_map_curve == 2.f || tone_map_curve == 5.f) {
+    // Reduce exposure before evaluating the same Narkowicz fit.
     const float scaled_input = input * 0.6f;
     return saturate(((input * 1.506f + 0.03f) * scaled_input)
                     / ((input * 1.458f + 0.59f) * scaled_input + 0.14f));
   }
 
   if (tone_map_curve == 6.f) {
-    const float encoded_input = pow(input, 0.45454543828964233f);
-    const float3 aces_input = float3(encoded_input, encoded_input, encoded_input);
+    // Match the legacy gamma wrapper while leaving updated linear input unchanged.
+  #ifdef SINKING_STAR_LINEAR_CURVE_6
+    const float curve_input = input;
+  #else
+    const float curve_input = pow(input, 0.45454543828964233f);
+  #endif
+    const float3 aces_input = float3(curve_input, curve_input, curve_input);
     const float3 aces_ap1 = float3(
         mad(0.04822999984025955f, aces_input.z, mad(0.35457998514175415f, aces_input.y, aces_input.x * 0.5971900224685669f)),
         mad(0.01565999910235405f, aces_input.z, mad(0.9083399772644043f, aces_input.y, aces_input.x * 0.07599999755620956f)),
         mad(0.8377699851989746f, aces_input.z, mad(0.1338299959897995f, aces_input.y, aces_input.x * 0.0284000001847744f)));
+    // Evaluate the Stephen Hill RRT/ODT fit between its input and output transforms.
     const float3 fitted = ((aces_ap1 + 0.024578599259257317f) * aces_ap1 - 9.053700341610238e-05f)
                           / ((aces_ap1 * 0.9837290048599243f + 0.4329510033130646f) * aces_ap1 + 0.23808099329471588f);
     const float3 bt709 = float3(
         mad(-0.07366999983787537f, fitted.z, mad(-0.5310800075531006f, fitted.y, fitted.x * 1.6047500371932983f)),
         mad(-0.006049999967217445f, fitted.z, mad(1.1081299781799316f, fitted.y, fitted.x * -0.10208000242710114f)),
         mad(1.0760200023651123f, fitted.z, mad(-0.07276000082492828f, fitted.y, fitted.x * -0.003269999986514449f)));
+  #ifdef SINKING_STAR_LINEAR_CURVE_6
+    const float3 output = saturate(bt709);
+  #else
     const float3 output = saturate(pow(max(bt709, float3(0.f, 0.f, 0.f)), 2.200000047683716f));
+  #endif
     return dot(output, float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   }
 
@@ -102,6 +115,7 @@ float3 SinkingStarApplyVanillaToneMapExtended(
     float tone_map_curve,
     SinkingStarVanillaToneMapReference reference) {
   if (tone_map_curve == 0.f || tone_map_curve == 1.f || tone_map_curve == 2.f) {
+    // Extend relative luminance and preserve RGB ratios for the scalar curve variants.
     const float input_y = dot(
         untonemapped,
         float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
@@ -144,7 +158,11 @@ float SinkingStarResolveVanillaToneMapInflectionInput(float tone_map_curve) {
   // Positive roots of V''(x) = 0 for the exact scalar game curves. Curves 0 and 3 have no positive root.
   if (tone_map_curve == 1.f || tone_map_curve == 4.f) return 0.120305925f;
   if (tone_map_curve == 2.f || tone_map_curve == 5.f) return 0.200509877f;
+#ifdef SINKING_STAR_LINEAR_CURVE_6
+  if (tone_map_curve == 6.f) return 0.249083227f;
+#else
   if (tone_map_curve == 6.f) return 0.083283576f;
+#endif
   return 0.f;
 }
 

@@ -2,7 +2,6 @@
 #include "./shared.h"
 #include "./tonemap.hlsli"
 
-
 struct Clustered_Params {
   column_major float4x4 clusters_view_proj;
   float3 clusters_count_inv;

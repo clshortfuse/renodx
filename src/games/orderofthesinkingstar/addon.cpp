@@ -24,6 +24,8 @@ ShaderInjectData shader_injection = {};
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x57A0AE0E),  // Scene effects, color grade, and tone map
     CustomShaderEntry(0x7CE8C479),  // FXAA and final scene blit
+    CustomShaderEntry(0x06815A08),  // Updated scene effects, color grade, and tone map
+    CustomShaderEntry(0x7C789067),  // Updated FXAA and final scene blit
 };
 
 renodx::utils::settings::Setting* output_mode_setting = nullptr;
