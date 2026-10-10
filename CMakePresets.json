@@ -70,6 +70,7 @@
         "MSVC": "true",
         "MSVC_TOOLSET_VERSION": "143",
         "CMAKE_CXX_COMPILER": "clang-cl.exe",
+        "CMAKE_C_COMPILER_TARGET": "i686-pc-windows-msvc",
         "CMAKE_CXX_COMPILER_TARGET": "i686-pc-windows-msvc",
         "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
         "CMAKE_CXX_FLAGS_RELEASE": "/Ox /Ob2 /DNDEBUG /Ot /GF -flto",
