@@ -1,0 +1,39 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "control-rr",
+  "title": "Control Ultimate Edition",
+  "mod_name": "Control Ray Reconstruction",
+  "category": "game",
+  "maintainers": ["speedlemur"],
+  "compatibility": "working",
+  "status": "stable",
+  "summary": "Adds DLSS Ray Reconstruction with specular motion vectors and optional HDR DLSS frame generation through OptiScaler.",
+  "tags": ["dlss", "ray-reconstruction", "frame-generation"],
+  "notes": [
+    "Requires DirectX 12, an NVIDIA RTX GPU, in-game DLSS enabled and ReShade 6.7.0 or newer with full add-on support.",
+    "Place the addon and release nvngx_dlssd.dll beside Control_DX12.exe; load only one RenoDX addon. Select Ray Reconstruction under Ray Tracing in the ReShade overlay.",
+    "Optional DLSS frame generation requires supported hardware and HDR enabled in Windows and Control. Install OptiScaler as winmm.dll alongside ReShade's dxgi.dll, with Streamline runtimes under OptiScaler/streamline/.",
+    "OptiScaler.ini: [Upscalers] Dx12Upscaler=dlss; [FrameGen] Enabled=true, FGInput=Upscaler, FGOutput=DLSSG; [fakenvapi] ForceReflex=2; [DLSSG] UseGamesReflexMarkers=false. Leave HDR overrides at auto. Enable the addon's HDR10 bridge and restart; leave it off for SDR."
+  ],
+  "urls": [
+    {
+      "kind": "support",
+      "label": "NVIDIA DLSS release DLLs",
+      "url": "https://github.com/NVIDIA/DLSS/tree/main/lib/Windows_x86_64/rel"
+    },
+    {
+      "kind": "support",
+      "label": "OptiScaler setup",
+      "url": "https://github.com/optiscaler/OptiScaler/wiki"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 870780,
+    "game_exe": "Control_DX12.exe",
+    "process_name": "Control_DX12.exe",
+    "api": "d3d12",
+    "architecture": ["x64"],
+    "reshade_version_range": ">=6.7.0",
+    "reshade_preferred_name": "dxgi.dll"
+  }
+}
