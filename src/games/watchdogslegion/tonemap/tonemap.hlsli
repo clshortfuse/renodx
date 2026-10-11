@@ -75,26 +75,28 @@ float3 UpgradeToneMapPerChannel(float3 color_hdr, float3 color_sdr, float3 post_
   return lerp(color_hdr, color_scaled, post_process_strength);
 }
 
+static const float3x3 ACESOutputMat = {
+  { 1.60475f, -0.53108f, -0.07367f },
+  { -0.10208f, 1.10813f, -0.00605f },
+  { -0.00327f, -0.07276f, 1.07602f }
+};
+static const float3x3 ACESOutputMatInverse = renodx::math::Invert3x3(ACESOutputMat);
+
 void ACESFittedAP1Extended(float3 color, out float3 color_sdr, out float3 color_hdr) {
-  const float3x3 input_matrix = {
+  const float3x3 ACESInputMat = {
     { 0.59719f, 0.35458f, 0.04823f },
     { 0.07600f, 0.90834f, 0.01566f },
     { 0.02840f, 0.13383f, 0.83777f }
   };
-  const float3x3 output_matrix = {
-    { 1.60475f, -0.53108f, -0.07367f },
-    { -0.10208f, 1.10813f, -0.00605f },
-    { -0.00327f, -0.07276f, 1.07602f }
-  };
-  color = mul(input_matrix, color);
-  float3 numerator = color * (color + 0.0245786f) - 0.000090537f;
-  float3 denominator = color * (0.983729f * color + 0.4329510f) + 0.238081f;
-  float3 fitted = numerator / denominator;
-  color_sdr = saturate(mul(output_matrix, fitted));
+  color = mul(ACESInputMat, color);
+  float3 a = color * (color + 0.0245786f) - 0.000090537f;
+  float3 b = color * (0.983729f * color + 0.4329510f) + 0.238081f;
+  float3 fitted = a / b;
+  color_sdr = saturate(mul(ACESOutputMat, fitted));
   // Tangent at the rational curve's positive inflection; no SDR white clamp.
   float3 extended = renodx::math::Select(color > 0.24908324f, 0.16727666f + 0.90512937f * (color - 0.24908324f), fitted);
   // extended = max(0, extended);
-  color_hdr = mul(output_matrix, extended);
+  color_hdr = mul(ACESOutputMat, extended);
   color_hdr = max(0, color_hdr);
 }
 
@@ -110,11 +112,11 @@ float3 UpgradeBlendedLUT(
   float3 neutral_sdr_bt709;
   float3 hdr_bt709;
   ACESFittedAP1Extended(scene_bt709, neutral_sdr_bt709, hdr_bt709);
-  float3 neutral_sdr_ap1 = max(0.f, renodx::color::ap1::from::BT709(neutral_sdr_bt709));
-  float3 hdr_ap1 = max(0.f, renodx::color::ap1::from::BT709(hdr_bt709));
-  float3 graded_sdr_ap1 = max(0.f, renodx::color::ap1::from::BT709(graded_sdr_bt709));
-  float3 upgraded_ap1 = UpgradeToneMapPerChannel(hdr_ap1, neutral_sdr_ap1, graded_sdr_ap1, 1.f);
-  return lerp(scene_bt709, renodx::color::bt709::from::AP1(upgraded_ap1), CUSTOM_LUT_STRENGTH);
+  float3 neutral_sdr_fitted = max(0.f, mul(ACESOutputMatInverse, neutral_sdr_bt709));
+  float3 hdr_fitted = max(0.f, mul(ACESOutputMatInverse, hdr_bt709));
+  float3 graded_sdr_fitted = max(0.f, mul(ACESOutputMatInverse, graded_sdr_bt709));
+  float3 upgraded_fitted = UpgradeToneMapPerChannel(hdr_fitted, neutral_sdr_fitted, graded_sdr_fitted, 1.f);
+  return lerp(scene_bt709, mul(ACESOutputMat, upgraded_fitted), CUSTOM_LUT_STRENGTH);
 }
 
 float4 EncodeHDRLUT(float _113, float _114, float _115, float4 HDROutput_000, float HDROutput_064) {
@@ -128,14 +130,14 @@ float4 EncodeHDRLUT(float _113, float _114, float _115, float4 HDROutput_000, fl
     }
 
     if (RENODX_TONE_MAP_TYPE == 1.f) {
-      color = renodx::color::ap1::from::BT709(color);
-      float3 ungraded_ap1 = color;
-      float3 saturation_source_ap1 = color;
+      float3 saturation_source_ap1 = renodx::color::ap1::from::BT709(color);
+      color = mul(ACESOutputMatInverse, color);
       color = ApplyAnchoredTonalGrading(
           color, 0.16727666f, 0.16727666f,
           RENODX_TONE_MAP_CONTRAST, 0.1f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
           RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
       color = ApplyAnchoredCubicShoulder(color, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.16727666f, 1.f, clip);
+      color = renodx::color::ap1::from::BT709(mul(ACESOutputMat, color));
       color = ApplyAnchoredSaturationGrading(
           color, saturation_source_ap1, 0.16727666f,
           RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA);
