@@ -215,7 +215,7 @@ float4 main(
   _220 = _219 * _188.x;
   _221 = _219 * _188.y;
   _222 = _219 * _188.z;
-#if 0  // custom code
+#if 1  // custom code
   SV_Target.rgb = ApplyVanillaPQNoise(float3(_220, _221, _222), t1, SV_Position.xy, Global_1168.x, Global_1168.y);
 #else  // original code
   _234 = t1.Load(int3(int(frac(Global_1168.y * SV_Position.x) * Global_1168.x), int(frac(Global_1168.y * SV_Position.y) * Global_1168.x), 0));
