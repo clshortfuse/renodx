@@ -1,0 +1,54 @@
+struct SCameraDistances {
+  float SCameraDistances_000;
+  float SCameraDistances_004;
+  float SCameraDistances_008;
+  float SCameraDistances_012;
+};
+
+struct SLCMFrustumPlanes {
+  float4 SLCMFrustumPlanes_000[6];
+};
+
+Texture2D<uint> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
+
+cbuffer cb0 : register(b0) {
+  float cb0_092x : packoffset(c092.x);
+  float cb0_092y : packoffset(c092.y);
+};
+
+cbuffer cb1 : register(b1) {
+  float4 PostFxDLSSResolveMotionVector_000[4] : packoffset(c000.x);
+  float4 PostFxDLSSResolveMotionVector_064 : packoffset(c004.x);
+};
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+struct OutputSignature {
+  float2 SV_Target : SV_Target;
+  float SV_Target_1 : SV_Target1;
+};
+
+OutputSignature main(
+    precise noperspective float4 SV_Position: SV_Position) {
+  float2 SV_Target;
+  float SV_Target_1;
+  int _10;
+  int _11;
+  float4 _24;
+  _10 = int(SV_Position.x);
+  _11 = int(SV_Position.y);
+  _24 = t1.Load(int3(max((int)(min((int)(0), (int)(_10))), (int)(min((int)(max((int)(0), (int)(_10))), (int)(((int)((uint)(int(PostFxDLSSResolveMotionVector_064.x)) + (uint)(-1))))))), max((int)(min((int)(0), (int)(_11))), (int)(min((int)(max((int)(0), (int)(_11))), (int)(((int)((uint)(int(PostFxDLSSResolveMotionVector_064.y)) + (uint)(-1))))))), 0));
+  SV_Target.x = (-0.0f - (_24.x * cb0_092x));
+  SV_Target.y = (-0.0f - (_24.y * cb0_092y));
+  SV_Target_1 = saturate(float((int)(((uint)(t0.Load(int3(_10, _11, 0)))).x)) * 0.003921568859368563f);
+  OutputSignature output_signature = { SV_Target, SV_Target_1 };
+  return output_signature;
+}

@@ -1,0 +1,249 @@
+#include "tonemap.hlsli"
+
+struct SCameraDistances {
+  float SCameraDistances_000;
+  float SCameraDistances_004;
+  float SCameraDistances_008;
+  float SCameraDistances_012;
+};
+
+struct SGlobalDebugValues {
+  float SGlobalDebugValues_000;
+  float SGlobalDebugValues_004;
+  float SGlobalDebugValues_008;
+  float SGlobalDebugValues_012;
+};
+
+struct SGlobalScalars {
+  float SGlobalScalars_000;
+  float SGlobalScalars_004;
+  float SGlobalScalars_008;
+};
+
+struct SLCMFrustumPlanes {
+  float4 SLCMFrustumPlanes_000[6];
+};
+
+struct SSkyLightingBuffer {
+  float4 SSkyLightingBuffer_000;
+  float4 SSkyLightingBuffer_016;
+  float4 SSkyLightingBuffer_032;
+  float4 SSkyLightingBuffer_048;
+  float4 SSkyLightingBuffer_064;
+  float4 SSkyLightingBuffer_080;
+  float3 SSkyLightingBuffer_096[6];
+  float2 SSkyLightingBuffer_168;
+  float3 SSkyLightingBuffer_176[6];
+  float2 SSkyLightingBuffer_248;
+  float4 SSkyLightingBuffer_256[3];
+  float4 SSkyLightingBuffer_304[9];
+  float4 SSkyLightingBuffer_448[9];
+  float4 SSkyLightingBuffer_592[3];
+  float4 SSkyLightingBuffer_640[6];
+};
+
+StructuredBuffer<SSkyLightingBuffer> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
+
+Texture2D<float3> t2 : register(t2);
+
+Texture2D<float3> t3 : register(t3);
+
+Texture2D<float4> t4 : register(t4);
+
+Texture2D<float4> t5 : register(t5);
+
+Texture3D<float4> t6 : register(t6);
+
+Texture2D<float4> t7 : register(t7);
+
+cbuffer cb0 : register(b0) {
+  float4 Global_000 : packoffset(c000.x);
+  float4 Global_016 : packoffset(c001.x);
+  float4 Global_032 : packoffset(c002.x);
+  float4 Global_048[29] : packoffset(c003.x);
+  float4 Global_512[29] : packoffset(c032.x);
+  float4 Global_976 : packoffset(c061.x);
+  float4 Global_992 : packoffset(c062.x);
+  float4 Global_1008 : packoffset(c063.x);
+  float4 Global_1024[2] : packoffset(c064.x);
+  SGlobalDebugValues Global_1056 : packoffset(c066.x);
+  float3 Global_1072 : packoffset(c067.x);
+  float Global_1084 : packoffset(c067.w);
+  float3 Global_1088 : packoffset(c068.x);
+  float Global_1100 : packoffset(c068.w);
+  float3 Global_1104 : packoffset(c069.x);
+  float Global_1116 : packoffset(c069.w);
+  float3 Global_1120 : packoffset(c070.x);
+  float Global_1132 : packoffset(c070.w);
+  float3 Global_1136 : packoffset(c071.x);
+  float Global_1148 : packoffset(c071.w);
+  SGlobalScalars Global_1152 : packoffset(c072.x);
+  float Global_1164 : packoffset(c072.w);
+  float2 Global_1168 : packoffset(c073.x);
+  float Global_1176 : packoffset(c073.z);
+  float Global_1180 : packoffset(c073.w);
+  float2 Global_1184 : packoffset(c074.x);
+  float Global_1192 : packoffset(c074.z);
+  float Global_1196 : packoffset(c074.w);
+  float2 Global_1200 : packoffset(c075.x);
+  float Global_1208 : packoffset(c075.z);
+  float Global_1212 : packoffset(c075.w);
+  float2 Global_1216 : packoffset(c076.x);
+  float Global_1224 : packoffset(c076.z);
+  float2 Global_1232 : packoffset(c077.x);
+};
+
+cbuffer cb1 : register(b1) {
+  float cb1_092z : packoffset(c092.z);
+  float cb1_836y : packoffset(c836.y);
+  float cb1_836w : packoffset(c836.w);
+};
+
+cbuffer cb2 : register(b2) {
+  float cb2_005x : packoffset(c005.x);
+  float cb2_005y : packoffset(c005.y);
+  float cb2_005z : packoffset(c005.z);
+  float cb2_006w : packoffset(c006.w);
+  float cb2_007x : packoffset(c007.x);
+};
+
+cbuffer cb3 : register(b3) {
+  float4 HDRLighting_000 : packoffset(c000.x);
+  float4 HDRLighting_016 : packoffset(c001.x);
+  float4 HDRLighting_032 : packoffset(c002.x);
+  float4 HDRLighting_048 : packoffset(c003.x);
+  float4 HDRLighting_064 : packoffset(c004.x);
+  float4 HDRLighting_080 : packoffset(c005.x);
+  float4 HDRLighting_096 : packoffset(c006.x);
+  float3 HDRLighting_112 : packoffset(c007.x);
+  float HDRLighting_124 : packoffset(c007.w);
+  float3 HDRLighting_128 : packoffset(c008.x);
+  float HDRLighting_140 : packoffset(c008.w);
+  float3 HDRLighting_144 : packoffset(c009.x);
+  float HDRLighting_156 : packoffset(c009.w);
+  float3 HDRLighting_160 : packoffset(c010.x);
+  float HDRLighting_172 : packoffset(c010.w);
+  float3 HDRLighting_176 : packoffset(c011.x);
+  float HDRLighting_188 : packoffset(c011.w);
+  float HDRLighting_192 : packoffset(c012.x);
+  float HDRLighting_196 : packoffset(c012.y);
+  float HDRLighting_200 : packoffset(c012.z);
+  float HDRLighting_204 : packoffset(c012.w);
+  float HDRLighting_208 : packoffset(c013.x);
+  float HDRLighting_212 : packoffset(c013.y);
+  float HDRLighting_216 : packoffset(c013.z);
+  float HDRLighting_220 : packoffset(c013.w);
+  float HDRLighting_224 : packoffset(c014.x);
+  float HDRLighting_228 : packoffset(c014.y);
+};
+
+SamplerState s0 : register(s0);
+
+SamplerState s1 : register(s1);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+float4 main(
+    linear float2 TEXCOORD0_centroid: TEXCOORD0_centroid,
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
+  float4 SV_Target;
+  float4 _19;
+  float _40;
+  float _41;
+  float _29;
+  float _30;
+  float4 _33;
+  float _51;
+  float _52;
+  float _62;
+  float3 _74;
+  float _79;
+  float _80;
+  float _81;
+  float _90;
+  float _102;
+  float _106;
+  float _107;
+  float _108;
+  float _110;
+  float _117;
+  float4 _122;
+  float _141;
+  float _146;
+  float _172;
+  float _174;
+  float _176;
+  float4 _212;
+  float _223;
+  float _228;
+  float _237;
+  float _247;
+  float _248;
+  float _249;
+  float _250;
+  float4 _262;
+  _19 = t7.Sample(s1, float2(TEXCOORD0_centroid.x, TEXCOORD0_centroid.y));
+  if (_19.z > 0.0f) {
+    _29 = ((_19.x * 2.0f) + -1.0f) * _19.z;
+    _30 = ((_19.y * 2.0f) + -1.0f) * _19.z;
+    _33 = t7.Sample(s1, float2((_29 + TEXCOORD0_centroid.x), (_30 + TEXCOORD0_centroid.y)));
+    _40 = ((_33.w * _29) + TEXCOORD0_centroid.x);
+    _41 = ((_33.w * _30) + TEXCOORD0_centroid.y);
+  } else {
+    _40 = TEXCOORD0_centroid.x;
+    _41 = TEXCOORD0_centroid.y;
+  }
+  _51 = (_40 + -0.5f) * 2.0f;
+  _52 = _51 * _51;
+  _62 = saturate(_41);
+  _74 = t2.SampleLevel(s0, float2(_40, _41), 0.0f);
+  _79 = t0[0].SSkyLightingBuffer_000.x;
+  _80 = t0[0].SSkyLightingBuffer_000.y;
+  _81 = t0[0].SSkyLightingBuffer_000.z;
+  _90 = (_40 * 2.0f) + -1.0f;
+  _102 = (_41 * 2.0f) + -1.0f;
+  _106 = (HDRLighting_144.x - (HDRLighting_112.x * _90)) - (HDRLighting_128.x * _102);
+  _107 = (HDRLighting_144.y - (HDRLighting_112.y * _90)) - (HDRLighting_128.y * _102);
+  _108 = (HDRLighting_144.z - (HDRLighting_112.z * _90)) - (HDRLighting_128.z * _102);
+  _110 = rsqrt(dot(float3(_106, _107, _108), float3(_106, _107, _108)));
+  _117 = saturate((dot(float3((_106 * _110), (_107 * _110), (_108 * _110)), float3(_79, _80, _81)) + -0.699999988079071f) * 3.3333332538604736f);
+  _122 = t4.Sample(s0, float2(_40, _41));
+  _141 = saturate((dot(float3((_74.x / cb1_836w), (_74.y / cb1_836w), (_74.z / cb1_836w)), float3(0.2126390039920807f, 0.7151686549186707f, 0.07219231873750687f)) - (HDRLighting_048.z * 100.0f)) / (HDRLighting_048.z * 900.0f));
+  _146 = min(((_141 * _141) * (3.0f - (_141 * 2.0f))), ((_117 * _117) * (3.0f - (_117 * 2.0f))));
+  _172 = ((max(((((HDRLighting_048.x * _122.x) * _146) + 1.0f) * _74.x), 0.0f) + (((float3)(t3.SampleLevel(s0, float2(saturate(saturate(((((HDRLighting_124 * 8.0f) * _52) * cb1_092z) * cb1_836y) + _40)), _62), 0.0f))).x)) * 1.0f);
+  _174 = ((max(((((HDRLighting_048.x * _122.y) * _146) + 1.0f) * _74.y), 0.0f) + (((float3)(t3.SampleLevel(s0, float2(saturate(saturate(_40)), _62), 0.0f))).y)) * 1.0f);
+  _176 = ((max(((((HDRLighting_048.x * _122.z) * _146) + 1.0f) * _74.z), 0.0f) + (((float3)(t3.SampleLevel(s0, float2(saturate(saturate(((((HDRLighting_124 * -8.0f) * _52) * cb1_092z) * cb1_836y) + _40)), _62), 0.0f))).z)) * 1.0f);
+  _172 = EncodeARRILUT(_172, cb2_005x, cb2_005y, cb2_005z);
+  _174 = EncodeARRILUT(_174, cb2_005x, cb2_005y, cb2_005z);
+  _176 = EncodeARRILUT(_176, cb2_005x, cb2_005y, cb2_005z);
+  _212 = t6.SampleLevel(s1,
+                        float3(((cb2_007x * _172) + cb2_006w),
+                               ((cb2_007x * _174) + cb2_006w),
+                               ((cb2_007x * _176) + cb2_006w)),
+                        0.0f);
+  _223 = (TEXCOORD0_centroid.x * 2.0f) + -1.0f;
+  _228 = ((HDRLighting_064.w * ((TEXCOORD0_centroid.y * 2.0f) + -1.0f)) * HDRLighting_048.w) * cb1_836y;
+  _237 = log2(saturate(((sqrt((_228 * _228) + (_223 * _223)) - HDRLighting_064.x) / HDRLighting_064.y) + 0.5f));
+  _247 = 1.0f - ((HDRLighting_064.z * 0.25f) * ((exp2(_237 * 2.0f) * 3.0f) - (exp2(_237 * 3.0f) * 2.0f)));
+  _248 = _247 * _212.x;
+  _249 = _247 * _212.y;
+  _250 = _247 * _212.z;
+#if 1  // custom code
+  SV_Target.rgb = ApplyVanillaPQNoise(float3(_248, _249, _250), t1, SV_Position.xy, Global_1168.x, Global_1168.y);
+#else  // original code
+  _262 = t1.Load(int3(int(frac(Global_1168.y * SV_Position.x) * Global_1168.x), int(frac(Global_1168.y * SV_Position.y) * Global_1168.x), 0));
+  SV_Target.x = (((0.03125f - (saturate(_248) * 0.015625f)) * (_262.x + -0.5f)) + _248);
+  SV_Target.y = (((0.03125f - (saturate(_249) * 0.015625f)) * (_262.y + -0.5f)) + _249);
+  SV_Target.z = (((0.03125f - (saturate(_250) * 0.015625f)) * (_262.z + -0.5f)) + _250);
+#endif
+  SV_Target.w = (1.0f - (((float4)(t5.Load(int3(int(SV_Position.x), int(SV_Position.y), 0)))).w));
+  return SV_Target;
+}
