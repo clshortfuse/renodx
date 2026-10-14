@@ -5,7 +5,6 @@
 #include "./colorgrade.hlsl"
 #include "./lut.hlsl"
 #include "./tonemap/aces.hlsl"
-#include "./tonemap/agx.hlsl"
 #include "./tonemap/allenwp.hlsl"
 #include "./tonemap/c_infinity_rolloff.hlsl"
 #include "./tonemap/daniele.hlsl"
