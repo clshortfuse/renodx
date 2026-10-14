@@ -12,7 +12,9 @@
 
 #include <embed/shaders.h>
 
+#include <array>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "../../mods/shader.hpp"
@@ -44,6 +46,7 @@ bool copy_on_replace(reshade::api::command_list* cmd_list) {
 namespace {
 
 renodx::utils::settings::Setting* output_mode_setting = nullptr;
+renodx::utils::settings::Setting* output_encoding_setting = nullptr;
 float active_output_mode = 0.f;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -79,6 +82,19 @@ renodx::utils::settings::Settings settings = {
         .tint = 0xFF5F5F,
         .is_visible = []() { return output_mode_setting->GetValue() != active_output_mode; },
         .is_sticky = true,
+    },
+    output_encoding_setting = new renodx::utils::settings::Setting{
+        .key = "outputEncoding",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .can_reset = false,
+        .label = "HDR10 Output Encoding",
+        .section = "Tone Mapping",
+        .tooltip = "Switches the HDR10 presentation live, without recreating the swapchain.\n"
+                   "SDR encodes gamma 2.2 BT.709 and tone maps to SDR white; peak, game and UI brightness apply to HDR10 only.",
+        .labels = {"HDR10 (PQ)", "SDR (Gamma 2.2)"},
+        .parse = [](float value) { return value >= 0.5f ? 1.f : 0.f; },
+        .is_visible = []() { return active_output_mode >= 0.5f; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapType",
@@ -335,6 +351,13 @@ struct __declspec(uuid("B53B33CF-967D-4E93-AD0F-79BFF3E9E984")) PresentationData
   // Custom route: in-place gamma-to-scRGB pass per logical back buffer, run before ReShade effects/GUI.
   std::unordered_map<uint64_t, renodx::utils::draw::SwapchainProxyPass> composition_passes;
   uint32_t composition_reports = 0;
+  // Custom route: borrowed facade (the ReShade swapchain owns it for this data's lifetime),
+  // the encoding whose composition settings are live, and a setting value the facade
+  // rejected, which is not retried until the setting changes.
+  renodx::games::ffxiv::swapchain_facade::ForwardingSwapchain* facade = nullptr;
+  renodx::games::ffxiv::swapchain_facade::OutputEncoding frame_encoding =
+      renodx::games::ffxiv::swapchain_facade::OutputEncoding::HDR10_PQ;
+  float rejected_encoding_setting = -1.f;
   std::vector<reshade::api::resource_view> swapchain_rtvs;
   reshade::api::resource final_texture = {};
   reshade::api::resource_view final_texture_view = {};
@@ -432,11 +455,31 @@ renodx::utils::resource::ResourceUpgradeInfo composition_view_info = {
 void OnPresentDisabled(reshade::api::command_queue*, reshade::api::swapchain*, const reshade::api::rect*,
                        const reshade::api::rect*, uint32_t, const reshade::api::rect*) {}
 
+// SDR reuses the upstream tone mapper with peak, game and UI white at 80 nits, so
+// highlights roll off to SDR white at scRGB 1.0. HDR10 restores the user's values.
+// Re-applied every frame because the settings UI writes these bindings directly.
+void ApplyCompositionSettings(renodx::games::ffxiv::swapchain_facade::OutputEncoding encoding) {
+  const std::array<std::pair<const char*, float*>, 3> brightness = {{
+      {"toneMapPeakNits", &shader_injection.toneMapPeakNits},
+      {"toneMapGameNits", &shader_injection.toneMapGameNits},
+      {"toneMapUINits", &shader_injection.toneMapUINits},
+  }};
+  for (const auto& [key, binding] : brightness) {
+    if (encoding == renodx::games::ffxiv::swapchain_facade::OutputEncoding::SDR_GAMMA22) {
+      *binding = 80.f;
+    } else {
+      renodx::utils::settings::FindSetting(key)->Write();
+    }
+  }
+}
+
 // Converts the game's gamma-domain FP16 frame (with Dalamud composited) to linear
-// scRGB in place, so ReShade effects/GUI see scRGB. The facade encodes PQ at Present.
+// scRGB in place, so ReShade effects/GUI see scRGB. The facade encodes it at Present
+// with the encoding this frame was composed for.
 void OnPresentComposition(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
                           const reshade::api::rect*, const reshade::api::rect*, uint32_t, const reshade::api::rect*) {
   auto* data = swapchain->get_private_data<PresentationData>();
+  data->facade->SetFrameEncoding(data->frame_encoding);
   const auto buffer = swapchain->get_current_back_buffer();
   const auto pass = data->composition_passes.find(buffer.handle);
   const bool submitted = (pass != data->composition_passes.end() && pass->second.Render(swapchain, queue));
@@ -490,10 +533,16 @@ void OnInitPresentation(reshade::api::swapchain* swapchain, bool resize) {
                                                               .shader_injection_size = sizeof(shader_injection) / sizeof(uint32_t),
                                                           });
     }
+    // Composition resumes with the encoding the facade kept across resize.
+    data->facade = facade.Get();
+    data->frame_encoding = facade->AppliedEncoding();
+    ApplyCompositionSettings(data->frame_encoding);
     // Publish the custom route last, after every logical buffer is configured.
     data->present = &OnPresentComposition;
     renodx::utils::log::i("[FFXIV Presentation] INIT swapchain=", swapchain, " route=custom custom_ready=1",
-                          " facade=", facade.Get(), " passes=", data->composition_passes.size(), " resize=", resize);
+                          " facade=", facade.Get(), " passes=", data->composition_passes.size(),
+                          " encoding=", renodx::games::ffxiv::swapchain_facade::EncodingName(data->frame_encoding),
+                          " resize=", resize);
     return;
   }
 
@@ -533,6 +582,11 @@ void OnDestroyPresentation(reshade::api::swapchain* swapchain, bool resize) {
   auto* device = swapchain->get_device();
   auto* data = swapchain->get_private_data<PresentationData>();
   if (active_output_mode >= 0.5f) {
+    if (data->facade != nullptr) {
+      // Do not leak SDR composition values into a successor that takes another route;
+      // a custom-route successor reapplies its own encoding at init.
+      ApplyCompositionSettings(renodx::games::ffxiv::swapchain_facade::OutputEncoding::HDR10_PQ);
+    }
     for (auto& [buffer, pass] : data->composition_passes) {
       pass.Destroy(device);
     }
@@ -636,6 +690,42 @@ void OnPresentRouted(reshade::api::command_queue* queue, reshade::api::swapchain
   present(queue, swapchain, source_rect, dest_rect, dirty_rect_count, dirty_rects);
 }
 
+// Runs after ReShade's overlay (which may change settings) and before the facade
+// Present of this frame. Chooses the encoding the next frame is composed for; the
+// facade applies it at that frame's Present, keeping composition and encoding paired.
+void OnEncodingPresent(reshade::api::effect_runtime* runtime) {
+  namespace facade_api = renodx::games::ffxiv::swapchain_facade;
+  auto* data = runtime->get_private_data<PresentationData>();
+  if (data == nullptr || data->facade == nullptr) return;
+
+  const float setting_value = output_encoding_setting->GetValue();
+  if (data->facade->TakeSwitchFailure()) {
+    // Revert composition to the encoding the facade still presents; retry only after the setting changes.
+    data->frame_encoding = data->facade->AppliedEncoding();
+    data->rejected_encoding_setting = setting_value;
+    renodx::utils::log::i("[FFXIV Presentation] ENCODING_REVERT swapchain=", runtime,
+                          " to=", facade_api::EncodingName(data->frame_encoding), " reason=switch_failed");
+  }
+  if (setting_value != data->rejected_encoding_setting) {
+    data->rejected_encoding_setting = -1.f;
+    const auto requested = (setting_value >= 0.5f ? facade_api::OutputEncoding::SDR_GAMMA22
+                                                  : facade_api::OutputEncoding::HDR10_PQ);
+    if (requested != data->frame_encoding) {
+      if (data->facade->SupportsEncoding(requested)) {
+        renodx::utils::log::i("[FFXIV Presentation] ENCODING_REQUEST swapchain=", runtime,
+                              " from=", facade_api::EncodingName(data->frame_encoding),
+                              " to=", facade_api::EncodingName(requested));
+        data->frame_encoding = requested;
+      } else {
+        data->rejected_encoding_setting = setting_value;
+        renodx::utils::log::i("[FFXIV Presentation] ENCODING_REJECTED swapchain=", runtime,
+                              " to=", facade_api::EncodingName(requested), " reason=color_space_unsupported");
+      }
+    }
+  }
+  ApplyCompositionSettings(data->frame_encoding);
+}
+
 }  // namespace
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
@@ -663,6 +753,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (use_hdr10) {
         reshade::unregister_event<reshade::addon_event::present>(renodx::mods::swapchain::OnPresent);
         reshade::register_event<reshade::addon_event::present>(OnPresentRouted);
+        reshade::register_event<reshade::addon_event::reshade_present>(OnEncodingPresent);
         renodx::games::ffxiv::swapchain_facade::Use(fdw_reason);
       }
       renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
@@ -691,6 +782,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     }
     case DLL_PROCESS_DETACH:
       if (active_output_mode >= 0.5f) {
+        reshade::unregister_event<reshade::addon_event::reshade_present>(OnEncodingPresent);
         renodx::games::ffxiv::swapchain_facade::Use(fdw_reason);
       } else {
         reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);

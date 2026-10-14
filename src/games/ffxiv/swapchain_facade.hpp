@@ -61,6 +61,21 @@ inline void Log(Args&&... args) noexcept {
   }
 }
 
+// Late encoding of the logical scRGB buffer into the physical RGB10A2 buffer.
+enum class OutputEncoding : uint32_t {
+  HDR10_PQ,
+  SDR_GAMMA22,
+};
+
+inline DXGI_COLOR_SPACE_TYPE PhysicalColorSpace(OutputEncoding encoding) {
+  return (encoding == OutputEncoding::SDR_GAMMA22 ? DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+                                                  : DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+}
+
+inline const char* EncodingName(OutputEncoding encoding) {
+  return (encoding == OutputEncoding::SDR_GAMMA22 ? "sdr_g22" : "hdr10_pq");
+}
+
 // Reuse the complete DXGI forwarding implementation, replacing its non-owning
 // IUnknown behavior. Only insert for inners supporting all versions.
 class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain final : public DXGISwapChainWrapper {
@@ -111,9 +126,11 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
     if (FAILED(result)) return result;
     result = device_->CreateVertexShader(__final_vertex_shader.data(), __final_vertex_shader.size(), nullptr, &conversion_vs_);
     if (FAILED(result)) return result;
-    result = device_->CreatePixelShader(__present_pq.data(), __present_pq.size(), nullptr, &conversion_ps_);
+    result = device_->CreatePixelShader(__present_pq.data(), __present_pq.size(), nullptr, &conversion_pq_ps_);
     if (FAILED(result)) return result;
-    result = inner_->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+    result = device_->CreatePixelShader(__present_sdr.data(), __present_sdr.size(), nullptr, &conversion_sdr_ps_);
+    if (FAILED(result)) return result;
+    result = inner_->SetColorSpace1(PhysicalColorSpace(applied_encoding_.load()));
     if (FAILED(result)) return result;
     return buffers_result_ = CreateLogicalBuffers();
   }
@@ -121,6 +138,21 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
   bool IsCompositionReady() {
     std::shared_lock lock(buffers_mutex_);
     return SUCCEEDED(buffers_result_);
+  }
+
+  // Encoding the addon composed the current frame with; applied at the next Present.
+  void SetFrameEncoding(OutputEncoding encoding) { frame_encoding_ = encoding; }
+
+  // Encoding of the physical color space and late conversion; persists across resize.
+  OutputEncoding AppliedEncoding() const { return applied_encoding_.load(); }
+
+  // True once after Present failed to apply the frame encoding.
+  bool TakeSwitchFailure() { return switch_failed_.exchange(false); }
+
+  bool SupportsEncoding(OutputEncoding encoding) {
+    UINT support = 0;
+    return SUCCEEDED(inner_->CheckColorSpaceSupport(PhysicalColorSpace(encoding), &support))
+           && (support & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) != 0;
   }
 
   HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID id, UINT* size, void* data) override {
@@ -233,12 +265,12 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
     HRESULT result = DXGI_ERROR_INVALID_CALL;
   };
 
-  // Encodes the current logical scRGB buffer as BT.2020/PQ into the physical
-  // buffer: after ReShade effects/GUI, before the inner (OptiScaler/DXGI) Present.
+  // Encodes the current logical scRGB buffer into the physical buffer (BT.2020/PQ
+  // or gamma 2.2/BT.709): after ReShade effects/GUI, before the inner Present.
   HRESULT ConvertForPresent() {
     auto fail = [&](HRESULT result) {
       if (++conversion_failures_ <= 8) {
-        Log("PQ_FAILED facade=", this, " generation=", generation_.load(), " hr=", utils::log::AsHex(result));
+        Log("ENCODE_FAILED facade=", this, " generation=", generation_.load(), " hr=", utils::log::AsHex(result));
       }
       return result;
     };
@@ -261,10 +293,30 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
     if (FAILED(result)) return fail(result);
     result = device_->CreateRenderTargetView(physical.Get(), nullptr, &physical_rtv);
     if (FAILED(result)) return fail(result);
+    // Switch the physical color space together with the encoding. On failure keep
+    // encoding with the applied color space, so the two never disagree.
+    const auto frame_encoding = frame_encoding_.load();
+    const auto previous_encoding = applied_encoding_.load();
+    if (frame_encoding != previous_encoding) {
+      const auto switched = inner_->SetColorSpace1(PhysicalColorSpace(frame_encoding));
+      if (SUCCEEDED(switched)) {
+        applied_encoding_ = frame_encoding;
+        Log("ENCODING_SWITCH facade=", this, " from=", EncodingName(previous_encoding),
+            " to=", EncodingName(frame_encoding), " color_space=", static_cast<UINT>(PhysicalColorSpace(frame_encoding)));
+      } else {
+        switch_failed_ = true;
+        if (++switch_failures_ <= 8) {
+          Log("ENCODING_SWITCH_FAILED facade=", this, " from=", EncodingName(previous_encoding),
+              " to=", EncodingName(frame_encoding), " hr=", utils::log::AsHex(switched));
+        }
+      }
+    }
+    const auto encoding = applied_encoding_.load();
+    const auto& pixel_shader = (encoding == OutputEncoding::SDR_GAMMA22 ? conversion_sdr_ps_ : conversion_pq_ps_);
     conversion_context_->ClearState();
     conversion_context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     conversion_context_->VSSetShader(conversion_vs_.Get(), nullptr, 0);
-    conversion_context_->PSSetShader(conversion_ps_.Get(), nullptr, 0);
+    conversion_context_->PSSetShader(pixel_shader.Get(), nullptr, 0);
     conversion_context_->PSSetShaderResources(0, 1, logical_srv.GetAddressOf());
     conversion_context_->OMSetRenderTargets(1, physical_rtv.GetAddressOf(), nullptr);
     const D3D11_VIEWPORT viewport{
@@ -285,10 +337,11 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
     device_->GetImmediateContext(&immediate_context);
     // Restore all immediate-context state before the inner swapchain consumes the frame.
     immediate_context->ExecuteCommandList(commands.Get(), TRUE);
-    if (converted_generation_ != generation_.load()) {
+    if (converted_generation_ != generation_.load() || converted_encoding_ != encoding) {
       converted_generation_ = generation_.load();
-      Log("PQ_SUBMITTED facade=", this, " generation=", converted_generation_, " index=", index,
-          " logical=", buffers_[index].texture.Get(), " physical=", physical.Get(), " scRGB80_to_PQ=1");
+      converted_encoding_ = encoding;
+      Log("ENCODE_SUBMITTED facade=", this, " generation=", converted_generation_, " index=", index,
+          " logical=", buffers_[index].texture.Get(), " physical=", physical.Get(), " encoding=", EncodingName(encoding));
     }
     return S_OK;
   }
@@ -362,10 +415,11 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
       buffers_ = {};
       result = buffers_result_ = CreateLogicalBuffers();
       if (SUCCEEDED(result)) {
-        result = inner_->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+        result = inner_->SetColorSpace1(PhysicalColorSpace(applied_encoding_.load()));
       }
     }
     Log("RESIZE_END facade=", this, " generation=", generation_.load(), " ready=", SUCCEEDED(buffers_result_),
+        " encoding=", EncodingName(applied_encoding_.load()),
         " hr=", utils::log::AsHex(result));
     return result;
   }
@@ -395,9 +449,15 @@ class DECLSPEC_UUID("6E1F3A52-9C4B-4D7E-A2B8-3F05C7D19E64") ForwardingSwapchain 
   ComPtr<ID3D11Device> device_;
   ComPtr<ID3D11DeviceContext> conversion_context_;
   ComPtr<ID3D11VertexShader> conversion_vs_;
-  ComPtr<ID3D11PixelShader> conversion_ps_;
+  ComPtr<ID3D11PixelShader> conversion_pq_ps_;
+  ComPtr<ID3D11PixelShader> conversion_sdr_ps_;
   uint32_t converted_generation_ = UINT32_MAX;
   uint32_t conversion_failures_ = 0;
+  std::atomic<OutputEncoding> frame_encoding_ = OutputEncoding::HDR10_PQ;
+  std::atomic<OutputEncoding> applied_encoding_ = OutputEncoding::HDR10_PQ;
+  OutputEncoding converted_encoding_ = OutputEncoding::HDR10_PQ;
+  std::atomic_bool switch_failed_ = false;
+  uint32_t switch_failures_ = 0;
 };
 
 inline HRESULT STDMETHODCALLTYPE CreateSwapChainHook(IDXGIFactory* factory, IUnknown* device,
