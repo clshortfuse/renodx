@@ -136,7 +136,9 @@ void main(
   r1.x = r1.y * r1.x;
   r0.xyz = applyDither(r0.xyz, r1.x * (1.0 / 255.0));
   if (CUSTOM_COUNT_OLD == CUSTOM_COUNT_NEW) {
-    r0.xyz = PostToneMapScale(r0.xyz);
+    r0.xyz = PostToneMapScale(r0.xyz, true);
+  } else {
+    r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
   }
   o0.xyzw = r0.xyzw;
   return;
