@@ -87,9 +87,9 @@ uint firstbithigh_msb(uint value) {
 }
 
 float4 main(
-    linear float3 TEXCOORD: TEXCOORD,
-    linear float4 COLOR: COLOR,
-    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
+    linear float3 TEXCOORD : TEXCOORD,
+    linear float4 COLOR : COLOR,
+    precise noperspective float4 SV_Position : SV_Position) : SV_Target {
   float4 SV_Target;
   float4 _19;
   float _30;
@@ -306,11 +306,18 @@ float4 main(
     _186 = _150;
   }
   if (!(g_bApplyFilmGrain == 0)) {
+#if 1
+    float3 grain_color = ApplyFilmGrainDirect(float3(_184, _185, _186), g_tFilmGrain, float4(_144 * g_vScreenRes.x, _145 * g_vScreenRes.y, 0.0f, 0.0f), g_vFilmGrainOffset, g_fFilmGrainIntensity, 1.0f);
+    _228 = grain_color.x;
+    _229 = grain_color.y;
+    _230 = grain_color.z;
+#else
     _197 = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(_144 * g_vScreenRes.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(_145 * g_vScreenRes.y)))) % 512), 0));
     _217 = g_fFilmGrainIntensity * ((1.0f - sqrt(max(dot(float3(_184, _185, _186), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f)), 0.0f))) * 5.0f);
     _228 = (((_217 * ((_197.x * 2.0f) + -1.0f)) * saturate(_184)) + _184);
     _229 = (((_217 * ((_197.y * 2.0f) + -1.0f)) * saturate(_185)) + _185);
     _230 = (((_217 * ((_197.z * 2.0f) + -1.0f)) * saturate(_186)) + _186);
+#endif
   } else {
     _228 = _184;
     _229 = _185;
@@ -477,24 +484,24 @@ float4 main(
           _892 = saturate(exp2(log2((exp2(_862 * g_vTonemapCrosstalk.z) * (1.0f - _857)) + _857) * g_vTonemapCrosstalkSaturation.z) * _841);
           if (_233) {
             do {
-              [branch]
-              if (!(_890 <= 0.0031308000907301903f)) {
+              [branch] if (!(_890 <= 0.0031308000907301903f)) {
                 _904 = (((pow(_890, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-              } else {
+              }
+              else {
                 _904 = (_890 * 12.920000076293945f);
               }
               do {
-                [branch]
-                if (!(_891 <= 0.0031308000907301903f)) {
+                [branch] if (!(_891 <= 0.0031308000907301903f)) {
                   _915 = (((pow(_891, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-                } else {
+                }
+                else {
                   _915 = (_891 * 12.920000076293945f);
                 }
                 do {
-                  [branch]
-                  if (!(_892 <= 0.0031308000907301903f)) {
+                  [branch] if (!(_892 <= 0.0031308000907301903f)) {
                     _926 = (((pow(_892, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-                  } else {
+                  }
+                  else {
                     _926 = (_892 * 12.920000076293945f);
                   }
                   _933 = (saturate(_915) * 0.96875f) + 0.015625f;
@@ -508,24 +515,24 @@ float4 main(
                   _956 = ((_945.y - _941.y) * _937) + _941.y;
                   _957 = ((_945.z - _941.z) * _937) + _941.z;
                   do {
-                    [branch]
-                    if (!(_955 <= 0.040449999272823334f)) {
+                    [branch] if (!(_955 <= 0.040449999272823334f)) {
                       _968 = exp2(log2((_955 + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
-                    } else {
+                    }
+                    else {
                       _968 = (_955 * 0.07739938050508499f);
                     }
                     do {
-                      [branch]
-                      if (!(_956 <= 0.040449999272823334f)) {
+                      [branch] if (!(_956 <= 0.040449999272823334f)) {
                         _979 = exp2(log2((_956 + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
-                      } else {
+                      }
+                      else {
                         _979 = (_956 * 0.07739938050508499f);
                       }
                       do {
-                        [branch]
-                        if (!(_957 <= 0.040449999272823334f)) {
+                        [branch] if (!(_957 <= 0.040449999272823334f)) {
                           _990 = exp2(log2((_957 + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
-                        } else {
+                        }
+                        else {
                           _990 = (_957 * 0.07739938050508499f);
                         }
                         _993 = dot(float3(_968, _979, _990), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f));

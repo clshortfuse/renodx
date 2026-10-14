@@ -22,6 +22,9 @@ struct ShaderInjectData {
   float tone_map_flare;
 
   float tone_map_gamut_clip;
+
+  float custom_grain_type;
+  float custom_grain_strength;
 };
 
 #ifndef __cplusplus
@@ -33,8 +36,8 @@ cbuffer shader_injection : register(b0, space50) {
 #define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
 
-#define TONE_MAP_TYPE                      shader_injection.tone_map_type
-#define TONE_MAP_GAMUT_CLIP                shader_injection.tone_map_gamut_clip
+#define TONE_MAP_TYPE       shader_injection.tone_map_type
+#define TONE_MAP_GAMUT_CLIP shader_injection.tone_map_gamut_clip
 
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS  shader_injection.tone_map_contrast_highlights
@@ -45,6 +48,9 @@ cbuffer shader_injection : register(b0, space50) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+
+#define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
+#define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
 
 #include "../../shaders/renodx.hlsl"
 

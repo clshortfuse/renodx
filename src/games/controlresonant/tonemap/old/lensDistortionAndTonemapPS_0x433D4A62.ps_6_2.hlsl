@@ -105,7 +105,7 @@ uint firstbithigh_msb(uint value) {
 }
 
 float4 main(
-    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
+    precise noperspective float4 SV_Position : SV_Position) : SV_Target {
   float4 SV_Target;
   float _19;
   float _20;
@@ -544,24 +544,24 @@ float4 main(
                 _1045 = _931;
                 if (_269) {
                   do {
-                    [branch]
-                    if (!(_929 <= 0.0031308000907301903f)) {
+                    [branch] if (!(_929 <= 0.0031308000907301903f)) {
                       _944 = (((pow(_929, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-                    } else {
+                    }
+                    else {
                       _944 = (_929 * 12.920000076293945f);
                     }
                     do {
-                      [branch]
-                      if (!(_930 <= 0.0031308000907301903f)) {
+                      [branch] if (!(_930 <= 0.0031308000907301903f)) {
                         _955 = (((pow(_930, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-                      } else {
+                      }
+                      else {
                         _955 = (_930 * 12.920000076293945f);
                       }
                       do {
-                        [branch]
-                        if (!(_931 <= 0.0031308000907301903f)) {
+                        [branch] if (!(_931 <= 0.0031308000907301903f)) {
                           _966 = (((pow(_931, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
-                        } else {
+                        }
+                        else {
                           _966 = (_931 * 12.920000076293945f);
                         }
                         _973 = (saturate(_955) * 0.96875f) + 0.015625f;
@@ -575,24 +575,24 @@ float4 main(
                         _996 = ((_985.y - _981.y) * _977) + _981.y;
                         _997 = ((_985.z - _981.z) * _977) + _981.z;
                         do {
-                          [branch]
-                          if (!(_995 <= 0.040449999272823334f)) {
+                          [branch] if (!(_995 <= 0.040449999272823334f)) {
                             _1008 = exp2(log2((_995 + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
-                          } else {
+                          }
+                          else {
                             _1008 = (_995 * 0.07739938050508499f);
                           }
                           do {
-                            [branch]
-                            if (!(_996 <= 0.040449999272823334f)) {
+                            [branch] if (!(_996 <= 0.040449999272823334f)) {
                               _1019 = exp2(log2((_996 + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
-                            } else {
+                            }
+                            else {
                               _1019 = (_996 * 0.07739938050508499f);
                             }
                             do {
-                              [branch]
-                              if (!(_997 <= 0.040449999272823334f)) {
+                              [branch] if (!(_997 <= 0.040449999272823334f)) {
                                 _1030 = exp2(log2((_997 + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
-                              } else {
+                              }
+                              else {
                                 _1030 = (_997 * 0.07739938050508499f);
                               }
                               _1032 = dot(float3(_1008, _1019, _1030), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f));
@@ -628,6 +628,17 @@ float4 main(
     _1063 = (_428 * _278);
   }
   if (!(g_bApplyFilmGrain == 0)) {
+#if 1
+    float3 grain_color;
+    if (!(_267)) {
+      grain_color = ApplyFilmGrainDirect(float3(_1061, _1062, _1063), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _278);
+    } else {
+      grain_color = ApplyFilmGrainReinhardDelta(float3(_1061, _1062, _1063), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _278);
+    }
+    _1161 = grain_color.x;
+    _1162 = grain_color.y;
+    _1163 = grain_color.z;
+#else
     _1075 = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(SV_Position.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(SV_Position.y)))) % 512), 0));
     _1082 = (_1075.x * 2.0f) + -1.0f;
     _1083 = (_1075.y * 2.0f) + -1.0f;
@@ -659,6 +670,7 @@ float4 main(
       _1162 = (((_1138 * _1143) + _1062) - (_1150 * _1121));
       _1163 = (((_1139 * _1143) + _1063) - (_1150 * _1122));
     }
+#endif
   } else {
     _1161 = _1061;
     _1162 = _1062;

@@ -1,4 +1,5 @@
 #include "../common.hlsli"
+#include "../film_grain.hlsli"
 #include "remedy_agx.hlsli"
 
 float ConditionalOverrideGameBrightness(float original_paper_white, int hdr_enabled) {
