@@ -1,3 +1,4 @@
+#include "../film_grain.hlsli"
 #include "./UI.hlsli"
 
 Texture2D<float4> g_tFilmGrain : register(t0);
@@ -74,10 +75,9 @@ uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - fir
 uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
 
 float4 main(
-  linear float3 TEXCOORD : TEXCOORD,
-  linear float4 COLOR : COLOR,
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    linear float3 TEXCOORD : TEXCOORD,
+    linear float4 COLOR : COLOR,
+    precise noperspective float4 SV_Position : SV_Position) : SV_Target {
   float4 SV_Target;
   float4 _14;
   float _19;
@@ -107,11 +107,18 @@ float4 main(
   _65 = g_vShapeEngineColorAdd.y + mad((g_mShapeEngineColorTransform[3].y), _22, mad((g_mShapeEngineColorTransform[2].y), _21, mad((g_mShapeEngineColorTransform[1].y), _20, ((g_mShapeEngineColorTransform[0].y) * _19))));
   _66 = g_vShapeEngineColorAdd.z + mad((g_mShapeEngineColorTransform[3].z), _22, mad((g_mShapeEngineColorTransform[2].z), _21, mad((g_mShapeEngineColorTransform[1].z), _20, ((g_mShapeEngineColorTransform[0].z) * _19))));
   if (!(g_bApplyFilmGrain == 0)) {
+#if 1
+    float3 grain_color = ApplyFilmGrainDirect(float3(_64, _65, _66), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, 1.0f);
+    _114 = grain_color.x;
+    _115 = grain_color.y;
+    _116 = grain_color.z;
+#else
     _83 = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(SV_Position.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(SV_Position.y)))) % 512), 0));
     _103 = g_fFilmGrainIntensity * ((1.0f - sqrt(max(dot(float3(_64, _65, _66), float3(0.2126729041337967f, 0.7151520848274231f, 0.07217500358819962f)), 0.0f))) * 5.0f);
     _114 = (((_103 * ((_83.x * 2.0f) + -1.0f)) * saturate(_64)) + _64);
     _115 = (((_103 * ((_83.y * 2.0f) + -1.0f)) * saturate(_65)) + _65);
     _116 = (((_103 * ((_83.z * 2.0f) + -1.0f)) * saturate(_66)) + _66);
+#endif
   } else {
     _114 = _64;
     _115 = _65;
