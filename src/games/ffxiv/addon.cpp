@@ -12,10 +12,18 @@
 
 #include <embed/shaders.h>
 
+#include <unordered_map>
+#include <vector>
+
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/draw.hpp"
+#include "../../utils/log.hpp"
+#include "../../utils/resource.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
+#include "./swapchain_facade.hpp"
 
 ShaderInjectData shader_injection;
 
@@ -311,15 +319,26 @@ void OnPresetOff() {
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Final Fantasy XIV Online";
 
-struct __declspec(uuid("1228220F-364A-46A2-BB29-1CCE591A018A")) DeviceData {
+namespace {
+
+struct __declspec(uuid("24BD7DC3-34CC-4493-9018-9A28D9D2CBE3")) DeviceData {
   reshade::api::effect_runtime* main_runtime = nullptr;
   std::atomic_bool rendered_effects = false;
-  std::vector<reshade::api::resource_view> swapchain_rtvs;
   reshade::api::pipeline final_pipeline = {};
+  reshade::api::pipeline_layout final_layout = {};
+};
+
+struct __declspec(uuid("B53B33CF-967D-4E93-AD0F-79BFF3E9E984")) PresentationData {
+  // Publish a custom callback only after all preparation succeeds, before exposing custom buffers.
+  decltype(&renodx::mods::swapchain::OnPresent) present = nullptr;
+  bool logged_present = false;
+  // Custom route: in-place gamma-to-scRGB pass per logical back buffer, run before ReShade effects/GUI.
+  std::unordered_map<uint64_t, renodx::utils::draw::SwapchainProxyPass> composition_passes;
+  uint32_t composition_reports = 0;
+  std::vector<reshade::api::resource_view> swapchain_rtvs;
   reshade::api::resource final_texture = {};
   reshade::api::resource_view final_texture_view = {};
   reshade::api::sampler final_texture_sampler = {};
-  reshade::api::pipeline_layout final_layout = {};
 };
 
 constexpr reshade::api::pipeline_layout PIPELINE_LAYOUT{0};
@@ -400,9 +419,85 @@ void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  auto device = swapchain->get_device();
-  auto* data = device->get_private_data<DeviceData>();
+// FP16 view upgrade/snapshot target for logical back buffers, independent of upstream
+// device data. Resource infos keep this pointer; the facade hook pins the module.
+renodx::utils::resource::ResourceUpgradeInfo composition_view_info = {
+    .new_format = reshade::api::format::r16g16b16a16_float,
+    .usage_set = static_cast<uint32_t>(reshade::api::resource_usage::shader_resource | reshade::api::resource_usage::render_target),
+    .use_resource_view_cloning_and_upgrade = true,
+};
+
+// A facade whose composition is not ready presents nothing from the addon: upstream
+// encoding would be PQ-encoded again by the facade.
+void OnPresentDisabled(reshade::api::command_queue*, reshade::api::swapchain*, const reshade::api::rect*,
+                       const reshade::api::rect*, uint32_t, const reshade::api::rect*) {}
+
+// Converts the game's gamma-domain FP16 frame (with Dalamud composited) to linear
+// scRGB in place, so ReShade effects/GUI see scRGB. The facade encodes PQ at Present.
+void OnPresentComposition(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
+                          const reshade::api::rect*, const reshade::api::rect*, uint32_t, const reshade::api::rect*) {
+  auto* data = swapchain->get_private_data<PresentationData>();
+  const auto buffer = swapchain->get_current_back_buffer();
+  const auto pass = data->composition_passes.find(buffer.handle);
+  const bool submitted = (pass != data->composition_passes.end() && pass->second.Render(swapchain, queue));
+  if (++data->composition_reports <= 4 || (!submitted && data->composition_reports <= 16)) {
+    renodx::utils::log::i("[FFXIV Presentation] COMPOSE swapchain=", swapchain,
+                          " buffer=", reinterpret_cast<void*>(buffer.handle), " pass=", pass != data->composition_passes.end(),
+                          " submitted=", submitted, " gamma_to_scRGB=1 before_effects=1");
+  }
+}
+
+void OnInitPresentation(reshade::api::swapchain* swapchain, bool resize) {
+  auto* data = swapchain->create_private_data<PresentationData>();
+  auto* device = swapchain->get_device();
+  if (active_output_mode >= 0.5f) {
+    // The route follows the facade, never upstream data: upstream presentation on a
+    // facade would be PQ-encoded twice, so an unready facade gets no presentation pass.
+    const auto facade = renodx::games::ffxiv::swapchain_facade::Find(swapchain);
+    if (facade == nullptr) {
+      data->present = &renodx::mods::swapchain::OnPresent;
+      renodx::utils::log::i("[FFXIV Presentation] INIT swapchain=", swapchain, " route=upstream_hdr10 custom_ready=0 facade=0 resize=", resize);
+      return;
+    }
+    if (!facade->IsCompositionReady()) {
+      data->present = &OnPresentDisabled;
+      renodx::utils::log::i("[FFXIV Presentation] INIT swapchain=", swapchain, " route=none custom_ready=0",
+                            " facade=", facade.Get(), " facade_ready=0 resize=", resize);
+      return;
+    }
+
+    for (uint32_t index = 0; index < swapchain->get_back_buffer_count(); ++index) {
+      const auto buffer = swapchain->get_back_buffer(index);
+      std::vector<uint64_t> views;
+      renodx::utils::resource::UpdateResourceInfo(buffer, [&](renodx::utils::resource::ResourceInfo* info) {
+        // Application bindings stay on the logical buffer (FP16 views, no clone redirect);
+        // the clone is only the present-time snapshot read by the composition pass.
+        info->clone_target = &composition_view_info;
+        info->clone_enabled = false;
+        info->clone_can_deactivate = false;
+        info->upgrade_target = &composition_view_info;
+        views.assign(info->resource_view_handles.begin(), info->resource_view_handles.end());
+      });
+      renodx::utils::resource::upgrade::UpdateResourceViewsCloneState(views, false, false, &composition_view_info);
+      data->composition_passes.try_emplace(buffer.handle, renodx::utils::draw::SwapchainProxyPass{
+                                                              .vertex_shader = __final_vertex_shader,
+                                                              .pixel_shader = __final_scrgb_pixel_shader,
+                                                              .expected_constant_buffer_index = renodx::mods::swapchain::expected_constant_buffer_index,
+                                                              .revert_state = renodx::mods::swapchain::swapchain_proxy_revert_state,
+                                                              .use_compatibility_mode = true,
+                                                              .proxy_format = reshade::api::format::r16g16b16a16_float,
+                                                              .shader_injection = reinterpret_cast<const float*>(&shader_injection),
+                                                              .shader_injection_size = sizeof(shader_injection) / sizeof(uint32_t),
+                                                          });
+    }
+    // Publish the custom route last, after every logical buffer is configured.
+    data->present = &OnPresentComposition;
+    renodx::utils::log::i("[FFXIV Presentation] INIT swapchain=", swapchain, " route=custom custom_ready=1",
+                          " facade=", facade.Get(), " passes=", data->composition_passes.size(), " resize=", resize);
+    return;
+  }
+
+  renodx::utils::log::i("[FFXIV Presentation] INIT swapchain=", swapchain, " route=upstream_scrgb custom_ready=0 resize=", resize);
 
   for (int i = 0; i < swapchain->get_back_buffer_count(); ++i) {
     auto back_buffer_resource = swapchain->get_back_buffer(i);
@@ -434,9 +529,20 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  auto device = swapchain->get_device();
-  auto* data = device->get_private_data<DeviceData>();
+void OnDestroyPresentation(reshade::api::swapchain* swapchain, bool resize) {
+  auto* device = swapchain->get_device();
+  auto* data = swapchain->get_private_data<PresentationData>();
+  if (active_output_mode >= 0.5f) {
+    for (auto& [buffer, pass] : data->composition_passes) {
+      pass.Destroy(device);
+    }
+    if (!data->composition_passes.empty()) {
+      renodx::utils::log::i("[FFXIV Presentation] DESTROY swapchain=", swapchain,
+                            " passes=", data->composition_passes.size(), " resize=", resize);
+    }
+    swapchain->destroy_private_data<PresentationData>();
+    return;
+  }
 
   for (const auto& rtv : data->swapchain_rtvs) {
     device->destroy_resource_view(rtv);
@@ -447,6 +553,7 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   device->destroy_sampler(data->final_texture_sampler);
   device->destroy_resource_view(data->final_texture_view);
   device->destroy_resource(data->final_texture);
+  swapchain->destroy_private_data<PresentationData>();
 }
 
 // more or less the same as what reshade does to render its techniques
@@ -454,7 +561,8 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   auto device = queue->get_device();
   auto cmd_list = queue->get_immediate_command_list();
 
-  auto* data = device->get_private_data<DeviceData>();
+  auto* device_data = device->get_private_data<DeviceData>();
+  auto* data = swapchain->get_private_data<PresentationData>();
 
   auto back_buffer_resource = swapchain->get_current_back_buffer();
   auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
@@ -470,7 +578,7 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
     cmd_list->barrier(2, resources, state_new, state_old);
   }
 
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data->final_pipeline);
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, device_data->final_pipeline);
 
   cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::render_target);
 
@@ -482,7 +590,7 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   cmd_list->push_descriptors(reshade::api::shader_stage::all_graphics, PIPELINE_LAYOUT, 0, reshade::api::descriptor_table_update{{}, 0, 0, 1, reshade::api::descriptor_type::sampler, &data->final_texture_sampler});
 
   // push the renodx settings
-  cmd_list->push_constants(reshade::api::shader_stage::all_graphics, data->final_layout, 0, 0, sizeof(shader_injection) / 4, &shader_injection);
+  cmd_list->push_constants(reshade::api::shader_stage::all_graphics, device_data->final_layout, 0, 0, sizeof(shader_injection) / 4, &shader_injection);
 
   const reshade::api::viewport viewport = {
       0.0f, 0.0f,
@@ -501,6 +609,34 @@ void OnPresentStateReset(reshade::api::command_queue*, reshade::api::swapchain*,
   track_next_copy = false;
   shader_injection.copyTracker = 0;
 }
+
+void OnPresentRouted(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
+                     const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect,
+                     uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  auto* data = swapchain->get_private_data<PresentationData>();
+  auto present = (active_output_mode >= 0.5f ? &renodx::mods::swapchain::OnPresent : &OnPresent);
+  if (data != nullptr && data->present != nullptr) {
+    present = data->present;
+  } else if (active_output_mode >= 0.5f && renodx::games::ffxiv::swapchain_facade::Find(swapchain) != nullptr) {
+    // No published route for a facade: never fall back to upstream encoding.
+    present = &OnPresentDisabled;
+  }
+  if (data != nullptr && !data->logged_present) {
+    data->logged_present = true;
+    const char* route = "custom";
+    if (present == &renodx::mods::swapchain::OnPresent) {
+      route = "upstream_hdr10";
+    } else if (present == &OnPresent) {
+      route = "upstream_scrgb";
+    } else if (present == &OnPresentDisabled) {
+      route = "none";
+    }
+    renodx::utils::log::i("[FFXIV Presentation] PRESENT swapchain=", swapchain, " route=", route);
+  }
+  present(queue, swapchain, source_rect, dest_rect, dirty_rect_count, dirty_rects);
+}
+
+}  // namespace
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -524,6 +660,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __final_pixel_shader;
       }
       renodx::mods::swapchain::Use(fdw_reason, use_hdr10 ? &shader_injection : nullptr);
+      if (use_hdr10) {
+        reshade::unregister_event<reshade::addon_event::present>(renodx::mods::swapchain::OnPresent);
+        reshade::register_event<reshade::addon_event::present>(OnPresentRouted);
+        renodx::games::ffxiv::swapchain_facade::Use(fdw_reason);
+      }
       renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -540,22 +681,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!use_hdr10) {
         reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
         reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-        reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-        reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-        reshade::register_event<reshade::addon_event::present>(OnPresent);
+        reshade::register_event<reshade::addon_event::present>(OnPresentRouted);
       }
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitPresentation);
+      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroyPresentation);
       reshade::register_event<reshade::addon_event::present>(OnPresentStateReset);
 
       break;
     }
     case DLL_PROCESS_DETACH:
-      if (active_output_mode < 0.5f) {
+      if (active_output_mode >= 0.5f) {
+        renodx::games::ffxiv::swapchain_facade::Use(fdw_reason);
+      } else {
         reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
         reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-        reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-        reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-        reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       }
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitPresentation);
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroyPresentation);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresentRouted);
       reshade::unregister_event<reshade::addon_event::present>(OnPresentStateReset);
 
       reshade::unregister_addon(h_module);
