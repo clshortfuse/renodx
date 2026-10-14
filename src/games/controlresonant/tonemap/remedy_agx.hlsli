@@ -12,9 +12,76 @@ static const float REMEDY_AGX_LOG_PIVOT =
     REMEDY_AGX_SHADOW_STOPS / (REMEDY_AGX_SHADOW_STOPS + REMEDY_AGX_HIGHLIGHT_STOPS);
 static const float REMEDY_AGX_OUTPUT_GAMMA = 2.4f;
 
+// Game-local representation of Remedy's supplied curve constants and matrices.
+struct RemedyAgXToneScaleParameters {
+  float min_ev;
+  float max_ev;
+  float input_mid_gray;
+  float output_pivot;
+  float toe_power;
+  float shoulder_power;
+  float slope;
+  float output_power;
+};
+
+struct RemedyAgXToneScale {
+  RemedyAgXToneScaleParameters parameters;
+  float inverse_ev_range;
+  float minimum_linear;
+  float input_pivot;
+  float toe_scale;
+  float shoulder_scale;
+  float inverse_toe_power;
+  float inverse_shoulder_power;
+};
+
+struct RemedyAgXGamutTransforms {
+  float3x3 inset;
+  float3x3 outset;
+};
+
+RemedyAgXToneScale BuildRemedyAgXToneScale(RemedyAgXToneScaleParameters parameters, float toe_scale, float shoulder_scale) {
+  RemedyAgXToneScale tone_scale;
+  tone_scale.parameters = parameters;
+  const float ev_range = parameters.max_ev - parameters.min_ev;
+  tone_scale.inverse_ev_range = 1.f / ev_range;
+  tone_scale.minimum_linear = parameters.input_mid_gray * exp2(parameters.min_ev);
+  tone_scale.input_pivot = -parameters.min_ev * tone_scale.inverse_ev_range;
+  tone_scale.toe_scale = toe_scale;
+  tone_scale.shoulder_scale = shoulder_scale;
+  tone_scale.inverse_toe_power = 1.f / parameters.toe_power;
+  tone_scale.inverse_shoulder_power = 1.f / parameters.shoulder_power;
+  return tone_scale;
+}
+
+float DecodeRemedyAgXLog2(float value, RemedyAgXToneScale tone_scale) {
+  const float ev_range = tone_scale.parameters.max_ev - tone_scale.parameters.min_ev;
+  const float ev = value * ev_range + tone_scale.parameters.min_ev;
+  return tone_scale.parameters.input_mid_gray * exp2(ev);
+}
+
+#define REMEDY_AGX_SIGMOID_GENERATOR(T, B)                                                                                       \
+  T ApplyRemedyAgXToneScaleSigmoid(T value, RemedyAgXToneScale tone_scale) {                                                     \
+    const RemedyAgXToneScaleParameters parameters = tone_scale.parameters;                                                       \
+    const B use_shoulder = value >= tone_scale.input_pivot;                                                                      \
+    const T distance = abs(value - tone_scale.input_pivot);                                                                      \
+    const T power = renodx::math::Select(use_shoulder, parameters.shoulder_power, parameters.toe_power);                         \
+    const T scale = renodx::math::Select(use_shoulder, tone_scale.shoulder_scale, tone_scale.toe_scale);                         \
+    const T inverse_power = renodx::math::Select(use_shoulder, tone_scale.inverse_shoulder_power, tone_scale.inverse_toe_power); \
+    const T mapped = parameters.slope * distance / scale;                                                                        \
+    const T powered = renodx::math::SignPow(mapped, power);                                                                      \
+    const T response = renodx::math::SignPow(1.f + powered, inverse_power);                                                      \
+    const T shaped = scale * mapped / response;                                                                                  \
+    return parameters.output_pivot + renodx::math::Select(use_shoulder, shaped, -shaped);                                        \
+  }
+
+REMEDY_AGX_SIGMOID_GENERATOR(float, bool)
+REMEDY_AGX_SIGMOID_GENERATOR(float3, bool3)
+#undef REMEDY_AGX_SIGMOID_GENERATOR
+
 struct RemedyAgXParameters {
-  renodx::tonemap::agx::ToneScale tone_scale;
-  renodx::tonemap::agx::GamutTransforms gamut;
+  RemedyAgXToneScale tone_scale;
+  RemedyAgXGamutTransforms gamut;
 
   // Remedy's separate HDR expansion.
   float hdr_ratio;
@@ -52,7 +119,7 @@ RemedyAgXParameters CreateRemedyAgXParameters(
 
   const float mid_gray_log2 = log2(REMEDY_AGX_MID_GRAY);
 
-  renodx::tonemap::agx::ToneScaleParameters tone_scale_parameters;
+  RemedyAgXToneScaleParameters tone_scale_parameters;
   tone_scale_parameters.min_ev = min_log2_linear - mid_gray_log2;
   tone_scale_parameters.max_ev = max_log2_linear - mid_gray_log2;
   tone_scale_parameters.input_mid_gray = REMEDY_AGX_MID_GRAY;
@@ -63,7 +130,7 @@ RemedyAgXParameters CreateRemedyAgXParameters(
   tone_scale_parameters.output_power = REMEDY_AGX_OUTPUT_GAMMA;
 
   params.tone_scale =
-      renodx::tonemap::agx::BuildToneScale(tone_scale_parameters, toe_scale, shoulder_scale);
+      BuildRemedyAgXToneScale(tone_scale_parameters, toe_scale, shoulder_scale);
 
   // Remedy fixes the sigmoid pivot to EV 0's normalized position in a
   // -10/+6.5-stop range, independently of the supplied log bounds.
@@ -81,7 +148,7 @@ RemedyAgXParameters CreateRemedyAgXParameters(
   // Linear-light input value at Remedy's fixed normalized-log pivot.
   // This evaluates to 18% for the game's standard log bounds.
   params.input_pivot_linear =
-      renodx::tonemap::agx::DecodeLog2(params.tone_scale.input_pivot, params.tone_scale);
+      DecodeRemedyAgXLog2(params.tone_scale.input_pivot, params.tone_scale);
 
   params.output_pivot_linear = REMEDY_AGX_MID_GRAY;
 
@@ -118,9 +185,11 @@ static const float3x3 REMEDY_BT2020_TO_BT709 = float3x3(
     -0.01815368f, -0.100597374f, 1.118751f);
 
 float3 ApplyVanillaSDRAgX(float3 color, RemedyAgXParameters params) {
-  color = renodx::tonemap::agx::ApplyInset(color, params.gamut);
-  color = renodx::tonemap::agx::EncodeLog2(color, params.tone_scale);
-  color = renodx::tonemap::agx::ApplySigmoid(color, params.tone_scale);
+  color = mul(params.gamut.inset, max(color, 0.f));
+  color = max(color, params.tone_scale.minimum_linear);
+  const float3 ev = log2(color / params.tone_scale.parameters.input_mid_gray);
+  color = saturate((ev - params.tone_scale.parameters.min_ev) * params.tone_scale.inverse_ev_range);
+  color = ApplyRemedyAgXToneScaleSigmoid(color, params.tone_scale);
 
   // Preserve Remedy's original ordering:
   // outset in the sigmoid-output domain, then linearize.

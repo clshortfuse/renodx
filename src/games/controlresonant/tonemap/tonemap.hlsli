@@ -190,7 +190,7 @@ float3 ApplyVanillaToneMap(float3 untonemapped, RemedyAgXParameters params) {
 static const float REMEDY_AGX_WHITE_CLIP = 72.f;  // untonemapped typically doesn't get brighter than this
 
 struct RemedyAgXCurveParameters {
-  renodx::tonemap::agx::ToneScale tone_scale;
+  RemedyAgXToneScale tone_scale;
   float input_pivot_linear;
   float output_pivot_linear;
   float linear_tangent_slope;
@@ -223,7 +223,7 @@ RemedyAgXCurveParameters CreateRemedyAgXCurveParameters(
 
   const float mid_gray_log2 = log2(REMEDY_AGX_MID_GRAY);
 
-  renodx::tonemap::agx::ToneScaleParameters tone_scale_parameters;
+  RemedyAgXToneScaleParameters tone_scale_parameters;
   tone_scale_parameters.min_ev = min_log2_linear - mid_gray_log2;
   tone_scale_parameters.max_ev = max_log2_linear - mid_gray_log2;
   tone_scale_parameters.input_mid_gray = REMEDY_AGX_MID_GRAY;
@@ -233,10 +233,10 @@ RemedyAgXCurveParameters CreateRemedyAgXCurveParameters(
   tone_scale_parameters.slope = contrast_slope;
   tone_scale_parameters.output_power = REMEDY_AGX_OUTPUT_GAMMA;
 
-  curve.tone_scale = renodx::tonemap::agx::BuildToneScale(tone_scale_parameters, toe_scale, shoulder_scale);
+  curve.tone_scale = BuildRemedyAgXToneScale(tone_scale_parameters, toe_scale, shoulder_scale);
   curve.tone_scale.input_pivot = REMEDY_AGX_LOG_PIVOT;
 
-  curve.input_pivot_linear = renodx::tonemap::agx::DecodeLog2(curve.tone_scale.input_pivot, curve.tone_scale);
+  curve.input_pivot_linear = DecodeRemedyAgXLog2(curve.tone_scale.input_pivot, curve.tone_scale);
   curve.output_pivot_linear = REMEDY_AGX_MID_GRAY;
   curve.linear_tangent_slope =
       tone_scale_parameters.output_power * pow(tone_scale_parameters.output_pivot, tone_scale_parameters.output_power - 1.f)
@@ -254,7 +254,7 @@ RemedyAgXCurveParameters CreateRemedyAgXCurveParameters(
     const T ev = log2(safe_color / params.tone_scale.parameters.input_mid_gray);                                   \
     const T log_color = max((ev - params.tone_scale.parameters.min_ev) * params.tone_scale.inverse_ev_range, 0.f); \
                                                                                                                    \
-    sdr_gamma = renodx::tonemap::agx::ApplySigmoid(log_color, params.tone_scale);                                  \
+    sdr_gamma = ApplyRemedyAgXToneScaleSigmoid(log_color, params.tone_scale);                                      \
     sdr_linear = pow(max(sdr_gamma, 0.f), output_power);                                                           \
                                                                                                                    \
     extended_linear = select(                                                                                      \
