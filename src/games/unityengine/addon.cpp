@@ -2653,7 +2653,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Neutwo"},
+        .labels = {"Vanilla", "None", "Vanilla+ (extended curve + Neutwo), PsychoV (30)"},
         .tint = 0x38F6FC,
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
@@ -2743,7 +2743,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x38F6FC,
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 2.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -2756,7 +2756,7 @@ renodx::utils::settings::Settings settings = {
         .tint = 0x38F6FC,
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 2.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -2847,6 +2847,18 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x452F7A,
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 2.f; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "psychovConeResponse",
+        .binding = &shader_injection.psychovConeResponse,
+        .default_value = 50.f,
+        .label = "Cone Response",
+        .section = "Color Grading",
+        .tint = 0x452F7A,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 3.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -2857,6 +2869,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x452F7A,
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -2867,6 +2880,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x452F7A,
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType == 2.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -2878,7 +2892,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = 0x452F7A,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 2.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .parse = [](float value) { return value; },
     },
     new renodx::utils::settings::Setting{
@@ -4419,6 +4433,11 @@ void OnPresent(
         shader_injection.count2New = 0.f;
         unityTonemapper = InternalLutCheck == 4.f || sneakyBuilder ? unityTonemapper : 0;
         shader_injection.isTonemapped = isTonemapped || isTonemappedCheck == 1.f ? 1.f : 0.f;
+            if(isTonemapped){
+            settings[1]->labels = {"Vanilla", "None", "Vanilla+ (extended curve + Neutwo)"};
+        } else {
+            settings[1]->labels = {"Vanilla", "None", "Vanilla+ (extended curve + Neutwo)", "PsychoV (30)"};
+        }
         isTonemapped = InternalLutCheck == 4.f || sneakyBuilder ? shader_injection.isTonemapped == 1.f : false;
         lutSampler = 0;
         lutBuilder = 0;

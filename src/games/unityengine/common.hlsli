@@ -41,6 +41,33 @@ float3 GradeAndDisplayMap(float3 color) {
     }
     color = HDRBoost(color, CUSTOM_HDR_BOO0ST);
   }
+  if(CUSTOM_IS_TONEMAPPED == 0.f){
+    if(RENODX_TONE_MAP_TYPE == 3.f){
+      float psychov_peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+      if(RENODX_GAMMA_CORRECTION != 0.f){
+        psychov_peak = renodx::color::gamma::Encode(psychov_peak, RENODX_GAMMA_CORRECTION == 1.f ? 2.2f : 2.4f);
+        psychov_peak = renodx::color::srgb::Decode(psychov_peak);
+      }
+      return renodx::tonemap::psychov::psychotm_test30(color,
+      psychov_peak,
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      RENODX_TONE_MAP_SATURATION,
+      RENODX_TONE_MAP_BLOWOUT,
+      RENODX_RENO_DRT_WHITE_CLIP,
+      1.f,
+      1.f,
+      1,
+      PSYCHOV_CONE_RESPONSE,
+      0.18f,
+      0.18f,
+      1.f,
+      1,
+      1.f);
+    } else {}
+  }
   return renodx::tonemap::config::Apply(color, config);
 }
 

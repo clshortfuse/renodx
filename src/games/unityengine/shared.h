@@ -68,7 +68,7 @@ struct ShaderInjectData {
   float rolloffUI;
   float processing_use_scrgb;
   float isTonemapped;
-  float padding04;
+  float psychovConeResponse;
 };
 
 #ifndef __cplusplus
@@ -137,6 +137,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_ROLLOFF_UI                             shader_injection.rolloffUI
 #define CUSTOM_SWAPCHAIN_USE_SCRGB                    shader_injection.processing_use_scrgb
 #define CUSTOM_IS_TONEMAPPED                          shader_injection.isTonemapped
+#define PSYCHOV_CONE_RESPONSE                         shader_injection.psychovConeResponse
 
 #endif
 #ifndef __cplusplus
