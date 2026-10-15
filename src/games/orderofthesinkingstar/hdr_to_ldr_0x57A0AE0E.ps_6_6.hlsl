@@ -406,7 +406,8 @@ float4 main(
             SV_Position.xy,
             tone_mapper_curve,
             RENODX_TONE_MAP_TYPE,
-            custom_reference);
+            custom_reference,
+            white_point, contrast, 0.f, gain_adjust);
       }
 #endif
     } else {

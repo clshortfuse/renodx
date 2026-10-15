@@ -49,10 +49,12 @@ struct ShaderInjectData {
   float custom_gain;
   float custom_game_saturation;
   float custom_flags;
+
+  float custom_hue_clip;
 };
 
 #ifdef __cplusplus
-static_assert(sizeof(ShaderInjectData) == 7u * 16u);
+static_assert(sizeof(ShaderInjectData) == 29u * sizeof(float));
 #endif
 
 #ifndef __cplusplus
@@ -95,6 +97,7 @@ cbuffer injected_buffer : register(b13) {
 #define CUSTOM_GAME_GRADE_LIFT               shader_injection.custom_lift
 #define CUSTOM_GAME_GRADE_GAMMA              shader_injection.custom_gamma
 #define CUSTOM_GAME_GRADE_GAIN               shader_injection.custom_gain
+#define CUSTOM_GAME_GRADE_HUE_CLIP           shader_injection.custom_hue_clip
 #ifdef NDEBUG
 #define CUSTOM_DEBUG_CANVAS false
 #else

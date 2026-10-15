@@ -466,7 +466,8 @@ float4 main(
   if (RENODX_PEAK_WHITE_NITS > 0.f) {
     const float3 custom_color_graded = SinkingStarApplyCustomColorGrade(
         float3(_404, _406, _408), _409, saturation, contrast, white_point,
-        inv_gamma_adjust, lift_adjust, gain_adjust, float3(_460, _473, _486));
+        inv_gamma_adjust, lift_adjust, gain_adjust, float3(_460, _473, _486),
+        0.0010000000474974513f);
     _460 = custom_color_graded.x;
     _473 = custom_color_graded.y;
     _486 = custom_color_graded.z;
@@ -566,7 +567,7 @@ float4 main(
   // CUSTOM: Preserve the existing HDR dispatch and intermediate output contract.
   if (RENODX_PEAK_WHITE_NITS > 0.f) {
     if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_VANILLA) {
-      const float3 custom_untonemapped = float3(_557, _558, _559);
+      float3 custom_untonemapped = float3(_557, _558, _559);
       const float3 custom_vanilla = saturate(SV_Target.rgb);
       if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_NEUTWO
           || RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_PSYCHOV17
@@ -584,7 +585,8 @@ float4 main(
 #ifndef NDEBUG
         if (CUSTOM_DEBUG_CANVAS) {
           SV_Target.rgb = SinkingStarDrawPsychoVDebugCanvas(
-              SV_Target.rgb, SV_Position.xy, tone_mapper_curve, RENODX_TONE_MAP_TYPE, custom_reference);
+              SV_Target.rgb, SV_Position.xy, tone_mapper_curve, RENODX_TONE_MAP_TYPE, custom_reference,
+              white_point, contrast, 0.0010000000474974513f, gain_adjust);
         }
 #endif
       } else {
@@ -594,6 +596,7 @@ float4 main(
       // CUSTOM: Emulate the original UNORM write after the resource upgrade.
       SV_Target.rgb = saturate(SV_Target.rgb);
     }
+    
     SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
   }
   return SV_Target;
