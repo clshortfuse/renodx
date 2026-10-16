@@ -237,8 +237,11 @@ float3 ApplyToneMapAndScale(float3 color, float2 vpos, bool clamp = false) {
 float4 FinalizePostFX(float4 color) {
   // writes onto swapchain, breaks unless manually clamped
 #if CLAMP_POSTFX
-  color = max(0, color);
+  color.rgb = GammaDecode(color.rgb);
+  color.rgb = renodx::color::bt709::clamp::BT2020(color.rgb);
+  color.rgb = GammaEncode(color.rgb);
 #endif
+  color.a = max(0, color.a);
 
   return color;
 }
