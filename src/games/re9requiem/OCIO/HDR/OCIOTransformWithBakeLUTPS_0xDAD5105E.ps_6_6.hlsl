@@ -73,7 +73,7 @@ OutputSignature main(
   if (TONE_MAP_TYPE != 0.f) {
     float3 untonemapped_ap1 = _11.rgb;
 #if 1
-    SV_Target = float4(ApplyToneMapEncodePQ(untonemapped_ap1, displayMaxNits, whitePaperNits, TEXCOORD), SV_Target.w);
+    SV_Target = float4(ApplyToneMapEncodePQ(untonemapped_ap1, TEXCOORD), SV_Target.w);
     SV_Target_1 = SV_Target;
     output_signature.SV_Target = SV_Target;
     output_signature.SV_Target_1 = SV_Target_1;

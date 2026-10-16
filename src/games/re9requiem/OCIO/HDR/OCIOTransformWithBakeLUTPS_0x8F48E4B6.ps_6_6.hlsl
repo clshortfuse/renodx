@@ -64,7 +64,7 @@ float4 main(
   if (TONE_MAP_TYPE != 0.f) {
     float3 untonemapped_ap1 = _11.rgb;
 #if 1
-    return float4(ApplyToneMapEncodePQ(untonemapped_ap1, displayMaxNits, whitePaperNits, TEXCOORD), SV_Target.w);
+    return float4(ApplyToneMapEncodePQ(untonemapped_ap1, TEXCOORD), SV_Target.w);
     // return float4(renodx_custom::aces::rrtodt_academy_rec2020_1000nits_15nits_st2084::Apply(untonemapped_ap1), SV_Target.w);
 #else
     SV_Target.rgb = renodx_custom::aces::odt_srgb_100nits_dim::Apply(

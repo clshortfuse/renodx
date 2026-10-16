@@ -83,6 +83,38 @@ float3 SampleAndBlendLUTs(
   return correctedColor;
 }
 
+float3 CompensateGradingZeroInputOffset(
+    float3 graded,
+    float3 source,
+    float3 grading_zero_output,
+    float half_weight_stops = 1.f) {
+  // Split the grading output at zero into a shared RGB offset and its unequal-channel residual.
+  const float common_offset = max(renodx::math::Min(grading_zero_output), 0.f);
+  const float3 channel_residual = grading_zero_output - common_offset;
+
+  // Express the relative linear-light RMS source level in units of the chosen half-weight level.
+  const float source_magnitude = sqrt(dot(source, source) / 3.f);
+  const float source_to_common_offset = renodx::math::DivideSafe(source_magnitude, common_offset, 0.f);
+  const float source_half_weight_units = source_to_common_offset * exp2(half_weight_stops);
+  // Approximate exp2(-x), matching x = 0, 1, and 2 exactly at weights 1, 1/2, and 1/4.
+  const float source_release_denominator = 1.f + 0.5f * source_half_weight_units * (1.f + source_half_weight_units);
+
+  // Reduce compensation when the zero-input output contains unequal-channel structure; never subtract that residual.
+  const float common_offset_squared_magnitude = 3.f * common_offset * common_offset;
+  // Combine source release and the relative squared RGB residual weight into one division.
+  const float compensation_weight = renodx::math::DivideSafe(
+      common_offset_squared_magnitude,
+      source_release_denominator
+          * (common_offset_squared_magnitude + dot(channel_residual, channel_residual)),
+      0.f);
+
+  // Subtract one bounded scalar, preserving channel differences and keeping every channel at or above its source.
+  const float removable_common_offset = max(renodx::math::Min(graded - source), 0.f);
+  const float offset_compensation = min(common_offset * compensation_weight, removable_common_offset);
+
+  return graded - offset_compensation;
+}
+
 float3 ApplyColorGradingLUTs(
     float3 color_input,
     float fTextureBlendRate,
@@ -119,32 +151,10 @@ float3 ApplyColorGradingLUTs(
         tTextureMap2,
         TrilinearClamp);
 
-    float lut_black_y = renodx::color::y::from::AP1(lut_black);
-    if (lut_black_y > 0.f) {
-      float3 lut_mid = SampleAndBlendLUTs(
-          lut_black,
-          fTextureBlendRate,
-          fTextureBlendRate2,
-          fTextureSize,
-          fOneMinusTextureInverseSize,
-          fHalfTextureInverseSize,
-          tTextureMap0,
-          tTextureMap1,
-          tTextureMap2,
-          TrilinearClamp);
-
-      float3 unclamped_gamma = Unclamp(
-          renodx::color::srgb::EncodeSafe(color_output),
-          renodx::color::srgb::EncodeSafe(lut_black),
-          renodx::color::srgb::EncodeSafe(lut_mid),
-          renodx::color::srgb::EncodeSafe(color_input));
-
-      float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
-
-      color_output *= lerp(
-          1.f,
-          renodx::math::DivideSafe(renodx::color::yf::from::AP1(unclamped_linear), renodx::color::yf::from::AP1(color_output), 1.f),
-          COLOR_GRADE_LUT_SCALING);
+    [branch]
+    if (renodx::math::Min(lut_black) > 0.f) {
+      const float3 color_scaled = CompensateGradingZeroInputOffset(color_output, color_input, lut_black, 1.f);
+      color_output = lerp(color_output, color_scaled, COLOR_GRADE_LUT_SCALING);
     }
   }
 
