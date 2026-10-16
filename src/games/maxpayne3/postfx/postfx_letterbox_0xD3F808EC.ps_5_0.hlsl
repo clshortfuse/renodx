@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 SamplerState RenderMapPointSampler_s : register(s1);
 Texture2D<float4> RenderMapPointSampler : register(t1);
@@ -14,6 +14,6 @@ void main(
   o0.xyz = v2.xyz * r0.xyz;
   o0.w = v2.w;
 
-  o0.rgb = PostFXScale(o0.rgb);
+  o0 = FinalizePostFX(o0);
   return;
 }

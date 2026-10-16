@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 cbuffer _Globals : register(b4)
 {
@@ -85,6 +85,6 @@ void main(
   o0.xyz = r2.xyz + r0.yzw;
   o0.w = r0.x;
   
-  o0.rgb = PostFXScale(o0.rgb);
+  o0 = FinalizePostFX(o0);
   return;
 }
