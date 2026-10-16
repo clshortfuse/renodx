@@ -1,12 +1,23 @@
-#include "./common.hlsl"
+#include "./shared.h"
+
+// Honkai: Star Rail LUT builder. Renders a 32x32x32 LUT as a 1024x32
+// R16G16B16A16_FLOAT strip, only when grading changes (not every frame).
+// Input: log-encoded scene (5.555 * x + 0.048, log2 * 0.0735 + 0.386).
+// Output: linear BT.709. Vanilla stores the SDR spline result (at most 1.0);
+// the uberposts sample it and sRGB encode into an 8-bit buffer.
+// RenoDX: stores the RenoDX tone mapped result instead, using the vanilla
+// result as the grading reference, so values can exceed 1.0.
+// Original bytecode decompiled with 3Dmigoto.
 
 cbuffer cb0 : register(b0) {
   float4 cb0[37];
 }
+
 #define cmp -
 
-// somewhat similar to ACES, but shadows aren't darkened as much
-float3 ApplyVanillaToneMap(float3 untonemapped_bt709) {
+// Vanilla tone map (segmented spline in AP1 with a saturation boost). Skipped
+// by the game when cb0[36].x > 0.5.
+float3 VanillaToneMap(float3 untonemapped_bt709) {
   float4 r0, r1, r2, r3, r4, r5;
 
   r0.rgb = untonemapped_bt709;
@@ -205,155 +216,109 @@ float3 ApplyVanillaToneMap(float3 untonemapped_bt709) {
     }
   }
 
-  float3 tonemapped_bt709 = r0.xyz;
-
-  return tonemapped_bt709;
+  return r0.xyz;
 }
 
-float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
-    return untonemapped;
-  }
-  float3 color = untonemapped;
+void main(
+    float4 v0: SV_POSITION0,
+    float2 v1: TEXCOORD0,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2, r3, r4;
 
-  color *= config.exposure;
+  // LUT strip texel -> log-encoded coordinate
+  r0.yz = -cb0[25].yz + v1.xy;
+  r1.x = cb0[25].x * r0.y;
+  r0.x = frac(r1.x);
+  r1.x = r0.x / cb0[25].x;
+  r0.w = -r1.x + r0.y;
 
-  const float y_normalized = y / mid_gray;
-  const float highlight_mask = 1.f / mid_gray;
-  const float shadow_mask = mid_gray;
+  // Log decode to linear scene
+  r0.xyz = r0.xzw * cb0[25].www + float3(-0.413588405, -0.413588405, -0.413588405);
+  r0.xyz = r0.xyz * cb0[27].zzz + float3(0.0275523961, 0.0275523961, 0.0275523961);
+  r0.xyz = float3(13.6054821, 13.6054821, 13.6054821) * r0.xyz;
+  r0.xyz = exp2(r0.xyz);
+  r0.xyz = float3(-0.0479959995, -0.0479959995, -0.0479959995) + r0.xyz;
+  r0.xyz = float3(0.179999992, 0.179999992, 0.179999992) * r0.xyz;
 
-  // contrast & flare
-  float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
-  float exponent = config.contrast * flare;
-  const float y_contrasted = pow(y_normalized, exponent);
+  // Vanilla shadows / midtones / highlights grading
+  r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  r0.w = dot(r0.xyz, float3(0.272228986, 0.674081981, 0.0536894985));
+  r1.x = 1 / cb0[14].x;
+  r1.x = saturate(r1.x * r0.w);
+  r1.y = r1.x * -2 + 3;
+  r1.x = r1.x * r1.x;
+  r1.x = -r1.y * r1.x + 1;
+  r1.y = 1 + -cb0[14].y;
+  r1.z = -cb0[14].y + r0.w;
+  r1.y = 1 / r1.y;
+  r1.y = saturate(r1.z * r1.y);
+  r1.z = r1.y * -2 + 3;
+  r1.y = r1.y * r1.y;
+  r1.w = r1.z * r1.y;
+  r2.x = 1 + -r1.x;
+  r1.y = -r1.z * r1.y + r2.x;
+  r2.xyz = cb0[5].xyz * cb0[5].www;
+  r0.xyz = r0.xyz + -r0.www;
+  r2.xyz = r2.xyz * r0.xyz + r0.www;
+  r2.xyz = max(float3(0.00100000005, 0.00100000005, 0.00100000005), r2.xyz);
+  r2.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r2.xyz;
+  r3.xyz = cb0[6].xyz * cb0[6].www;
+  r2.xyz = log2(r2.xyz);
+  r2.xyz = r3.xyz * r2.xyz;
+  r2.xyz = exp2(r2.xyz);
+  r2.xyz = float3(0.180000007, 0.180000007, 0.180000007) * r2.xyz;
+  r3.xyz = cb0[7].xyz * cb0[7].www;
+  r2.xyz = r3.xyz * r2.xyz;
+  r3.xyz = cb0[11].xyz * cb0[11].www;
+  r3.xyz = r3.xyz * r0.xyz + r0.www;
+  r3.xyz = max(float3(0.00100000005, 0.00100000005, 0.00100000005), r3.xyz);
+  r3.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r3.xyz;
+  r4.xyz = cb0[12].xyz * cb0[12].www;
+  r3.xyz = log2(r3.xyz);
+  r3.xyz = r4.xyz * r3.xyz;
+  r3.xyz = exp2(r3.xyz);
+  r3.xyz = float3(0.180000007, 0.180000007, 0.180000007) * r3.xyz;
+  r4.xyz = cb0[13].xyz * cb0[13].www;
+  r3.xyz = r4.xyz * r3.xyz;
+  r4.xyz = cb0[8].xyz * cb0[8].www;
+  r0.xyz = r4.xyz * r0.xyz + r0.www;
+  r0.xyz = max(float3(0.00100000005, 0.00100000005, 0.00100000005), r0.xyz);
+  r0.xyz = float3(5.55555534, 5.55555534, 5.55555534) * r0.xyz;
+  r4.xyz = cb0[9].xyz * cb0[9].www;
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = r4.xyz * r0.xyz;
+  r0.xyz = exp2(r0.xyz);
+  r0.xyz = float3(0.180000007, 0.180000007, 0.180000007) * r0.xyz;
+  r4.xyz = cb0[10].xyz * cb0[10].www;
+  r0.xyz = r4.xyz * r0.xyz;
+  r0.xyz = r0.xyz * r1.yyy;
+  r0.xyz = r2.xyz * r1.xxx + r0.xyz;
+  r0.xyz = r3.xyz * r1.www + r0.xyz;
 
-  // highlights
-  float y_highlighted = pow(y_contrasted, config.highlights);
-  y_highlighted = lerp(y_contrasted, y_highlighted, saturate(y_contrasted / highlight_mask));
+  // Vanilla contrast around a pivot, then color filter
+  r1.x = cb0[0].x + cb0[0].y;
+  r1.y = 0.5 * r1.x;
+  r0.w = cmp(r1.y < r0.w);
+  r1.yzw = -r1.xxx * float3(0.5, 0.5, 0.5) + r0.xyz;
+  r2.x = -r1.x * 0.5 + cb0[0].x;
+  r1.yzw = r1.yzw / r2.xxx;
+  r1.yzw = r1.yzw * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
+  r1.yzw = max(float3(0, 0, 0), r1.yzw);
+  r0.xyz = r1.xxx * float3(0.5, 0.5, 0.5) + -r0.xyz;
+  r1.x = r1.x * 0.5 + -cb0[0].y;
+  r0.xyz = r0.xyz / r1.xxx;
+  r0.xyz = -r0.xyz * float3(0.5, 0.5, 0.5) + float3(0.5, 0.5, 0.5);
+  r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  r0.xyz = r0.www ? r1.yzw : r0.xyz;
+  r0.xyz = cb0[1].xyz * r0.xyz;
 
-  // shadows
-  float y_shadowed = pow(y_highlighted, -1.f * (config.shadows - 2.f));
-  y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted / shadow_mask));
+  float3 untonemapped = r0.xyz;
+  float3 vanilla = VanillaToneMap(untonemapped);
 
-  const float y_final = y_shadowed * mid_gray;
-
-  color *= (y > 0 ? (y_final / y) : 0);
-
-  return color;
-}
-
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, renodx::color::grade::Config config) {
-  float3 color = tonemapped;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
-
-    if (config.hue_correction_strength != 0.f) {
-      float3 perceptual_old = renodx::color::oklab::from::BT709(hue_reference_color);
-
-      // Save chrominance to apply black
-      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
-
-      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
-
-      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
-
-      // Apply back previous chrominance
-      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
-    }
-
-    if (config.dechroma != 0.f) {
-      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
-    }
-
-    if (config.blowout != 0.f) {
-      float percent_max = saturate(y * 100.f / 10000.f);
-      // positive = 1 to 0, negative = 1 to 2
-      float blowout_strength = 100.f;
-      float blowout_change = pow(1.f - percent_max, blowout_strength * abs(config.blowout));
-      if (config.blowout < 0) {
-        blowout_change = (2.f - blowout_change);
-      }
-
-      perceptual_new.yz *= blowout_change;
-    }
-
-    perceptual_new.yz *= config.saturation;
-
-    color = renodx::color::bt709::from::OkLab(perceptual_new);
-
-    color = renodx::color::bt709::clamp::AP1(color);
-  }
-  return color;
-}
-
-float3 ApplyVanillaPlus(float3 untonemapped, float3 vanilla) {
-  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
-  cg_config.exposure = injectedData.colorGradeExposure;
-  cg_config.highlights = injectedData.colorGradeHighlights;
-  cg_config.shadows = injectedData.colorGradeShadows;
-  cg_config.contrast = injectedData.colorGradeContrast;
-  cg_config.flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
-  cg_config.saturation = injectedData.colorGradeSaturation;
-  cg_config.dechroma = injectedData.colorGradeBlowout;
-  cg_config.hue_correction_strength = injectedData.toneMapHueCorrection;
-  // cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
-  float untonemapped_lum = renodx::color::y::from::BT709(untonemapped);
-
-  const float mid_gray = renodx::color::y::from::BT709(ApplyVanillaToneMap(float3(0.18f, 0.18f, 0.18f)));
-
-  // blend between vanilla and untonemapped with shifted midgray
-  untonemapped *= mid_gray / 0.18f;
-  untonemapped = lerp(vanilla, untonemapped, saturate(renodx::color::y::from::BT709(untonemapped)));
-
-  untonemapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, untonemapped_lum, cg_config, mid_gray);
-  float peak_white = renodx::color::correct::GammaSafe(injectedData.toneMapPeakNits / injectedData.toneMapGameNits, true);
-  float3 tonemapped = renodx::tonemap::ExponentialRollOff(untonemapped, mid_gray, peak_white);
-  tonemapped = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped, untonemapped, untonemapped_lum, cg_config);
-
-  return tonemapped;
-}
-
-float3 applyUserTonemap(float3 untonemapped, float3 vanilla) {
-  if (injectedData.toneMapType == 5.f) {
-    return ApplyVanillaPlus(untonemapped, vanilla);
-  }
-  float3 outputColor = untonemapped;
-  float vanillaMidGray = renodx::tonemap::unity::BT709(0.18f).x;
-
-  renodx::tonemap::Config config = renodx::tonemap::config::Create();
-
-  config.type = injectedData.toneMapType;
-  config.peak_nits = injectedData.toneMapPeakNits;
-  config.game_nits = injectedData.toneMapGameNits;
-  config.gamma_correction = 1.f;
-  config.exposure = injectedData.colorGradeExposure;
-  config.highlights = injectedData.colorGradeHighlights;
-  config.shadows = injectedData.colorGradeShadows;
-  config.contrast = injectedData.colorGradeContrast;
-  config.saturation = injectedData.colorGradeSaturation;
-  config.mid_gray_value = vanillaMidGray;
-  config.mid_gray_nits = vanillaMidGray * 100.f;
-  config.reno_drt_contrast = 1.04f;
-  config.reno_drt_saturation = 1.05f;
-  config.reno_drt_dechroma = injectedData.colorGradeBlowout;
-  config.reno_drt_flare = 0.001 * pow(injectedData.colorGradeFlare, 2.3f);
-  config.hue_correction_type = renodx::tonemap::config::hue_correction_type::CUSTOM;
-  config.hue_correction_color = vanilla;
-  config.hue_correction_strength = injectedData.toneMapHueCorrection;
-
-  if (injectedData.toneMapType == 0.f) {
-    return vanilla;
-  }
-  if (injectedData.toneMapType == 2.f) {  // Frostbite
-    outputColor = applyFrostbite(outputColor, config);
-
-  } else if (injectedData.toneMapType == 4.f) {  // DICE
-    outputColor = applyDICE(outputColor, config);
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0.xyz = (0.8 < cb0[35].z) ? vanilla : max(0, vanilla);
   } else {
-    outputColor = renodx::tonemap::config::Apply(outputColor, config);
+    o0.xyz = renodx::draw::ToneMapPass(untonemapped, saturate(vanilla));
   }
-
-  outputColor = renodx::tonemap::UpgradeToneMap(outputColor, saturate(outputColor), vanilla, 1.f);
-
-  return outputColor;
+  o0.w = 1;
 }
