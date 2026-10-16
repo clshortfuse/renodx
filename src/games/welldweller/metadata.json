@@ -1,0 +1,15 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "welldweller",
+  "title": "Well Dweller",
+  "status": "experimental",
+  "compatibility": "in-progress",
+  "deploy": {
+    "steam_appid": 3699590,
+    "game_exe": "WellDweller.exe",
+    "api": "d3d11",
+    "architecture": [
+      "x64"
+    ]
+  }
+}
