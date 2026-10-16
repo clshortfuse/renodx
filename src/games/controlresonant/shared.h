@@ -9,6 +9,7 @@ struct ShaderInjectData {
   float graphics_white_nits;
 
   float tone_map_type;
+  float tone_map_gamut_clip;
   float tone_map_highlights;
   float tone_map_contrast_highlights;
 
@@ -21,10 +22,9 @@ struct ShaderInjectData {
   float tone_map_dechroma;
   float tone_map_flare;
 
-  float tone_map_gamut_clip;
-
   float custom_grain_type;
   float custom_grain_strength;
+  float custom_random;
 };
 
 #ifndef __cplusplus
@@ -51,6 +51,7 @@ cbuffer shader_injection : register(b0, space50) {
 
 #define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+#define CUSTOM_RANDOM         shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"
 

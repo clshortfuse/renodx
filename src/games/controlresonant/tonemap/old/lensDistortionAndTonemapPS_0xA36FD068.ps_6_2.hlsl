@@ -654,7 +654,7 @@ float4 main(
   }
   if (!(g_bApplyFilmGrain == 0)) {
 #if 1
-    float3 grain_color = ApplyFilmGrainDirect(float3(_1100, _1101, _1102), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _160);
+    float3 grain_color = ApplyFilmGrainDirect(float3(_1100, _1101, _1102), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _160, g_vInvOutputRes);
     _1150 = grain_color.x;
     _1151 = grain_color.y;
     _1152 = grain_color.z;

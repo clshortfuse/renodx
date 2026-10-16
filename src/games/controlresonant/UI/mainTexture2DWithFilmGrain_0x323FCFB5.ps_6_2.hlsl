@@ -108,7 +108,8 @@ float4 main(
   _66 = g_vShapeEngineColorAdd.z + mad((g_mShapeEngineColorTransform[3].z), _22, mad((g_mShapeEngineColorTransform[2].z), _21, mad((g_mShapeEngineColorTransform[1].z), _20, ((g_mShapeEngineColorTransform[0].z) * _19))));
   if (!(g_bApplyFilmGrain == 0)) {
 #if 1
-    float3 grain_color = ApplyFilmGrainDirect(float3(_64, _65, _66), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, 1.0f);
+    // This UI permutation has no output-resolution uniform; retain its existing coordinates.
+    float3 grain_color = ApplyFilmGrainDirect(float3(_64, _65, _66), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, 1.0f, float2(1.0f, 1.0f));
     _114 = grain_color.x;
     _115 = grain_color.y;
     _116 = grain_color.z;
