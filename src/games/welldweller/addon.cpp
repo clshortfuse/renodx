@@ -377,18 +377,28 @@ const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
 };
 
 void OnPresetOff() {
-  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-  //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+  renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueShift", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueShiftMethod", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapClampColorSpace", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapClampPeak", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
