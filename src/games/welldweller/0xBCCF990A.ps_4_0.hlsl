@@ -39,12 +39,12 @@ void main(
 
   // RenoDX: the upgraded scene surface exceeds 1.0 where sprites blend additively and
   // goes negative under subtractive blends. Negatives are floored as RGBA8 did.
-  // Vanilla clamps to the original RGBA8 range. HDR divides by the max channel so the
-  // LUT sees in-range pixels unchanged and highlights at their own hue and saturation.
+  // Vanilla clamps to the original RGBA8 range. HDR rolls off the max channel above
+  // 0.5 linear for a smooth LUT proxy that preserves RGB ratios.
   r1.w = saturate(r1.w);
   r1.rgb = max(0.f, r1.rgb);
   float3 untonemapped = renodx::color::srgb::DecodeSafe(r1.rgb);
-  float3 neutral_sdr = untonemapped / max(1.f, renodx::math::Max(untonemapped));
+  float3 neutral_sdr = renodx::tonemap::c_infinity_rolloff::MaxChannel(untonemapped, 1.f, 0.5f, 1.f);
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     r1.rgb = saturate(r1.rgb);
   } else {
