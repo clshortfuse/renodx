@@ -600,9 +600,9 @@ float4 main(
 #if 1
     float3 grain_color;
     if (!(_102)) {
-      grain_color = ApplyFilmGrainDirect(float3(_896, _897, _898), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _113);
+      grain_color = ApplyFilmGrainDirect(float3(_896, _897, _898), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _113, g_vInvOutputRes);
     } else {
-      grain_color = ApplyFilmGrainReinhardDelta(float3(_896, _897, _898), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _113);
+      grain_color = ApplyFilmGrainReinhardDelta(float3(_896, _897, _898), g_tFilmGrain, SV_Position, g_vFilmGrainOffset, g_fFilmGrainIntensity, _113, g_vInvOutputRes);
     }
     _996 = grain_color.x;
     _997 = grain_color.y;

@@ -4,16 +4,16 @@
 #include "./shared.h"
 
 float3 ApplyCustomFilmGrain(float3 color, Texture2D<float4> g_tFilmGrain, float4 SV_Position,
-                            int2 g_vFilmGrainOffset, float intensity, float paper_white) {
-  float random = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(SV_Position.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(SV_Position.y)))) % 512), 0)).x;
-  return renodx::effects::ApplyFilmGrain(color, SV_Position.xy, random, intensity * 0.045f * CUSTOM_GRAIN_STRENGTH, paper_white);
+                            int2 g_vFilmGrainOffset, float intensity, float paper_white, float2 inverse_resolution) {
+  //   float random = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(SV_Position.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(SV_Position.y)))) % 512), 0)).x;
+  return renodx::effects::ApplyFilmGrain(color, SV_Position.xy * inverse_resolution, CUSTOM_RANDOM, intensity * 0.045f * CUSTOM_GRAIN_STRENGTH, paper_white);
 }
 
 float3 ApplyFilmGrainDirect(float3 color, Texture2D<float4> g_tFilmGrain, float4 SV_Position,
-                            int2 g_vFilmGrainOffset, float intensity, float paper_white) {
+                            int2 g_vFilmGrainOffset, float intensity, float paper_white, float2 inverse_resolution) {
   float3 grained_color;
   if (CUSTOM_GRAIN_TYPE != 0.f) {
-    grained_color = ApplyCustomFilmGrain(color, g_tFilmGrain, SV_Position, g_vFilmGrainOffset, intensity, paper_white);
+    grained_color = ApplyCustomFilmGrain(color, g_tFilmGrain, SV_Position, g_vFilmGrainOffset, intensity, paper_white, inverse_resolution);
   } else {
     float4 _1299 = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(SV_Position.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(SV_Position.y)))) % 512), 0));
     float _1285 = color.x;
@@ -35,10 +35,10 @@ float3 ApplyFilmGrainDirect(float3 color, Texture2D<float4> g_tFilmGrain, float4
 }
 
 float3 ApplyFilmGrainReinhardDelta(float3 color, Texture2D<float4> g_tFilmGrain, float4 SV_Position,
-                                   int2 g_vFilmGrainOffset, float intensity, float paper_white) {
+                                   int2 g_vFilmGrainOffset, float intensity, float paper_white, float2 inverse_resolution) {
   float3 grained_color;
   if (CUSTOM_GRAIN_TYPE != 0.f) {
-    grained_color = ApplyCustomFilmGrain(color, g_tFilmGrain, SV_Position, g_vFilmGrainOffset, intensity, paper_white);
+    grained_color = ApplyCustomFilmGrain(color, g_tFilmGrain, SV_Position, g_vFilmGrainOffset, intensity, paper_white, inverse_resolution);
   } else {
     float4 _950 = g_tFilmGrain.Load(int3((((int)((uint)(g_vFilmGrainOffset.x) + (uint)(int(SV_Position.x)))) % 512), (((int)((uint)(g_vFilmGrainOffset.y) + (uint)(int(SV_Position.y)))) % 512), 0));
     float _936 = color.x;
