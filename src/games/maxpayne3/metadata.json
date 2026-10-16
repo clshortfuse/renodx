@@ -2,10 +2,13 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "maxpayne3",
   "title": "Max Payne 3",
+  "category": "game",
+  "support": "bespoke",
+  "summary": "HDR output with customizable tone mapping, color grading, bloom, and film grain.",
   "maintainers": [
     "Musa"
   ],
-  "status": "beta",
+  "status": "stable",
   "urls": [
     {
       "url": "https://www.nexusmods.com/maxpayne3/mods/218",
@@ -13,6 +16,7 @@
     }
   ],
   "deploy": {
+    "api": "d3d11",
     "steam_appid": 204100,
     "architecture": [
       "x86"
