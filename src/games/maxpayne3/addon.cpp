@@ -5,22 +5,33 @@
  */
 
 #define ImTextureID ImU64
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_1
+// #define DEBUG_LEVEL_2
+// #define DEBUG_LEVEL_3
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
-#include <random>
 
 #include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
-#include "./shared.h"
+#include "../../utils/swapchain.hpp"
+#include "shared.h"
 
 namespace {
+
+ShaderInjectData shader_injection;
+
+constexpr float FALLBACK_PEAK_NITS = 1000.f;
+bool peak_nits_default_initialized = false;
+renodx::utils::settings::Setting* tone_map_peak_nits_setting = nullptr;
+float current_settings_mode = 0.f;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x57F6AAB4),  // Bloom
@@ -155,10 +166,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 };
 
-ShaderInjectData shader_injection;
-
-float current_settings_mode = 0;
-
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "SettingsMode",
@@ -170,12 +177,53 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Simple", "Intermediate", "Advanced"},
         .is_global = true,
     },
+    tone_map_peak_nits_setting = new renodx::utils::settings::Setting{
+        .key = "ToneMapPeakNits",
+        .binding = &shader_injection.peak_white_nits,
+        .default_value = FALLBACK_PEAK_NITS,
+        .label = "Peak Brightness",
+        .section = "Output",
+        .tooltip = "Sets the value of peak white in nits",
+        .min = 48.f,
+        .max = 10000.f,
+        .is_logarithmic = true,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapGameNits",
+        .binding = &shader_injection.diffuse_white_nits,
+        .default_value = 203.f,
+        .label = "Game Brightness",
+        .section = "Output",
+        .tooltip = "Sets the value of 100% white in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Output",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "GammaCorrection",
+        .binding = &shader_injection.gamma_correction,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "SDR EOTF Emulation",
+        .section = "Output",
+        .tooltip = "Emulates output decoding used on SDR displays.",
+        .labels = {"None", "2.2", "BT.1886"},
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
-        .binding = &RENODX_TONE_MAP_TYPE,
+        .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 3.f,
-        .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
@@ -183,139 +231,98 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapPeakNits",
-        .binding = &RENODX_PEAK_WHITE_NITS,
-        .default_value = 1000.f,
-        .label = "Peak Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the value of peak white in nits",
-        .min = 48.f,
-        .max = 4000.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapGameNits",
-        .binding = &RENODX_DIFFUSE_WHITE_NITS,
-        .default_value = 203.f,
-        .label = "Game Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the value of 100% white in nits",
-        .min = 48.f,
-        .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &RENODX_GRAPHICS_WHITE_NITS,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
-        .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "GammaCorrection",
-        .binding = &RENODX_GAMMA_CORRECTION,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates a display EOTF.",
-        .labels = {"Off", "2.2", "BT.1886"},
-        .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
-        .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
+        .binding = &shader_injection.tone_map_hue_correction,
         .default_value = 60.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 2; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 2.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
-        .binding = &RENODX_TONE_MAP_EXPOSURE,
+        .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
-        .binding = &RENODX_TONE_MAP_HIGHLIGHTS,
+        .binding = &shader_injection.tone_map_highlights,
         .default_value = 50.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
-        .binding = &RENODX_TONE_MAP_SHADOWS,
+        .binding = &shader_injection.tone_map_shadows,
         .default_value = 50.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
-        .binding = &RENODX_TONE_MAP_CONTRAST,
+        .binding = &shader_injection.tone_map_contrast,
         .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
-        .binding = &RENODX_TONE_MAP_SATURATION,
+        .binding = &shader_injection.tone_map_saturation,
         .default_value = 50.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
-        .binding = &RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
+        .binding = &shader_injection.tone_map_highlight_saturation,
         .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 3.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
-        .binding = &RENODX_TONE_MAP_BLOWOUT,
+        .binding = &shader_injection.tone_map_blowout,
         .default_value = 0.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
-        .binding = &CUSTOM_BLOOM,
+        .binding = &shader_injection.custom_bloom,
         .default_value = 100.f,
         .label = "Bloom",
         .section = "Effects",
@@ -324,7 +331,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
-        .binding = &CUSTOM_FILM_GRAIN_STRENGTH,
+        .binding = &shader_injection.custom_film_grain_strength,
         .default_value = 0.f,
         .label = "Film Grain",
         .section = "Effects",
@@ -337,7 +344,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-0",
         .on_change = []() {
-          for (auto setting : settings) {
+          for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
@@ -350,19 +357,12 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-0",
         .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->key == "ColorGradeContrast") {
-              renodx::utils::settings::UpdateSetting(setting->key, 55.f);
-            } else if (setting->key == "ColorGradeHighlightSaturation") {
-              renodx::utils::settings::UpdateSetting(setting->key, 75.f);
-            } else if (setting->key == "FxFilmGrain") {
-              renodx::utils::settings::UpdateSetting(setting->key, 50.f);
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ColorGradeContrast", 55.f},
+              {"ColorGradeHighlightSaturation", 75.f},
+              {"FxFilmGrain", 50.f},
+          });
         },
     },
     new renodx::utils::settings::Setting{
@@ -372,7 +372,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "t9v7wx9NTD");
         },
     },
     new renodx::utils::settings::Setting{
@@ -399,10 +399,20 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Musa's Ko-Fi",
         .section = "Links",
-        .group = "button-line-1",
+        .group = "button-line-2",
         .tint = 0xFF5A16,
         .on_change = []() {
           renodx::utils::platform::LaunchURL("https://ko-fi.com/", "musaqh");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "shortfuse");
         },
     },
     new renodx::utils::settings::Setting{
@@ -413,51 +423,31 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("GammaCorrection", 0);
-  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
-  renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
+  renodx::utils::settings::UpdateSettings({
+      {"ToneMapType", 0.f},
+      {"ToneMapPeakNits", 203.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
+      {"GammaCorrection", 0.f},
+      {"ToneMapHueCorrection", 0.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeBlowout", 50.f},
+      {"FxBloom", 100.f},
+      {"FxFilmGrain", 0.f},
+  });
 }
 
-bool fired_on_init_swapchain = false;
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
+  if (swapchain == nullptr || peak_nits_default_initialized) return;
+  peak_nits_default_initialized = true;
 
-void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (fired_on_init_swapchain) return;
-  fired_on_init_swapchain = true;
-
-  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-  auto white_level = 203.f;
-  if (!peak.has_value()) {
-    peak = 1000.f;
-  }
-  settings[2]->default_value = peak.value();  // Peak Nits
-
-  float computed_diffuse = std::clamp(roundf(powf(10.f, 0.03460730900256f + (0.757737096673107f * log10f(peak.value())))), 100.f, 203.f);
-  settings[3]->default_value = computed_diffuse;  // Game Nits
-  settings[4]->default_value = computed_diffuse;  // UI Nits
-}
-
-void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
+  const auto detected_peak_nits = renodx::utils::swapchain::GetPeakNits(swapchain);
+  tone_map_peak_nits_setting->default_value = detected_peak_nits.value_or(FALLBACK_PEAK_NITS);
 }
 
 bool initialized = false;
@@ -505,17 +495,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,  // Results in black screen otherwise
       });
 
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // Peak nits / diffuse white
-      reshade::register_event<reshade::addon_event::present>(OnPresent);               // Grain
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // Peak nits / diffuse white
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);               // Grain
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_addon(h_module);
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
