@@ -80,6 +80,6 @@ void main(
   r0.xyz = r1.www ? r0.xyz : 0;
   o0.xyz = r0.xyz + r1.xyz;
 
-  o0.rgb = FinalizePostFX(o0);
+  o0 = FinalizePostFX(o0);
   return;
 }
