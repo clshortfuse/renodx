@@ -6,6 +6,7 @@
 
 #define ImTextureID ImU64
 #define DEBUG_LEVEL_0
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -480,22 +481,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
         renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+
+        renodx::mods::swapchain::SetUseHDR10();
+
         initialized = true;
       }
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
       });
 
       // Artifacts in some shadows with r8g8b8a8_typeless upgrades
-      // renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      // renodx::mods::swapchain::resource_upgrade_infos.push_back({
       //     .old_format = reshade::api::format::r8g8b8a8_typeless,
       //     .new_format = reshade::api::format::r16g16b16a16_float,
       //     .index = 6,  // Results in artifacts otherwise
       // });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,  // Results in black screen otherwise
