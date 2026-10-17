@@ -13,6 +13,7 @@
 #include "./tonemap/frostbite.hlsl"
 #include "./tonemap/hermite_spline.hlsl"
 #include "./tonemap/naka_rushton.hlsl"
+#include "./tonemap/neupow.hlsl"
 #include "./tonemap/neutwo.hlsl"
 #include "./tonemap/psychov.hlsl"
 #include "./tonemap/reinhard.hlsl"
