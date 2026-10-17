@@ -39,7 +39,7 @@ float3 GradeAndDisplayMap(float3 color) {
     if(CUSTOM_IS_TONEMAPPED == 0.f){
     color = CorrectHueAndChrominanceOKLAB(color, renodx::tonemap::ReinhardPiecewise(color, RENODX_TONE_MAP_SDR_CLIP, 0.99f), RENODX_TONE_MAP_SDRHUE, RENODX_TONE_MAP_SDRCHROMINANCE);
     }
-    color = HDRBoost(color, CUSTOM_HDR_BOO0ST);
+    color = HDRBoost(color, CUSTOM_HDR_BOOST, CUSTOM_HDR_BOOST_START);
   }
   if(CUSTOM_IS_TONEMAPPED == 0.f){
     if(RENODX_TONE_MAP_TYPE == 3.f){

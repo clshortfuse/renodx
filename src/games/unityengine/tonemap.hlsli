@@ -135,23 +135,30 @@ float3 CorrectHueAndChrominanceOKLAB(float3 input_color, float3 target_color, fl
 }
 }
 
-float HDRBoost(float color, float power = 0.f, float3 normalization_point = 0.04f) {
+float HDRBoost(float color, float power = 0.f, float normalization_point = 0.04f) {
   if (power == 0.f) return color;
-  float3 LMS_WHITE = renodx::color::lms::from::BT709(float3(1, 1, 1));
-  float3 lms_color = renodx::color::lms::from::BT709(color);
-  lms_color /= LMS_WHITE;
-  normalization_point /= LMS_WHITE;
+  //float3 LMS_WHITE = renodx::color::lms::from::BT709(float3(1, 1, 1));
+  ///float3 lms_color = renodx::color::lms::from::BT709(color);
+  //lms_color /= LMS_WHITE;
+  //normalization_point /= LMS_WHITE;
   const float smoothing = power * 2.f;
-  float boosted = max(lms_color, lerp(lms_color, normalization_point * pow(lms_color / normalization_point, 1.f + power), renodx::tonemap::Reinhard(lms_color, smoothing)));
-  return boosted * LMS_WHITE;
+  //float boosted = max(lms_color, lerp(lms_color, normalization_point * pow(lms_color / normalization_point, 1.f + power), renodx::tonemap::Reinhard(lms_color, smoothing)));
+  float powered = normalization_point * pow(max(color, 0.f) / normalization_point, 1.f + power);
+  float weight = renodx::tonemap::Reinhard(max(0.f, color), smoothing);
+  return max(color, lerp(color, powered, weight));
 }
 
-float3 HDRBoost(float3 color, float power = 0.f, float3 normalization_point = 0.04f) {
-  return float3(
-      HDRBoost(color.r, power, normalization_point),
-      HDRBoost(color.g, power, normalization_point),
-      HDRBoost(color.b, power, normalization_point)
-  );
+float3 HDRBoost(float3 color, float power = 0.f, float normalization_point = 0.04f) {
+  if(power == 0.f) return color;
+  float3 lms_white = renodx::color::lms::from::BT709(float3(1, 1, 1));
+  float3 lms_color = renodx::color::lms::from::BT709(color);
+  float3 normalized = max(0.f, renodx::math::DivideSafe(lms_color, 1.f, 0.f));
+  float3 fully_boosted = float3(
+      HDRBoost(normalized.r, power, normalization_point),
+      HDRBoost(normalized.g, power, normalization_point),
+      HDRBoost(normalized.b, power, normalization_point));
+  float3 bt709_boosted = renodx::color::bt709::from::LMS(fully_boosted);
+  return CorrectHueAndChrominanceOKLAB(bt709_boosted, color, 1.f, 1.f);
 }
 
 // Narkowicz
@@ -172,9 +179,6 @@ float3 Bt709AcesTonemap(float3 color, float exposure = 1.f) {
   } else {
     float compression_scale;
     GamutCompression(exposed_color, compression_scale);
-    /*float3 hdr_color = exposed_color > 0.230976 ?
-    1.46658788438 * exposed_color + 0.00821561635884 :
-     (exposed_color * (a * exposed_color + b)) / (exposed_color * (c * exposed_color + d) + e);*/
     float3 hdr_color = renodx::math::Select(exposed_color > 0.230976,
     1.46658788438 * exposed_color + 0.00821561635884,
      (exposed_color * (a * exposed_color + b)) / (exposed_color * (c * exposed_color + d) + e));

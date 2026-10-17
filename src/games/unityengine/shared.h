@@ -53,22 +53,27 @@ struct ShaderInjectData {
   float fxFilmGrain;
   float fxFilmGrainType;
   float fxHdrBoost;
-  float random;
+  float fxHdrBoostStart;
 
+  float fxHdrVideos;
+  float random;
   float countOld;
   float countNew;
+
   float count2Old;
   float count2New;
-
   float blitCopyHack;
   float gammaSpace;
+
   float isClamped;
   float swapchainProxy;
-
   float rolloffUI;
   float processing_use_scrgb;
+
   float isTonemapped;
   float psychovConeResponse;
+  float padding03;
+  float padding04;
 };
 
 #ifndef __cplusplus
@@ -121,21 +126,24 @@ cbuffer shader_injection : register(b13) {
 
 #define CUSTOM_FILM_GRAIN                             shader_injection.fxFilmGrain
 #define CUSTOM_FILM_GRAIN_TYPE                        shader_injection.fxFilmGrainType
-#define CUSTOM_HDR_BOO0ST                             shader_injection.fxHdrBoost
-#define CUSTOM_RANDOM                                 shader_injection.random
+#define CUSTOM_HDR_BOOST                              shader_injection.fxHdrBoost
+#define CUSTOM_HDR_BOOST_START                        shader_injection.fxHdrBoostStart
 
+#define CUSTOM_HDR_VIDEOS                             shader_injection.fxHdrVideos
+#define CUSTOM_RANDOM                                 shader_injection.random
 #define CUSTOM_COUNT_OLD                              shader_injection.countOld
 #define CUSTOM_COUNT_NEW                              shader_injection.countNew
+
 #define CUSTOM_COUNT_NEW_2                            shader_injection.count2New
 #define CUSTOM_COUNT_OLD_2                            shader_injection.count2Old
-
 #define CUSTOM_BLIT_COPY_HACK                         shader_injection.blitCopyHack
 #define CUSTOM_GAMMA_SPACE                            shader_injection.gammaSpace
+
 #define CUSTOM_IS_CLAMPED                             shader_injection.isClamped
 #define CUSTOM_SWAPCHAIN_PROXY                        shader_injection.swapchainProxy
-
 #define CUSTOM_ROLLOFF_UI                             shader_injection.rolloffUI
 #define CUSTOM_SWAPCHAIN_USE_SCRGB                    shader_injection.processing_use_scrgb
+
 #define CUSTOM_IS_TONEMAPPED                          shader_injection.isTonemapped
 #define PSYCHOV_CONE_RESPONSE                         shader_injection.psychovConeResponse
 

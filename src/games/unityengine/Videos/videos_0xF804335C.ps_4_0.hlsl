@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "../common.hlsli"
 
 Texture2D<float4> t2 : register(t2);
 Texture2D<float4> t1 : register(t1);
@@ -30,5 +30,7 @@ void main(
   o0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   o0.w = 1;
   o0.xyz = max(0.f, o0.xyz);
+  o0.xyz = HDRBoost(o0.xyz, CUSTOM_HDR_VIDEOS, CUSTOM_HDR_BOOST_START);
+  o0.xyz = PostToneMapScale(o0.xyz);
   return;
 }
