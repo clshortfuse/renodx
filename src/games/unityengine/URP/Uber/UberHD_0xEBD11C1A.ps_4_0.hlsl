@@ -1,31 +1,15 @@
 #include "../../common.hlsli"
 
-// ---- Created with 3Dmigoto v1.4.1 on Thu Aug  6 21:23:10 2026
 Texture2D<float4> t4 : register(t4);
-
 Texture2D<float4> t3 : register(t3);
-
 Texture2D<float4> t2 : register(t2);
-
 Texture2D<float4> t1 : register(t1);
-
 Texture2D<float4> t0 : register(t0);
-
 SamplerState s1_s : register(s1);
-
 SamplerState s0_s : register(s0);
-
-cbuffer cb0 : register(b0)
-{
+cbuffer cb0 : register(b0){
   float4 cb0[147];
 }
-
-
-
-
-// 3Dmigoto declarations
-#define cmp -
-
 
 void main(
   float4 v0 : SV_POSITION0,
@@ -38,15 +22,13 @@ void main(
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
   r1.xyzw = t1.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
-  r0.w = cmp(0 < cb0[135].x);
-  if (r0.w != 0) {
+  if (cb0[135].x > 0) {
     r2.xyz = r1.xyz * r1.www;
     r1.xyz = float3(8,8,8) * r2.xyz;
   }
   r1.xyz = cb0[134].xxx * r1.xyz * CUSTOM_BLOOM;
   r0.xyz = r1.xyz * cb0[134].yzw + r0.xyz;
-  r0.w = cmp(0 < cb0[142].z);
-  if (r0.w != 0) {
+  if (cb0[142].z > 0) {
     r1.xy = -cb0[142].xy + v1.xy;
     r1.yz = cb0[142].zz * abs(r1.xy) * min(1.f, CUSTOM_VIGNETTE);
     r1.x = cb0[141].w * r1.y;
@@ -86,11 +68,13 @@ void main(
     r1.xyz = cb0[133].www * r2.xyz + r1.xyz;
     r0.xyz = renodx::color::srgb::DecodeSafe(r1.xyz);
   }
+  if (CUSTOM_COUNT_OLD_2 == CUSTOM_COUNT_NEW_2) {
+    r0.xyz = GradeAndDisplayMap(r0.xyz);
+  }
   r1.xy = v1.xy * cb0[146].xy + cb0[146].zw;
   r1.xyzw = t4.SampleBias(s1_s, r1.xy, cb0[5].x).xyzw;
   r0.w = r1.w * 2 + -1;
-  r1.x = cmp(r0.w >= 0);
-  r1.x = r1.x ? 1 : -1;
+  r1.x = r0.w >= 0 ? 1 : -1;
   r0.w = 1 + -abs(r0.w);
   r0.w = sqrt(r0.w);
   r0.w = 1 + -r0.w;
