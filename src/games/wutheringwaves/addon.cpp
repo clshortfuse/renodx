@@ -19,19 +19,321 @@
 #include "../../utils/settings.hpp"
 #include "../../utils/shader.hpp"
 #include "../../utils/shader_dump.hpp"
+#include "../../utils/state.hpp"
 #include "../../utils/swapchain.hpp"
 #include "../../utils/random.hpp"
+#include "../../utils/render.hpp"
 #include "./shared.h"
 
 namespace {
-
-std::unordered_set<std::uint32_t> drawn_shaders;
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
+// ===================== Video AutoHDR + HAnS (post-draw) =====================
+
+struct HansResources {
+  uint32_t width = 0;
+  uint32_t height = 0;
+  std::array<reshade::api::resource, 6> resources = {};
+  std::array<reshade::api::resource_view, 6> srvs = {};
+  std::array<reshade::api::resource_view, 6> uavs = {};
+  // Persistent RenderPass per stage: pipelines/layouts/descriptor tables are
+  // created once and reused.
+  std::array<renodx::utils::render::RenderPass, 6> passes = {};
+};
+
+HansResources g_hans_resources;
+
+struct VideoPostResources {
+  reshade::api::resource source_resource = {};
+  reshade::api::resource_view source_srv = {};
+  reshade::api::sampler source_sampler = {};
+  uint32_t width = 0;
+  uint32_t height = 0;
+  reshade::api::format format = reshade::api::format::unknown;
+  renodx::utils::render::RenderPass pass;
+  reshade::api::resource_view last_target = {};
+};
+
+VideoPostResources g_video_post_resources;
+
+reshade::api::device* g_device = nullptr;
+
+void ProcessHans(reshade::api::command_list* cmd_list, reshade::api::resource_view source_target);
+reshade::api::resource_view GetHansMapView(reshade::api::command_list* cmd_list);
+
+void DestroyVideoPostResources(reshade::api::device* device, VideoPostResources& resources) {
+  resources.pass.DestroyAll(device);
+  if (resources.source_sampler.handle != 0u) device->destroy_sampler(resources.source_sampler);
+  if (resources.source_srv.handle != 0u) device->destroy_resource_view(resources.source_srv);
+  if (resources.source_resource.handle != 0u) device->destroy_resource(resources.source_resource);
+  resources = {};
+}
+
+bool EnsureVideoPostResources(
+    reshade::api::device* device,
+    const reshade::api::resource_desc& target_desc,
+    VideoPostResources& resources) {
+  if (resources.width == target_desc.texture.width
+      && resources.height == target_desc.texture.height
+      && resources.source_resource.handle != 0u
+      && resources.format == target_desc.texture.format) {
+    return true;
+  }
+  DestroyVideoPostResources(device, resources);
+
+  reshade::api::resource_desc desc = target_desc;
+  desc.heap = reshade::api::memory_heap::gpu_only;
+  desc.texture.samples = 1;
+  desc.usage = reshade::api::resource_usage::copy_dest
+             | reshade::api::resource_usage::shader_resource;
+  desc.flags = reshade::api::resource_flags::none;
+  if (!device->create_resource(desc, nullptr, reshade::api::resource_usage::shader_resource, &resources.source_resource)) {
+    return false;
+  }
+  const auto view_desc = reshade::api::resource_view_desc(
+      reshade::api::format_to_default_typed(desc.texture.format));
+  if (!device->create_resource_view(
+          resources.source_resource,
+          reshade::api::resource_usage::shader_resource,
+          view_desc,
+          &resources.source_srv)
+      || !device->create_sampler({}, &resources.source_sampler)) {
+    DestroyVideoPostResources(device, resources);
+    return false;
+  }
+  resources.width = desc.texture.width;
+  resources.height = desc.texture.height;
+  resources.format = desc.texture.format;
+  return true;
+}
+
+bool RunVideoPostPass(reshade::api::command_list* cmd_list, reshade::api::resource_view target) {
+  if (target.handle == 0u) return false;
+  auto* device = cmd_list->get_device();
+
+  // GetResourceViewClone resolves the redirected view so we copy the real video content.
+  const auto clone_view = renodx::utils::resource::upgrade::GetResourceViewClone(target);
+  const auto actual_target_view = clone_view.handle != 0u ? clone_view : target;
+  const auto target_resource = device->get_resource_from_view(actual_target_view);
+  const auto target_desc = renodx::utils::resource::GetResourceDesc(device, target_resource);
+  if (target_resource.handle == 0u || target_desc.texture.width == 0u || target_desc.texture.height == 0u) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        std::format(
+            "[Wuthering Waves VideoPost] invalid target view=0x{:016X} resource=0x{:016X} size={}x{}",
+            target.handle,
+            target_resource.handle,
+            target_desc.texture.width,
+            target_desc.texture.height)
+            .c_str());
+    return false;
+  }
+  auto& resources = g_video_post_resources;
+  if (!EnsureVideoPostResources(device, target_desc, resources)) {
+    reshade::log::message(reshade::log::level::warning, "[Wuthering Waves VideoPost] source resource allocation failed");
+    return false;
+  }
+
+  // 1) Copy the freshly drawn video frame into the private source.
+  cmd_list->barrier(
+      target_resource,
+      reshade::api::resource_usage::render_target,
+      reshade::api::resource_usage::copy_source);
+  cmd_list->barrier(
+      resources.source_resource,
+      reshade::api::resource_usage::shader_resource,
+      reshade::api::resource_usage::copy_dest);
+  cmd_list->copy_resource(target_resource, resources.source_resource);
+  cmd_list->barrier(
+      target_resource,
+      reshade::api::resource_usage::copy_source,
+      reshade::api::resource_usage::render_target);
+  cmd_list->barrier(
+      resources.source_resource,
+      reshade::api::resource_usage::copy_dest,
+      reshade::api::resource_usage::shader_resource);
+
+  // 2) Run the HAnS analysis chain against the private source
+  ProcessHans(cmd_list, resources.source_srv);
+
+  // 3) Render the post pass into the video target.
+  auto& pass = resources.pass;
+  if (resources.last_target.handle != target.handle) {
+    pass.InvalidateRenderTargets(cmd_list);
+    resources.last_target = target;
+  }
+  pass.auto_generate_descriptor_table_updates = true;
+  pass.render_target_slots.views = {target};
+  const auto map_view = GetHansMapView(cmd_list);
+  pass.shader_resource_slots.views = {resources.source_srv, map_view.handle != 0u ? map_view : resources.source_srv};
+  pass.sampler_descs = {{}};
+  pass.samplers = {resources.source_sampler};
+  pass.push_constants[renodx::utils::render::ConstantBuffersSlots{.slot = 13, .space = 50}] =
+      std::span<const float>(
+          reinterpret_cast<const float*>(&shader_injection),
+          sizeof(ShaderInjectData) / sizeof(float));
+  pass.pipeline_subobjects.vertex_shader = __video_post_vertex;
+  pass.pipeline_subobjects.pixel_shader = __video_post_pixel;
+  pass.revert_state_after_render = true;
+  const bool rendered = pass.Render(cmd_list);
+  if (!rendered) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        "[Wuthering Waves VideoPost] fullscreen_render=false");
+  }
+  return rendered;
+}
+
+void DestroyHansResources(reshade::api::device* device, HansResources& hans) {
+  for (auto& pass : hans.passes) {
+    pass.DestroyAll(device);
+  }
+  for (const auto view : hans.srvs) {
+    if (view.handle != 0u) device->destroy_resource_view(view);
+  }
+  for (const auto view : hans.uavs) {
+    if (view.handle != 0u) device->destroy_resource_view(view);
+  }
+  for (const auto resource : hans.resources) {
+    if (resource.handle != 0u) device->destroy_resource(resource);
+  }
+  hans = {};
+}
+
+bool EnsureHansResources(
+    reshade::api::device* device,
+    uint32_t source_width,
+    uint32_t source_height,
+    HansResources& hans) {
+  const uint32_t width = (source_width + 1u) / 2u;
+  const uint32_t height = (source_height + 1u) / 2u;
+  if (hans.width == width && hans.height == height && hans.resources[0].handle != 0u) return true;
+  DestroyHansResources(device, hans);
+
+  // Zero-filled at creation
+  const auto zero_data = std::make_unique_for_overwrite<std::uint8_t[]>(
+      static_cast<size_t>(width) * static_cast<size_t>(height) * 8u);
+  std::memset(zero_data.get(), 0, width * height * 8u);
+  const reshade::api::subresource_data initial_data{
+      .data = zero_data.get(),
+      .row_pitch = width * 8u,
+      .slice_pitch = width * height * 8u,
+  };
+
+  reshade::api::resource_desc desc = {};
+  desc.type = reshade::api::resource_type::texture_2d;
+  desc.texture = {width, height, 1, 1, reshade::api::format::r16g16b16a16_float, 1};
+  desc.heap = reshade::api::memory_heap::gpu_only;
+  desc.usage = reshade::api::resource_usage::shader_resource | reshade::api::resource_usage::unordered_access;
+  desc.flags = reshade::api::resource_flags::none;
+
+  for (size_t i = 0; i < hans.resources.size(); ++i) {
+    if (!device->create_resource(desc, &initial_data, reshade::api::resource_usage::shader_resource, &hans.resources[i])) {
+      DestroyHansResources(device, hans);
+      return false;
+    }
+    const auto view_desc = reshade::api::resource_view_desc(reshade::api::format::r16g16b16a16_float);
+    if (!device->create_resource_view(hans.resources[i], reshade::api::resource_usage::shader_resource, view_desc, &hans.srvs[i])
+      || !device->create_resource_view(hans.resources[i], reshade::api::resource_usage::unordered_access, view_desc, &hans.uavs[i])) {
+      DestroyHansResources(device, hans);
+      return false;
+    }
+  }
+  hans.width = width;
+  hans.height = height;
+  return true;
+}
+
+bool RunHansPass(
+    renodx::utils::render::RenderPass& pass,
+    reshade::api::command_list* cmd_list,
+    std::span<const uint8_t> shader,
+    const std::vector<reshade::api::resource_view>& inputs,
+    reshade::api::resource_view output,
+    const std::array<float, 4>& constants,
+    uint32_t width,
+    uint32_t height) {
+  pass.auto_generate_descriptor_table_updates = true;
+  pass.shader_resource_slots.views = inputs;
+  pass.unordered_access_slots.views = {output};
+  pass.pipeline_subobjects.compute_shader = shader;
+  pass.push_constants[{0, 0}] = constants;
+  pass.dispatch_group_counts = {(width + 7u) / 8u, (height + 7u) / 8u, 1u};
+  pass.revert_state_after_render = true;
+  return pass.Render(cmd_list);
+}
+
+void ProcessHans(reshade::api::command_list* cmd_list, reshade::api::resource_view source_target) {
+  auto& hans = g_hans_resources;
+  if (shader_injection.hans_mode <= 0.f) {
+    return;
+  }
+
+  auto* device = cmd_list->get_device();
+  const auto source_resource = renodx::utils::resource::GetResourceFromView(device, source_target);
+  const auto source_desc = renodx::utils::resource::GetResourceDesc(device, source_resource);
+  if (source_resource.handle == 0u || source_desc.texture.width == 0u || source_desc.texture.height == 0u) {
+    return;
+  }
+
+  if (!EnsureHansResources(device, source_desc.texture.width, source_desc.texture.height, hans)) {
+    return;
+  }
+
+  const std::array<float, 4> constants = {
+      static_cast<float>(source_desc.texture.width),
+      static_cast<float>(source_desc.texture.height),
+      static_cast<float>(hans.width),
+      static_cast<float>(hans.height),
+  };
+  const uint32_t width = hans.width;
+  const uint32_t height = hans.height;
+    const bool feature_ok = RunHansPass(hans.passes[0], cmd_list, __hans_feature, {source_target}, hans.uavs[0], constants, width, height);
+    const bool blur_horizontal_ok = feature_ok && RunHansPass(hans.passes[1], cmd_list, __hans_blur_horizontal, {hans.srvs[0]}, hans.uavs[1], constants, width, height);
+    const bool blur_vertical_ok = blur_horizontal_ok && RunHansPass(hans.passes[2], cmd_list, __hans_blur_vertical, {hans.srvs[1]}, hans.uavs[2], constants, width, height);
+    const bool dilate_horizontal_ok = blur_vertical_ok && RunHansPass(hans.passes[3], cmd_list, __hans_dilate_horizontal, {hans.srvs[2]}, hans.uavs[3], constants, width, height);
+    const bool dilate_vertical_ok = dilate_horizontal_ok && RunHansPass(hans.passes[4], cmd_list, __hans_dilate_vertical, {hans.srvs[3]}, hans.uavs[4], constants, width, height);
+    RunHansPass(
+      hans.passes[5],
+      cmd_list,
+      __hans_map,
+      {hans.srvs[0], hans.srvs[2]},
+      hans.uavs[5],
+      constants,
+      width,
+      height);
+}
+
+reshade::api::resource_view GetHansMapView(reshade::api::command_list* cmd_list) {
+  return g_hans_resources.resources[5].handle != 0u ? g_hans_resources.srvs[5] : reshade::api::resource_view{0};
+}
+
 float current_settings_mode = 0;
+
+void OnVideoDrawn(reshade::api::command_list* cmd_list) {
+  reshade::api::resource_view target = {0};
+  if (auto* state = renodx::utils::state::GetCurrentState(cmd_list);
+      state != nullptr && !state->render_targets.empty()) {
+    target = state->render_targets[0];
+  }
+  if (target.handle == 0u) return;
+  RunVideoPostPass(cmd_list, target);
+}
+
+void RegisterVideoDrawProbes() {
+  // Hook the YUV conversion draw (decoder -> RGB) so the post pass runs on
+  // the raw decoded frame before the presentation shaders uses it.
+  const auto shader_hash = 0x2065A2FCu;
+  auto shader = custom_shaders.find(shader_hash);
+  if (shader != custom_shaders.end()) {
+    shader->second.on_drawn = &OnVideoDrawn;
+  }
+}
+
+// ===================== End Video AutoHDR + HAnS =====================
 
 int tint_tone_mapping = 0xF2C14E;
 int tint_video = 0xE76F51;
@@ -193,7 +495,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Map Method",
         .section = "Tone Mapping",
         .tooltip = "Selects the tone map method used. Extended sticks closer to the original creative intent. Psycho can give more pleasing hues.",
-        .labels = {"Extended", "PsychoV"},
+        .labels = {"Extended", "PsychoV", "PsychoV25"},
         .tint = tint_tone_mapping,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
@@ -220,6 +522,27 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 4000.f,
     },
+      new renodx::utils::settings::Setting{
+        .key = "HAnSMode",
+        .binding = &shader_injection.hans_mode,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Highlight Analysis",
+        .section = "Video",
+        .tooltip = "Controls HAnS local highlight analysis for SDR video.",
+        .labels = {"Off", "On"},
+        .tint = tint_video,
+      },
+      new renodx::utils::settings::Setting{
+        .key = "VideoFilmGrain",
+        .binding = &shader_injection.film_grain,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Film Grain",
+        .section = "Video",
+        .tooltip = "Applies film grain to videos.",
+        .tint = tint_video,
+      },
     new renodx::utils::settings::Setting {
         .key = "UIVisibility",
         .binding = &shader_injection.ui_visibility,
@@ -370,7 +693,7 @@ renodx::utils::settings::Settings settings = {
         .min = 0.f,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1
-                      && shader_injection.tone_map_scaling != 1.f; },
+                      && shader_injection.tone_map_scaling == 0.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
       },
@@ -454,20 +777,19 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
       new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.color_grade_blowout,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Custom Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .tooltip = "Desaturates highlights as they approach white (dechroma).\nRamped over ~2.75 decades above the adaptive neutral on a smooth C2 curve.\n0 = off.",
         .tint = tint_custom_grading,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return false; },
       },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeHueCorrection",
+      .key = "ColorGradeHueCorrection",
         .binding = &shader_injection.color_grade_hue_correction,
         .default_value = 50.f,
         .label = "Hue Restore",
@@ -483,7 +805,7 @@ renodx::utils::settings::Settings settings = {
       new renodx::utils::settings::Setting{
         .key = "ColorGradeHueEmulation",
         .binding = &shader_injection.color_grade_hue_emulation,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Hue Shift",
         .section = "Custom Color Grading",
         .tooltip = "Controls SDR hue emulation strength.",
@@ -508,35 +830,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
       },
-      new renodx::utils::settings::Setting{
-        .key = "ColorGradeHueReferenceClip",
-        .binding = &shader_injection.color_grade_hue_piecewise_a,
-        .default_value = 2.f,
-        .label = "Hue Reference Clip",
-        .section = "Custom Color Grading",
-        .tooltip = "White clip point for the hue/purity emulation reference curve.",
-        .tint = tint_custom_grading,
-        .min = 1.f,
-        .max = 8.f,
-        .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1;},
-        .is_visible = []() { return false; },
-      },
-      new renodx::utils::settings::Setting{
-        .key = "ColorGradeHueReferenceShoulder",
-        .binding = &shader_injection.color_grade_hue_piecewise_b,
-        .default_value = 1.f,
-        .label = "Hue Reference Shoulder",
-        .section = "Custom Color Grading",
-        .tooltip = "Rolloff start point for the hue/purity emulation reference curve.",
-        .tint = tint_custom_grading,
-        .min = 0.1f,
-        .max = 4.f,
-        .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1;},
-        .is_visible = []() { return false; },
-      },
-    new renodx::utils::settings::Setting {
+      new renodx::utils::settings::Setting {
         .key = "WuWaBloom",
         .binding = &shader_injection.wuwa_bloom,
         .default_value = 100.f,
@@ -555,6 +849,19 @@ renodx::utils::settings::Settings settings = {
       .section = "Post-Processing",
       .tooltip = "Boosts sun, moon, and glow brightness in the skybox.",
       .tint = tint_post_processing,
+    },
+    new renodx::utils::settings::Setting{
+      .key = "FilmGrain",
+      .binding = &shader_injection.wuwa_grain,
+      .default_value = 50.f,
+      .label = "Film Grain",
+      .section = "Post-Processing",
+      .tooltip = "Applies film grain to the final image.",
+      .tint = tint_post_processing,
+      .min = 0.f,
+      .max = 100.f,
+      .is_enabled = []() { return shader_injection.film_grain != 0.f; },
+      .parse = [](float value) { return value * 0.02f; },
     },
 };
 
@@ -580,7 +887,7 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"FxSharpeningType", 1.f},
       {"FxSharpening", 0.f},
       {"WuWaBloom", 100.f},
@@ -602,28 +909,28 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"WuWaBloom", 60.f}
     }
   },
   { HDR_LOOK,
     { {"GammaCorrection", 1.f},
       {"SwapChainGammaCorrection", 2.f},
-      {"ToneMapScaling", 1.f},
+      {"ToneMapScaling", 2.f},
       {"ColorGradeStrength", 100.f},
       {"WuWaTonemapper", 3.f},
       {"WuWaTonemapStrength", 50.f},
       {"WuWaLUTStrength", 100.f},
       {"WuWaLUTLightness", 50.f},
       {"ColorGradeHueCorrection", 0.f},
-      {"ColorGradeHueEmulation", 25.f},
-      {"ColorGradePerChannelBlowout", 25.f},
+      {"ColorGradeHueEmulation", 100.f},
+      {"ColorGradePerChannelBlowout", 50.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 60.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 60.f},
-      {"ColorGradeSaturation", 55.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeDechroma", 0.f},
       {"WuWaBloom", 60.f}
     }
   }
@@ -712,6 +1019,16 @@ renodx::utils::settings::Settings info_settings = {
         },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "spiwar's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/spiwar");
+        },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
@@ -725,6 +1042,7 @@ void OnPresetOff() {
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  g_device = swapchain->get_device();
   if (fired_on_init_swapchain) return;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
@@ -840,6 +1158,15 @@ void AddAdvancedSettings() {
           .usage_include = reshade::api::resource_usage::render_target
       });
   }
+
+  // Upgrade the YUV video decode output (2560x1080 b8g8r8a8_typeless)
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::b8g8r8a8_typeless,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .use_resource_view_cloning = true,
+      .dimensions = {.width = 2560, .height = 1080, .depth = -1},
+      .usage_include = reshade::api::resource_usage::render_target,
+  });
 
   const std::vector<float> letterbox_aspect_ratios = {3840.f / 1620.f, 2880.f / 1216.f};
   // Upgrade letterbox cutscene resources
@@ -1070,6 +1397,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade::log::message(reshade::log::level::info, "DumpLUTShaders enabled.");
       }
 
+      renodx::utils::state::Use(fdw_reason);
+      RegisterVideoDrawProbes();
+
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
@@ -1078,6 +1408,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
+      renodx::utils::state::Use(fdw_reason);
+      DestroyHansResources(g_device, g_hans_resources);
+      DestroyVideoPostResources(g_device, g_video_post_resources);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::draw>(OnDrawForLUTDump);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
