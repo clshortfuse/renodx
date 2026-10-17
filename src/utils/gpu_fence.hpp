@@ -5,14 +5,15 @@
 
 #pragma once
 
-#include <d3d9.h>
 #include <d3d10_1.h>
 #include <d3d11_4.h>
 #include <d3d12.h>
+#include <d3d9.h>
 #include <emmintrin.h>
 #include <ntstatus.h>
 #include <windows.h>
 #include <winternl.h>
+
 
 // The KMT declarations require NTSTATUS from winternl.h first.
 #include <d3dkmthk.h>
@@ -48,6 +49,9 @@
 #include "./platform.hpp"
 
 namespace renodx::utils::gpu_fence {
+
+// No fence point was accepted; this does not imply that GPU work was retired.
+inline constexpr std::uint64_t NO_SIGNAL = 0;
 
 namespace internal {
 
@@ -95,7 +99,6 @@ struct D3DKMTFence {
           reshade::log::message(reshade::log::level::error,
                                 ("utils::gpu_fence imported KMT object destruction NTSTATUS=" + std::to_string(result)).c_str());
           assert(false && "Imported KMT object destruction failed");
-          std::terminate();
         }
       }
     }
@@ -120,7 +123,7 @@ struct D3DKMTFence {
           reshade::log::message(reshade::log::level::error,
                                 ("utils::gpu_fence KMT broadcast wait failed after primary submission, NTSTATUS=" + std::to_string(result)).c_str());
           assert(false && "KMT broadcast wait partially submitted");
-          std::terminate();
+          return false;
         }
       }
       return true;
@@ -146,7 +149,6 @@ struct D3DKMTFence {
           reshade::log::message(reshade::log::level::error,
                                 ("utils::gpu_fence native KMT object destruction NTSTATUS=" + std::to_string(result)).c_str());
           assert(false && "Native KMT object destruction failed");
-          std::terminate();
         }
       }
     }
@@ -231,14 +233,14 @@ struct D3DKMTFence {
     if (!joined_contexts.empty() && wait_gpu == nullptr) {
       reshade::log::message(reshade::log::level::error, "utils::gpu_fence KMT joined-context wait unavailable");
       assert(false && "Missing joined-context wait function");
-      std::terminate();
+      return false;
     }
     for (const auto& joined : joined_contexts) {
       assert(joined->fence != nullptr && joined->fence->object != 0 && target > joined->value);
       if (joined->fence == nullptr || joined->fence->object == 0 || target <= joined->value) {
         reshade::log::message(reshade::log::level::error, "utils::gpu_fence invalid joined KMT timeline");
         assert(false && "Invalid joined KMT timeline");
-        std::terminate();
+        return false;
       }
     }
     const UINT64 monitored_value = target;
@@ -259,7 +261,6 @@ struct D3DKMTFence {
         if (submitted) {
           reshade::log::message(reshade::log::level::error, "utils::gpu_fence KMT signal failed after partial submission");
           assert(false && "KMT signal partially submitted");
-          std::terminate();
         }
         return false;
       }
@@ -279,7 +280,7 @@ struct D3DKMTFence {
         reshade::log::message(reshade::log::level::error,
                               ("utils::gpu_fence KMT join wait failed after signal, NTSTATUS=" + std::to_string(result)).c_str());
         assert(false && "KMT join partially submitted");
-        std::terminate();
+        return false;
       }
     }
     return signal_context(this);
@@ -346,7 +347,6 @@ struct D3D11Fence {
 struct D3D12Fence {
   std::shared_ptr<ID3D12Fence> fence;
   std::uint64_t value = 0;
-  std::shared_ptr<ID3D12CommandQueue> queue;
 
   explicit D3D12Fence(ID3D12Device* device) {
     assert(device != nullptr);
@@ -364,10 +364,9 @@ struct D3D12Fence {
 
   [[nodiscard]] std::uint64_t QueueFence(ID3D12CommandQueue* source) {
     if (value >= std::numeric_limits<std::uint64_t>::max() - 2) return 0;
-    source->AddRef();
-    std::shared_ptr<ID3D12CommandQueue> owned_queue(source, [](auto* native) { native->Release(); });
-    // A later signal must not overtake a pending value on another queue.
-    if (queue.get() != source && value != 0) {
+    // Order signals without retaining a queue past its ReShade wrapper lifetime.
+    // Waiting on the preceding signal is also valid on the same queue.
+    if (value != 0) {
       const auto result = source->Wait(fence.get(), value);
       if (FAILED(result)) {
         reshade::log::message(reshade::log::level::error,
@@ -381,7 +380,6 @@ struct D3D12Fence {
                             ("utils::gpu_fence D3D12 Signal HRESULT=" + std::to_string(result)).c_str());
       return 0;
     }
-    queue = std::move(owned_queue);
     return ++value;
   }
 };
@@ -412,6 +410,8 @@ struct OpenGLFence {
   void(APIENTRY* delete_sync)(void*) = nullptr;
   std::condition_variable_any condition;
   std::deque<Pending> pending;
+  bool ready = false;
+  bool failed = false;
   std::atomic_bool stopping = false;
   std::thread worker;
   std::uint64_t value = 0;
@@ -453,7 +453,14 @@ struct OpenGLFence {
         if (!current) {
           reshade::log::message(reshade::log::level::error, "utils::gpu_fence could not bind GL worker context");
           assert(false && "Could not bind GL worker context");
-          std::terminate();
+          std::unique_lock lock(mutex);
+          failed = true;
+          stopping.store(true);
+          return;
+        }
+        {
+          std::unique_lock lock(mutex);
+          ready = true;
         }
         for (;;) {
           Pending registration;
@@ -475,22 +482,24 @@ struct OpenGLFence {
             if (result != TIMEOUT_EXPIRED) {
               reshade::log::message(reshade::log::level::error, "utils::gpu_fence glClientWaitSync failed");
               assert(false && "glClientWaitSync failed");
-              std::terminate();
+              std::unique_lock lock(mutex);
+              failed = true;
+              stopping.store(true);
+              break;
             }
           }
+          // On stop/failure, drain sync objects without publishing completion.
           delete_sync(registration.sync);
         }
         if (make_current(nullptr, nullptr) == FALSE) {
           reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL worker unbind failed");
           assert(false && "GL worker unbind failed");
-          std::terminate();
         }
       });
     } catch (...) {
       if (delete_context(worker_context) == FALSE) {
         reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL context rollback failed");
         assert(false && "GL context rollback failed");
-        std::terminate();
       }
       worker_context = nullptr;
       throw;
@@ -499,12 +508,23 @@ struct OpenGLFence {
   [[nodiscard]] std::uint64_t QueueFence() {
     if (!worker.joinable() || stopping.load()
         || value >= std::numeric_limits<std::uint64_t>::max() - 1) return {};
+    {
+      // Do not wait for WGL startup here: the caller may hold ReShade's WGL lock.
+      // No sync may be accepted until the worker has a context for its cleanup.
+      std::shared_lock lock(mutex);
+      if (!ready) return 0;
+    }
     assert(get_current() == producer && get_dc() == dc);
     if (get_current() != producer || get_dc() != dc) return {};
     auto* sync = fence_sync(SYNC_GPU_COMMANDS_COMPLETE, 0);
     if (sync == nullptr) return {};
     try {
       std::unique_lock lock(mutex);
+      if (stopping.load()) {
+        lock.unlock();
+        delete_sync(sync);
+        return 0;
+      }
       pending.push_back(Pending{.sync = sync, .value = value + 1});
     } catch (...) {
       delete_sync(sync);
@@ -528,7 +548,6 @@ struct OpenGLFence {
       if (delete_context(worker_context) == FALSE) {
         reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL context destruction failed");
         assert(false && "GL context destruction failed");
-        std::terminate();
       }
     }
   }
@@ -585,6 +604,7 @@ struct __declspec(uuid("D9A8F82B-A79C-458B-B027-925F516BDA37")) NativeDiscoveryH
   decltype(&D3DKMTSetContextSchedulingPriority) set_priority = nullptr;
   NativeDiscoveryCapture* (*begin_capture)(NativeDiscoveryCapture*) = nullptr;
   void (*end_capture)(NativeDiscoveryCapture*, NativeDiscoveryCapture*) = nullptr;
+  bool installation_failed = false;
 };
 static cross_addon::Shared<NativeDiscoveryHooks> shared_data;
 static bool minhook_initialized = false;
@@ -645,15 +665,19 @@ template <typename NativeDevice>
   if (!internal::attached) {
     reshade::log::message(reshade::log::level::error, "utils::gpu_fence discovery requires module attachment");
     assert(false && "Discovery requires module attachment");
-    std::terminate();
+    return false;
   }
   auto* hooks = internal::shared_data.data;
   if (hooks == nullptr) {
     reshade::log::message(reshade::log::level::error, "utils::gpu_fence failed to allocate discovery owner");
     assert(false && "Discovery owner allocation failed");
-    std::terminate();
+    return false;
   }
   std::unique_lock lock(hooks->mutex);
+  if (hooks->installation_failed) {
+    reshade::log::message(reshade::log::level::error, "utils::gpu_fence native discovery installation previously failed");
+    return false;
+  }
   if (!hooks->installed) {
     try {
       auto* native = GetModuleHandleW(L"win32u.dll");
@@ -676,7 +700,7 @@ template <typename NativeDevice>
         if (active_discovery_capture != capture) {
           reshade::log::message(reshade::log::level::error, "utils::gpu_fence discovery capture ended out of order or on another thread");
           assert(false && "Invalid discovery capture nesting");
-          std::terminate();
+          return;
         }
         active_discovery_capture = previous;
       };
@@ -697,9 +721,12 @@ template <typename NativeDevice>
       minhook::ApplyQueued();
       hooks->installed = true;
     } catch (const std::exception& error) {
+      // MinHook failures can leave live patches. Preserve their pinned owner's
+      // trampoline pointers instead of rewriting them on another device's retry.
+      hooks->installation_failed = true;
       reshade::log::message(reshade::log::level::error, error.what());
       assert(false && "Native discovery installation failed");
-      std::terminate();
+      return false;
     }
   }
   IUnknown* identity = nullptr;
@@ -812,16 +839,17 @@ class Fence {
   friend std::uint64_t QueueSignal(Submitter* source, Fence* fence, std::function<void()> callback);
   template <QueueSubmitter Submitter>
   friend bool QueueWait(Submitter* destination, Fence* fence, std::uint64_t value);
+
  private:
   std::unique_ptr<void, decltype([](HANDLE handle) {
-    if (CloseHandle(handle) == FALSE) {
-      const auto error = GetLastError();
-      reshade::log::message(reshade::log::level::error,
-                            ("utils::gpu_fence shared handle close Win32 error=" + std::to_string(error)).c_str());
-      assert(false && "Shared fence handle close failed");
-      std::terminate();
-    }
-  })> shared_handle;
+                    if (CloseHandle(handle) == FALSE) {
+                      const auto error = GetLastError();
+                      reshade::log::message(reshade::log::level::error,
+                                            ("utils::gpu_fence shared handle close Win32 error=" + std::to_string(error)).c_str());
+                      assert(false && "Shared fence handle close failed");
+                    }
+                  })>
+      shared_handle;
   std::variant<std::monostate,
                std::unique_ptr<internal::D3DKMTFence>,
                std::unique_ptr<internal::D3D11Fence>,
@@ -833,8 +861,9 @@ class Fence {
   // released before the source backend; callers retire all GPU uses first.
   // Native fence interfaces retain their device; KMT imports retain binding_owner.
   std::map<IUnknown*, std::variant<std::shared_ptr<internal::D3DKMTFence::External>,
-                                  std::shared_ptr<ID3D11Fence>,
-                                  std::shared_ptr<ID3D12Fence>>> imports_by_device;
+                                   std::shared_ptr<ID3D11Fence>,
+                                   std::shared_ptr<ID3D12Fence>>>
+      imports_by_device;
   reshade::api::device* api_device = nullptr;
 
   struct CallbackDelivery {
@@ -848,7 +877,7 @@ class Fence {
     bool stopping = false;
     std::thread worker;
   };
-  std::unique_ptr<CallbackDelivery> callback_delivery;
+  std::shared_ptr<CallbackDelivery> callback_delivery;
 
   template <typename NativeDevice>
     requires(std::is_same_v<NativeDevice, IDirect3DDevice9Ex> || std::is_same_v<NativeDevice, ID3D10Device>)
@@ -900,6 +929,7 @@ class Fence {
     if (device == nullptr) throw std::invalid_argument("Fence requires a device");
     backend = std::make_unique<internal::D3D12Fence>(device);
   }
+
  public:
   template <typename NativeDevice>
     requires(std::is_same_v<NativeDevice, IDirect3DDevice9Ex>
@@ -948,14 +978,17 @@ class Fence {
   // A callback may not destroy its own fence or race other users of the fence.
   ~Fence() {
     if (callback_delivery != nullptr) {
-      if (callback_delivery->worker.get_id() == std::this_thread::get_id()) {
-        reshade::log::message(reshade::log::level::error, "utils::gpu_fence destruction from its own callback");
-        assert(false && "Fence callback cannot destroy its own fence");
-        std::terminate();
-      }
+      // Cancel CPU delivery; the caller is responsible for retiring GPU work.
       {
         std::unique_lock lock(callback_delivery->mutex);
         callback_delivery->stopping = true;
+      }
+      if (callback_delivery->worker.get_id() == std::this_thread::get_id()) {
+        reshade::log::message(reshade::log::level::error, "utils::gpu_fence destruction from its own callback");
+        assert(false && "Fence callback cannot destroy its own fence");
+        // Contract violation: the worker retains delivery state until it exits.
+        callback_delivery->worker.detach();
+        return;
       }
       callback_delivery->condition.notify_all();
       if (callback_delivery->worker.joinable()) {
@@ -969,6 +1002,8 @@ class Fence {
       if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::monostate>) {
         throw std::runtime_error("Uninitialized fence");
       } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::OpenGLFence>>) {
+        std::shared_lock lock(implementation->mutex);
+        if (implementation->failed) throw std::runtime_error("OpenGL fence completion observation failed");
         completed = implementation->completed_value.load();
       } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
         if (implementation->native == nullptr) throw std::runtime_error("Invalid fence");
@@ -977,9 +1012,9 @@ class Fence {
         if (implementation->fence == nullptr) throw std::runtime_error("Invalid fence");
         completed = implementation->fence->GetCompletedValue();
       }
-      if (completed == std::numeric_limits<std::uint64_t>::max()) throw std::runtime_error("Fence completion query failed");
       return completed;
-    }, backend);
+    },
+                      backend);
   }
   [[nodiscard]] bool IsComplete(std::uint64_t value) const { return GetCompletedValue() >= value; }
   [[nodiscard]] bool IsBusy() const {
@@ -990,20 +1025,33 @@ class Fence {
       } else {
         return completed < implementation->value;
       }
-    }, backend);
+    },
+                      backend);
   }
 };
 
-// Returns an automatically allocated GPU point, or zero on rejected/failed submission.
+// Returns an automatically allocated GPU point, or NO_SIGNAL on rejected/failed submission.
 // Callers submit pending API work first and retain resources after a failed signal.
 // Optional callbacks execute FIFO on a worker after completion, never under a lock.
 // Destruction cancels pending callbacks and joins delivery; serialize submission/destruction.
 // Delivery may precede this call's return. Callbacks must not throw, destroy their
 // fence, or race submission; capture dependencies must outlive delivery/cancellation.
-// Completion query, callback, or post-signal registration failures are fatal.
+// Backend completion values are preserved, including UINT64_MAX. Callbacks are
+// threshold notifications, not a guarantee of successful GPU execution.
+// Callback exceptions are logged and asserted; NDEBUG builds continue later callbacks.
+// Query exceptions stop delivery; submission exceptions propagate. GL worker failure
+// throws on completion queries rather than reporting retirement. GL submissions are
+// rejected until asynchronous worker startup succeeds; no GPU point is accepted then.
 template <QueueSubmitter Submitter>
 [[nodiscard]] std::uint64_t QueueSignal(Submitter* source, Fence* fence, std::function<void()> callback) {
   if (source == nullptr || fence == nullptr) throw std::invalid_argument("QueueSignal requires a source and fence");
+  if (fence->callback_delivery != nullptr) {
+    std::shared_lock lock(fence->callback_delivery->mutex);
+    if (fence->callback_delivery->stopping) {
+      reshade::log::message(reshade::log::level::error, "utils::gpu_fence callback delivery has stopped");
+      return NO_SIGNAL;
+    }
+  }
   if constexpr (std::is_same_v<Submitter, reshade::api::command_queue>) {
     switch (source->get_device()->get_api()) {
       case reshade::api::device_api::d3d9: {
@@ -1023,8 +1071,8 @@ template <QueueSubmitter Submitter>
       default:
         if (fence->api_device != source->get_device()) throw std::invalid_argument("Fence belongs to another device");
         if (auto* implementation = std::get_if<std::unique_ptr<internal::ReShadeFence>>(&fence->backend)) {
-          if ((*implementation)->queue != source && (*implementation)->value != 0
-              && !source->wait((*implementation)->native->fence, (*implementation)->value)) return 0;
+          if ((*implementation)->queue != source && (*implementation)->value != NO_SIGNAL
+              && !source->wait((*implementation)->native->fence, (*implementation)->value)) return NO_SIGNAL;
           (*implementation)->queue = source;
         }
         break;
@@ -1060,41 +1108,30 @@ template <QueueSubmitter Submitter>
       } else {
         return false;
       }
-    }, fence->backend);
+    },
+                                    fence->backend);
     if (!matches) throw std::invalid_argument("QueueSignal source does not own this fence timeline");
   }
   return std::visit([&](auto& implementation) -> std::uint64_t {
     if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::monostate>) {
       reshade::log::message(reshade::log::level::error, "utils::gpu_fence uninitialized signal backend");
       assert(false && "Uninitialized fence backend");
-      std::terminate();
+      return NO_SIGNAL;
     } else {
+      std::unique_lock<std::shared_mutex> delivery_lock;
+      bool callback_reserved = false;
+      std::uint64_t completion = NO_SIGNAL;
+
+      // Prepare delivery before accepting GPU work. Allocation failures must
+      // not leave a submitted point without its requested callback.
       try {
-        std::uint64_t completion = 0;
-        if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>
-                      && std::is_same_v<Submitter, ID3D12CommandQueue>) {
-          completion = implementation->QueueFence(source);
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
-          throw std::invalid_argument("D3D12 fence requires a D3D12 submission queue");
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
-          // ReShade owns Vulkan submission, including its immediate-list flush.
-          if (implementation->value < std::numeric_limits<std::uint64_t>::max() - 1
-              && implementation->queue->signal(implementation->native->fence, implementation->value + 1)) {
-            completion = ++implementation->value;
-          }
-        } else {
-          completion = implementation->QueueFence();
-        }
-        if (!completion) {
-          reshade::log::message(reshade::log::level::error, "utils::gpu_fence backend signal failed");
-          return 0;
-        }
         if (callback) {
           if (fence->callback_delivery == nullptr) {
-            fence->callback_delivery = std::make_unique<Fence::CallbackDelivery>();
-            fence->callback_delivery->worker = std::thread([fence]() {
+            fence->callback_delivery = std::make_shared<Fence::CallbackDelivery>();
+          }
+          if (!fence->callback_delivery->worker.joinable()) {
+            fence->callback_delivery->worker = std::thread([fence, delivery = fence->callback_delivery]() {
               try {
-                auto* delivery = fence->callback_delivery.get();
                 std::unique_lock lock(delivery->mutex);
                 while (true) {
                   delivery->condition.wait(lock, [delivery]() {
@@ -1110,32 +1147,99 @@ template <QueueSubmitter Submitter>
                   auto completed_callback = std::move(delivery->pending.front().callback);
                   delivery->pending.pop_front();
                   lock.unlock();
-                  completed_callback();
+
+                  // Both invocation and capture destruction run outside the lock.
+                  try {
+                    completed_callback();
+                  } catch (const std::exception& error) {
+                    reshade::log::message(reshade::log::level::error, error.what());
+                    assert(false && "Fence callback must not throw");
+                  } catch (...) {
+                    reshade::log::message(reshade::log::level::error, "utils::gpu_fence CPU callback threw");
+                    assert(false && "Fence callback must not throw");
+                  }
                   completed_callback = {};
                   lock.lock();
                 }
               } catch (...) {
-                reshade::log::message(reshade::log::level::error, "utils::gpu_fence completion query or CPU callback threw");
+                reshade::log::message(reshade::log::level::error, "utils::gpu_fence completion delivery worker threw");
                 assert(false && "Fence callback delivery failed");
-                std::terminate();
+                // Stop CPU delivery; this does not establish GPU retirement.
+                std::unique_lock lock(delivery->mutex);
+                delivery->stopping = true;
               }
             });
           }
-          {
-            std::unique_lock lock(fence->callback_delivery->mutex);
-            fence->callback_delivery->pending.push_back({.value = completion, .callback = std::move(callback)});
-          }
-          fence->callback_delivery->condition.notify_one();
         }
-        return completion;
+        if (fence->callback_delivery != nullptr) {
+          delivery_lock = std::unique_lock(fence->callback_delivery->mutex);
+          if (fence->callback_delivery->stopping) {
+            reshade::log::message(reshade::log::level::error, "utils::gpu_fence callback delivery has stopped");
+            return NO_SIGNAL;
+          }
+          if (callback) {
+            // Allocate before submission; the worker cannot observe this entry
+            // until its actual fence point has been assigned below.
+            fence->callback_delivery->pending.push_back({.value = NO_SIGNAL});
+            fence->callback_delivery->pending.back().callback = std::move(callback);
+            callback_reserved = true;
+          }
+        }
+
+        // Submit with the reservation hidden from the delivery worker.
+        if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>
+                      && std::is_same_v<Submitter, ID3D12CommandQueue>) {
+          completion = implementation->QueueFence(source);
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
+          throw std::invalid_argument("D3D12 fence requires a D3D12 submission queue");
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
+          // ReShade owns Vulkan submission, including its immediate-list flush.
+          if (implementation->value < std::numeric_limits<std::uint64_t>::max() - 1
+              && implementation->queue->signal(implementation->native->fence, implementation->value + 1)) {
+            completion = ++implementation->value;
+          }
+        } else {
+          completion = implementation->QueueFence();
+        }
       } catch (...) {
         reshade::log::message(reshade::log::level::error,
                               "utils::gpu_fence signal or required retirement tracking threw");
         assert(false && "Fence signal or required retirement tracking threw");
-        std::terminate();
+        // Roll back only this reservation, preserving earlier callbacks.
+        // Move captures out so unwinding destroys them after unlocking.
+        if (callback_reserved) {
+          callback = std::move(fence->callback_delivery->pending.back().callback);
+          fence->callback_delivery->pending.pop_back();
+        }
+        if (delivery_lock.owns_lock()) {
+          delivery_lock.unlock();
+        }
+        throw;
       }
+
+      // Commit the accepted point, or withdraw a rejected submission's callback.
+      if (callback_reserved) {
+        if (completion != NO_SIGNAL) {
+          fence->callback_delivery->pending.back().value = completion;
+        } else {
+          callback = std::move(fence->callback_delivery->pending.back().callback);
+          fence->callback_delivery->pending.pop_back();
+        }
+      }
+      if (delivery_lock.owns_lock()) {
+        delivery_lock.unlock();
+      }
+      if (completion == NO_SIGNAL) {
+        reshade::log::message(reshade::log::level::error, "utils::gpu_fence backend signal failed");
+        return NO_SIGNAL;
+      }
+      if (fence->callback_delivery != nullptr) {
+        fence->callback_delivery->condition.notify_one();
+      }
+      return completion;
     }
-  }, fence->backend);
+  },
+                    fence->backend);
 }
 
 template <QueueSubmitter Submitter>
@@ -1190,7 +1294,8 @@ template <QueueSubmitter Submitter>
     if (found == fence->imports_by_device.end()) {
       std::variant<std::shared_ptr<internal::D3DKMTFence::External>,
                    std::shared_ptr<ID3D11Fence>,
-                   std::shared_ptr<ID3D12Fence>> imported;
+                   std::shared_ptr<ID3D12Fence>>
+          imported;
       if (fence->shared_handle == nullptr) {
         HANDLE handle = nullptr;
         const auto exported = std::visit([&](const auto& implementation) -> bool {
@@ -1218,7 +1323,8 @@ template <QueueSubmitter Submitter>
           } else {
             return false;
           }
-        }, fence->backend);
+        },
+                                         fence->backend);
         if (!exported) return false;
         fence->shared_handle.reset(handle);
       }
