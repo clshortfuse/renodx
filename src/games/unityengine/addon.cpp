@@ -3508,6 +3508,7 @@ void AddGamePatches() {
     renodx::mods::shader::expected_constant_buffer_space = 50;
   } else if (filename == "SIGNALIS.exe") {
     clampDestAlphaBlends = true;
+    shader_injection.unormBounds = 1.f;
   } else {
     return;
   }

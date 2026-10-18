@@ -8,6 +8,14 @@ cbuffer cb0 : register(b0){
   float4 cb0[17];
 }
 
+// CUSTOM_UNORM_BOUNDS (SIGNALIS): the noise blends, scanlines and white level were bounded by saturate and the UNORM
+// target. Keep those exact bounds for Vanilla and for SDR-range channels; otherwise a channel may keep the over-range
+// magnitude of its reference input, so noise cannot push a highlight past its own value and divide-mode spikes stay
+// bounded.
+float3 UnormCeiling(float3 ceiling, float3 reference) {
+  return RENODX_TONE_MAP_TYPE == 0.f ? ceiling : ceiling * max(1.f, reference);
+}
+
 void main(
   float4 v0 : SV_POSITION0,
   float2 v1 : TEXCOORD0,
@@ -37,6 +45,10 @@ void main(
     r1.x = r3.x;
     r1.y = r4.y;
     r1.w = 1;
+  }
+  if (CUSTOM_UNORM_BOUNDS != 0.f) {
+    // The persistence history alpha divides the color below; UNORM bounded it.
+    r1.w = saturate(r1.w);
   }
   r2.xy = cb0[4].ww * cb0[4].yx;
   r2.z = 0;
@@ -146,7 +158,9 @@ void main(
   r1.xyz = asint(cb0[6].y) == int(2) ? r5.xyz : r1.xyz;
   r1.xyz = asint(cb0[6].y) == int(1) ? r4.xyz : r1.xyz;
   r1.xyz = cb0[6].yyy ? r1.xyz : r2.yzw;
-  if(RENODX_TONE_MAP_TYPE == 0.f){
+  if (CUSTOM_UNORM_BOUNDS != 0.f) {
+    r1.xyz = clamp(r1.xyz, 0.f, UnormCeiling(1.f, r0.xyz));
+  } else if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r2.yz = float2(1,1) + -cb0[6].zx;
@@ -164,7 +178,9 @@ void main(
   r1.xyz = asint(cb0[6].w) == int(2) ? r5.xyz : r1.xyz;
   r1.xyz = asint(cb0[6].w) == int(1) ? r4.xyz : r1.xyz;
   r1.xyz = cb0[6].www ? r1.xyz : r3.yzw;
-  if(RENODX_TONE_MAP_TYPE == 0.f){
+  if (CUSTOM_UNORM_BOUNDS != 0.f) {
+    r1.xyz = clamp(r1.xyz, 0.f, UnormCeiling(1.f, r0.xyz));
+  } else if(RENODX_TONE_MAP_TYPE == 0.f){
     r1.xyz = saturate(r1.xyz);
   }
   r0.w = 1 + -cb0[7].y;
@@ -188,16 +204,22 @@ void main(
   r0.w = v1.y / r0.w;
   r1.xy = cb0[16].zx * cb0[4].yz + r0.ww;
   r1.x = cb0[16].x * cb0[4].z + r1.x;
-  r1.x = sin(r1.x);
-  r0.x = saturate(r1.x * cb0[16].y + r0.x);
-  r1.x = sin(r1.y);
-  r0.y = r1.x * cb0[16].y + r0.y;
-  r0.w = -cb0[16].z + r0.w;
-  r0.w = cb0[16].x * cb0[4].z + r0.w;
-  r0.w = sin(r0.w);
-  r0.z = r0.w * cb0[16].y + r0.z;
-  if(RENODX_TONE_MAP_TYPE == 0.f){
-    r0.xyz = saturate(r0.xyz);
+  if (CUSTOM_UNORM_BOUNDS != 0.f) {
+    r1.z = -cb0[16].z + r0.w;
+    r1.z = cb0[16].x * cb0[4].z + r1.z;
+    r0.xyz = clamp(sin(r1.xyz) * cb0[16].yyy + r0.xyz, 0.f, UnormCeiling(1.f, r0.xyz));
+  } else {
+    r1.x = sin(r1.x);
+    r0.x = saturate(r1.x * cb0[16].y + r0.x);
+    r1.x = sin(r1.y);
+    r0.y = r1.x * cb0[16].y + r0.y;
+    r0.w = -cb0[16].z + r0.w;
+    r0.w = cb0[16].x * cb0[4].z + r0.w;
+    r0.w = sin(r0.w);
+    r0.z = r0.w * cb0[16].y + r0.z;
+    if(RENODX_TONE_MAP_TYPE == 0.f){
+      r0.xyz = saturate(r0.xyz);
+    }
   }
   r1.xyzw = cb0[9].xyzw * r0.yyyy;
   r1.xyzw = cb0[8].xyzw * r0.xxxx + r1.xyzw;
@@ -206,7 +228,10 @@ void main(
   r1.xyz = cb0[13].xyz + -cb0[12].xyz;
   r0.xyz = r0.xyz / r1.xyz;
   r0.xyz = cb0[12].xyz + r0.xyz;
-  if(RENODX_TONE_MAP_TYPE == 0.f){
+  if (CUSTOM_UNORM_BOUNDS != 0.f) {
+    r0.xyz = max(cb0[14].xyz, r0.xyz);
+    r0.xyz = min(UnormCeiling(cb0[15].xyz, r0.xyz), r0.xyz);
+  } else if(RENODX_TONE_MAP_TYPE == 0.f){
   r0.xyz = max(cb0[14].xyz, r0.xyz);
   r0.xyz = min(cb0[15].xyz, r0.xyz);
   }
@@ -216,5 +241,8 @@ void main(
   }
   o0.xyz = r0.xyz;
   o0.w = r0.w;
+  if (CUSTOM_UNORM_BOUNDS != 0.f) {
+    o0.w = saturate(o0.w);
+  }
   return;
 }
