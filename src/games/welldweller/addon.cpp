@@ -359,6 +359,22 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "FxDebanding",
+        .binding = &shader_injection.swap_chain_output_dither_bits,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .label = "Debanding",
+        .section = "Display Output",
+        .tooltip = "Dithers the final output to hide banding in smooth gradients.",
+        .labels = {"None", "8+2 Dither", "10+2 Dither"},
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+        .parse = [](float value) {
+          if (value == 1.f) return 8.f;
+          if (value == 2.f) return 10.f;
+          return 0.f;
+        },
+    },
 };
 
 const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
