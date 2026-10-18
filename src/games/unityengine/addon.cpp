@@ -2023,6 +2023,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     CountGammaTonemap1ClampedOnDraw(0x363122F4),
     CountGammaTonemap1ClampedOnDraw(0x599066C8),
     CountGammaTonemap1ClampedOnDraw(0x3806037E),
+    CountGammaTonemap1ClampedOnDraw(0x3C58524F),
     CountGammaTonemap1ClampedOnDraw(0xAB3A8C76),
     CountGammaTonemap1ClampedOnDraw(0xAE488FB0),
     CountLinearTonemap1ClampedOnDraw(0xB41582C3),
