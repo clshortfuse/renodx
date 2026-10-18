@@ -29,11 +29,13 @@ void main(
   r3.xyz = float3(-0.5,-0.5,-0.5) + r2.xyz;
   r3.xyz = -r3.xyz * float3(2,2,2) + float3(1,1,1);
   r1.xyz = -r3.xyz * r1.xyz + float3(1,1,1);
+  r3.xyz = r2.xyz;
   r0.xyz = r2.xyz * r0.xyz;
   r0.xyz = r2.xyz >= float3(0.5,0.5,0.5) ? float3(0,0,0) : r0.xyz;
   r2.xyz = r2.xyz >= float3(0.5,0.5,0.5) ? float3(1,1,1) : 0;
   r0.xyz = r0.xyz + r0.xyz;
   r0.xyz = r2.xyz * r1.xyz + r0.xyz;
+  r0.xyz = lerp(r3.xyz, r0.xyz, CUSTOM_FILM_GRAIN);
   } else {
     r2.xyz = CUSTOM_GAMMA_SPACE != 0.f ? renodx::color::srgb::DecodeSafe(r2.xyz) : r2.xyz;
     r0.xyz = applyFilmGrain(r2.xyz, v1);

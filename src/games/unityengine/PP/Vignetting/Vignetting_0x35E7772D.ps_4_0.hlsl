@@ -22,7 +22,7 @@ void main(
   r0.xy = r0.xy + r0.xy;
   r0.x = dot(r0.xy, r0.xy);
   r1.x = cb0[2].y * r0.x;
-  r0.x = -r0.x * cb0[2].x + 1;
+  r0.x = -r0.x * cb0[2].x * CUSTOM_VIGNETTE + 1;
   r1.x = saturate(r1.x);
   r2.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
   r3.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
