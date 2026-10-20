@@ -31,7 +31,7 @@ float3 PostToneMapScale(float3 color){
   return color;
 }
 
-float3 FinalizeOutput(float3 color) {
+float3 FinalizeOutput(float3 color, float2 position) {
   	if(injectedData.toneMapGammaCorrection == 2.f){
 	color = renodx::color::gamma::DecodeSafe(color, 2.4f);
   } else if(injectedData.toneMapGammaCorrection == 1.f){
@@ -46,10 +46,29 @@ float3 FinalizeOutput(float3 color) {
   } else {
   color = renodx::color::bt709::clamp::BT2020(color);
   }
-  color /= 80.f;
-  return color;
+  // Encode for the swap chain that exists. The mode follows the real back buffer (see
+  // OnInitSwapchain) rather than the "Swap Chain Format" setting, because that setting only
+  // applies once the swap chain has been recreated.
+  if (injectedData.swap_chain_output_preset == 1.f) {  // HDR10
+    // The HDR10 container is BT.2020 while the value here is BT.709 (bt709::clamp::BT2020 converts
+    // back), and it has to be PQ encoded; skipping either step visibly changes the image.
+    color = renodx::color::bt2020::from::BT709(color);
+    color = renodx::color::pq::EncodeSafe(color, 1.f);  // 1.0 == 10000 nits
+
+    // A 10-bit store bands without dither: +-0.5 LSB of noise, same as renodx::draw::SwapChainPass.
+    if (injectedData.swap_chain_output_dither_bits > 0.f) {
+      const float max_value = exp2(injectedData.swap_chain_output_dither_bits) - 1.f;
+      const float noise = renodx::random::Generate(position + injectedData.random) - 0.5f;
+      color = round(max(0, color * max_value + noise)) / max_value;
+    }
+    return color;
+  }
+
+  // scRGB: linear light, 1.0 == 80 nits.
+  return color / 80.f;
 }
 
+// Kept on the scRGB convention: only the cosmetic fireworks ("Happy Birthday") pass inverts this.
 float3 InvertFinalizeOutput(float3 color) {
   if (injectedData.toneMapGammaCorrection == 2.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.4f);

@@ -551,6 +551,20 @@ void OnPresetOff() {
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  // Read the output mode off the swap chain that was really created instead of off the
+  // "Swap Chain Format" setting: that setting only applies once the swap chain is recreated, and
+  // the shaders must never encode for a format that is not there yet.
+  {
+    const auto back_buffer = swapchain->get_back_buffer(0);
+    auto* device = swapchain->get_device();
+    if (device != nullptr && back_buffer.handle != 0u) {
+      const auto format = device->get_resource_desc(back_buffer).texture.format;
+      const bool is_hdr10 = format == reshade::api::format::r10g10b10a2_unorm
+                            || format == reshade::api::format::r10g10b10a2_typeless;
+      shader_injection.swap_chain_output_preset = is_hdr10 ? 1.f : 2.f;
+    }
+  }
+
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
@@ -578,6 +592,53 @@ void AddAdvancedSettings() {
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
           settings.push_back(setting);
+
+  // Global output settings. The format is requested here; the shaders follow the swap chain that
+  // really exists (see OnInitSwapchain), so a pending change stays invisible until it applies.
+  {
+    auto* output_format_setting = new renodx::utils::settings::Setting{
+        .key = "Upgrade_UseSCRGB",  // shared with wutheringwaves/unrealengine: 0 = HDR10, 1 = scRGB
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Swap Chain Format",
+        .section = "Resource Upgrades",
+        .tooltip = "HDR10 is required by Intel XeFG frame generation, which rejects the FP16 scRGB "
+                   "swap chain. Applied when the swap chain is recreated (game restart).",
+        .labels = {
+            "HDR10",
+            "scRGB",
+        },
+        .on_change_value = [](float, float current) { renodx::mods::swapchain::SetUseHDR10(current == 0.f); },
+        .is_global = true,
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    };
+    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, output_format_setting);
+    renodx::mods::swapchain::SetUseHDR10(output_format_setting->GetValue() == 0.f);
+    settings.push_back(output_format_setting);
+  }
+
+  {
+    auto* output_dither_setting = new renodx::utils::settings::Setting{
+        .key = "OutputDither",
+        .binding = &shader_injection.swap_chain_output_dither_bits,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Output Dither",
+        .section = "Output",
+        .tooltip = "Dithers the 10-bit HDR10 output so gradients cannot band. "
+                   "Unused by the scRGB swap chain, which is FP16.",
+        .labels = {
+            "Off",
+            "On",
+        },
+        .parse = [](float value) { return value == 0.f ? 0.f : 10.f; },
+        .is_global = true,
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    };
+    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, output_dither_setting);
+    shader_injection.swap_chain_output_dither_bits = output_dither_setting->GetValue();
+    settings.push_back(output_dither_setting);
+  }
 }
 
 }  // namespace
