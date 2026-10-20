@@ -874,8 +874,12 @@ static void OnBindPipeline(
       }
       for (const auto callback : internal::shared.data->on_bind_pipeline_info_callbacks) {
         if (callback != nullptr) {
-          replacement = callback(cmd_list, stages, pipeline, bind_point, &info);
-          retry_unlocked = retry_unlocked || !replacement.has_value();
+          const auto callback_replacement = callback(cmd_list, stages, pipeline, bind_point, &info);
+          retry_unlocked = retry_unlocked || !callback_replacement.has_value();
+          // Non-owner callbacks return zero and must not erase an owner's replacement.
+          if (callback_replacement.has_value() && callback_replacement->handle != 0u) {
+            replacement = callback_replacement;
+          }
         }
       }
     });
@@ -889,7 +893,10 @@ static void OnBindPipeline(
   if (found && retry_unlocked) {
     for (const auto callback : internal::shared.data->on_bind_pipeline_info_callbacks) {
       if (callback != nullptr) {
-        replacement = callback(cmd_list, stages, pipeline, bind_point, nullptr);
+        const auto callback_replacement = callback(cmd_list, stages, pipeline, bind_point, nullptr);
+        if (callback_replacement.has_value() && callback_replacement->handle != 0u) {
+          replacement = callback_replacement;
+        }
       }
     }
   }
