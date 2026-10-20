@@ -2145,7 +2145,6 @@ inline bool OnCreateResourceView(
     case reshade::api::resource_view_type::texture_cube_array:
       break;
     case reshade::api::resource_view_type::buffer:
-      if (is_vulkan) break;
       return false;
     case reshade::api::resource_view_type::unknown:
       assert(false);
@@ -2266,7 +2265,15 @@ inline bool OnCreateResourceView(
     }
   } else {
     // Resource upgrades in general may cause format mismatches
-    if (typeless_resource_format != typeless_view_format) {
+    // ReShade encodes these Vulkan component mappings as distinct view formats.
+    const bool is_vulkan_component_mapped_view = is_vulkan
+      && ((current_desc.format == reshade::api::format::a8_unorm
+         && resource_desc.texture.format == reshade::api::format::r8_unorm)
+        || (current_desc.format == reshade::api::format::b8g8r8x8_unorm
+          && resource_desc.texture.format == reshade::api::format::b8g8r8a8_unorm)
+        || (current_desc.format == reshade::api::format::b8g8r8x8_unorm_srgb
+          && resource_desc.texture.format == reshade::api::format::b8g8r8a8_unorm_srgb));
+    if (typeless_resource_format != typeless_view_format && !is_vulkan_component_mapped_view) {
       if (resource_desc.texture.format != typeless_resource_format) {
         switch (resource_desc.texture.format) {
           case reshade::api::format::r8g8b8a8_unorm:
