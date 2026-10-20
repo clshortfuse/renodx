@@ -28,11 +28,15 @@
 #include "./path.hpp"
 
 _COM_SMARTPTR_TYPEDEF(IDxcCompiler, __uuidof(IDxcCompiler));
+_COM_SMARTPTR_TYPEDEF(IDxcCompiler3, __uuidof(IDxcCompiler3));
 _COM_SMARTPTR_TYPEDEF(IDxcLibrary, __uuidof(IDxcLibrary));
 _COM_SMARTPTR_TYPEDEF(IDxcBlobEncoding, __uuidof(IDxcBlobEncoding));
+_COM_SMARTPTR_TYPEDEF(IDxcBlobUtf8, __uuidof(IDxcBlobUtf8));
+_COM_SMARTPTR_TYPEDEF(IDxcBlobWide, __uuidof(IDxcBlobWide));
 _COM_SMARTPTR_TYPEDEF(IDxcIncludeHandler, __uuidof(IDxcIncludeHandler));
 _COM_SMARTPTR_TYPEDEF(ID3DBlob, __uuidof(ID3DBlob));
 _COM_SMARTPTR_TYPEDEF(IDxcOperationResult, __uuidof(IDxcOperationResult));
+_COM_SMARTPTR_TYPEDEF(IDxcResult, __uuidof(IDxcResult));
 
 namespace renodx::utils::shader::compiler::directx {
 
@@ -176,6 +180,20 @@ inline HRESULT CreateCompiler(IDxcCompiler** dxc_compiler) {
   auto dxc_create_instance = DxcCreateInstanceProc(GetProcAddress(dxc_compiler_library, "DxcCreateInstance"));
   if (dxc_create_instance == nullptr) return -1;
   return dxc_create_instance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), reinterpret_cast<void**>(dxc_compiler));
+}
+
+inline HRESULT CreateCompiler3(IDxcCompiler3** dxc_compiler) {
+  // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
+  if (dxc_compiler_library == nullptr) {
+    dxc_compiler_library = LoadDXCompiler();
+  }
+  if (dxc_compiler_library == nullptr) {
+    return -1;
+  }
+  // NOLINTNEXTLINE(google-readability-casting)
+  auto dxc_create_instance = DxcCreateInstanceProc(GetProcAddress(dxc_compiler_library, "DxcCreateInstance"));
+  if (dxc_create_instance == nullptr) return -1;
+  return dxc_create_instance(CLSID_DxcCompiler, __uuidof(IDxcCompiler3), reinterpret_cast<void**>(dxc_compiler));
 }
 
 #define IFR(x)                \
@@ -480,6 +498,30 @@ inline std::string DisassembleShaderFXC(std::span<uint8_t> blob) {
       out_blob->GetBufferSize()};
 }
 
+inline bool TryDisassembleShaderDXC3(std::span<uint8_t> blob, std::string& output) {
+  IDxcCompiler3Ptr compiler;
+  IDxcResultPtr result;
+  IDxcBlobUtf8Ptr disassembly_text;
+  IDxcBlobWidePtr output_name;
+
+  if (FAILED(internal::CreateCompiler3(&compiler))) return false;
+
+  const DxcBuffer source = {
+      .Ptr = blob.data(),
+      .Size = blob.size(),
+      .Encoding = 0,
+  };
+  if (FAILED(compiler->Disassemble(&source, __uuidof(IDxcResult), reinterpret_cast<void**>(&result))) || result == nullptr) return false;
+
+  HRESULT status = S_OK;
+  if (FAILED(result->GetStatus(&status)) || FAILED(status)) return false;
+
+  if (FAILED(result->GetOutput(DXC_OUT_DISASSEMBLY, __uuidof(IDxcBlobUtf8), reinterpret_cast<void**>(&disassembly_text), &output_name)) || disassembly_text == nullptr) return false;
+
+  output.assign(disassembly_text->GetStringPointer(), disassembly_text->GetStringLength());
+  return !output.empty();
+}
+
 inline std::string DisassembleShaderDXC(std::span<uint8_t> blob) {
   IDxcLibraryPtr library;
   IDxcCompilerPtr compiler;
@@ -488,6 +530,15 @@ inline std::string DisassembleShaderDXC(std::span<uint8_t> blob) {
   ID3DBlobPtr disassembly;
 
   std::unique_lock lock(mutex_dxc_compiler);
+  std::string compiler3_disassembly;
+  try {
+    if (TryDisassembleShaderDXC3(blob, compiler3_disassembly)) {
+      return compiler3_disassembly;
+    }
+  } catch (...) {
+    // Fall back to the legacy disassembler path below.
+  }
+
   if (FAILED(internal::CreateLibrary(&library))) throw std::exception("Could not create library.");
   if (FAILED(library->CreateBlobWithEncodingFromPinned(blob.data(), blob.size(), CP_ACP, &source))) throw std::exception("Could not prepare blob.");
   if (FAILED(internal::CreateCompiler(&compiler))) throw std::exception("Could not create compiler object.");
