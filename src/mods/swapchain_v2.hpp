@@ -1207,11 +1207,13 @@ inline void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
+  if (utils::swapchain::ShouldSkipVREyeSubmission(swapchain, dest_rect)) return;
+
   auto* device = swapchain->get_device();
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
 
-  if (data->fake_fullscreen_pending) {
+  if (data->fake_fullscreen_pending && swapchain->get_hwnd() != nullptr) {
     auto* const hwnd = static_cast<HWND>(swapchain->get_hwnd());
     const bool can_apply = utils::windowing::CanApplyFakeFullscreen(hwnd);
     if (can_apply && utils::windowing::ApplyFakeFullscreen(swapchain, data->primary_swapchain_resource_desc)) {
