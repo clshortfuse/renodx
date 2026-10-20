@@ -30,6 +30,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 ShaderInjectData shader_injection;
 
+bool IsNeutwoEnabled() {
+  return shader_injection.tone_map_type == RENODX_TONE_MAP_TYPE_NEUTWO;
+}
+
+bool IsPsychoV30Enabled() {
+  return shader_injection.tone_map_type == RENODX_TONE_MAP_TYPE_PSYCHOV30;
+}
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -39,7 +47,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla (None)", "Neutwo"},
+        .labels = {"Vanilla (None)", "Neutwo", "PsychoV-30"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -90,7 +98,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from SDR tonemapping",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = &IsNeutwoEnabled,
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -151,7 +159,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = &IsNeutwoEnabled,
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -173,8 +181,45 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = &IsNeutwoEnabled,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeConeContrast",
+        .binding = &shader_injection.tone_map_cone_contrast,
+        .default_value = 50.f,
+        .label = "Cone Contrast",
+        .section = "Color Grading",
+        .tooltip = "Scales PsychoV cone-response contrast.",
+        .max = 100.f,
+        .is_enabled = &IsPsychoV30Enabled,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "PsychoVGamutCompression",
+        .binding = &shader_injection.psychov_gamut_compression,
+        .default_value = 1.f,
+        .label = "Gamut Compression",
+        .section = "Color Grading",
+        .tooltip = "Controls PsychoV gamut compression."
+                   "\n0 bypasses gamut mapping; 1 applies the full selected model.",
+        .min = 0.f,
+        .max = 1.f,
+        .format = "%.2f",
+        .is_enabled = &IsPsychoV30Enabled,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "PsychoVCompression",
+        .binding = &shader_injection.psychov_compression,
+        .default_value = 1.f,
+        .label = "Compression",
+        .section = "Color Grading",
+        .tooltip = "Controls PsychoV-30's finite-response compression power."
+                   "\n0 selects automatic compression; positive values select a manual power.",
+        .min = 0.f,
+        .max = 2.f,
+        .format = "%.2f",
+        .is_enabled = &IsPsychoV30Enabled,
     },
     new renodx::utils::settings::Setting{
         .key = "HDR10Encoding",
@@ -258,6 +303,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeConeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("PsychoVGamutCompression", 1.f);
+  renodx::utils::settings::UpdateSetting("PsychoVCompression", 1.f);
   renodx::utils::settings::UpdateSetting("HDR10Encoding", 0.f);
   renodx::utils::settings::UpdateSetting("ToneMapOverrideBrightness", 0.f);
 }

@@ -55,7 +55,9 @@ void main(
   r1.x = r1.x * 2 + -1;
   r0.xyz = r1.xxx * r0.www + r0.xyz;
 
-  r0.rgb = renodx::color::correct::Hue(r0.rgb, renodx::tonemap::ExponentialRollOff(r0.rgb, 1.f, 2.f), RENODX_TONE_MAP_HUE_SHIFT);
+  if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_PSYCHOV30) {
+    r0.rgb = renodx::color::correct::Hue(r0.rgb, renodx::tonemap::ExponentialRollOff(r0.rgb, 1.f, 2.f), RENODX_TONE_MAP_HUE_SHIFT);
+  }
 
   if (!RENODX_GAMMA_CORRECTION) {
     r0.xyz = max(float3(0, 0, 0), r0.xyz);
@@ -74,23 +76,27 @@ void main(
 
   float peak_nits;
   float3 untonemapped = r0.rgb;
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    r0.rgb = ApplyExposureContrastFlareHighlightsShadowsByLuminanceBT2020(r0.rgb);
-  }
-  if (!RENODX_OVERRIDE_BRIGHTNESS) {
-    if (RENODX_TONE_MAP_TYPE) {
-      peak_nits = RENODX_PEAK_WHITE_NITS / (cb0[24].y * 100.f);
-      r0.rgb = renodx::tonemap::neutwo::PerChannel(r0.rgb, peak_nits);
-    }
-    r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
-    r0.xyz = cb0[24].yyy * r0.xyz;
+  if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_PSYCHOV30) {
+    r0.rgb = ApplyPsychoV30BT2020(r0.rgb, cb0[24].y);
   } else {
-    if (RENODX_TONE_MAP_TYPE) {
-      peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-      r0.rgb = renodx::tonemap::neutwo::PerChannel(r0.rgb, peak_nits);
+    if (RENODX_TONE_MAP_TYPE != 0.f) {
+      r0.rgb = ApplyExposureContrastFlareHighlightsShadowsByLuminanceBT2020(r0.rgb);
     }
-    r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
-    r0.rgb *= RENODX_DIFFUSE_WHITE_NITS / 100.f;
+    if (!RENODX_OVERRIDE_BRIGHTNESS) {
+      if (RENODX_TONE_MAP_TYPE) {
+        peak_nits = RENODX_PEAK_WHITE_NITS / (cb0[24].y * 100.f);
+        r0.rgb = renodx::tonemap::neutwo::PerChannel(r0.rgb, peak_nits);
+      }
+      r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
+      r0.xyz = cb0[24].yyy * r0.xyz;
+    } else {
+      if (RENODX_TONE_MAP_TYPE) {
+        peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+        r0.rgb = renodx::tonemap::neutwo::PerChannel(r0.rgb, peak_nits);
+      }
+      r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
+      r0.rgb *= RENODX_DIFFUSE_WHITE_NITS / 100.f;
+    }
   }
 
   if (!RENODX_USE_PQ_ENCODING) {

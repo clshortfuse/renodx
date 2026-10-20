@@ -100,3 +100,27 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 ungraded, f
 float3 ApplyGammaCorrection(float3 incorrect_color) {
   return renodx::color::correct::GammaSafe(incorrect_color);
 }
+float3 ApplyPsychoV30BT2020(float3 untonemapped_bt2020, float vanilla_white_scale) {
+  const float white_scale = RENODX_OVERRIDE_BRIGHTNESS ? (RENODX_DIFFUSE_WHITE_NITS / 100.f) : vanilla_white_scale;
+  const float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_test30(
+      renodx::color::bt709::from::BT2020(untonemapped_bt2020),
+      RENODX_PEAK_WHITE_NITS / (white_scale * 100.f),
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      RENODX_TONE_MAP_SATURATION,
+      RENODX_TONE_MAP_BLOWOUT,
+      100.f,
+      1.f,
+      1.f,
+      1,
+      RENODX_TONE_MAP_CONE_CONTRAST,
+      0.18f,
+      0.18f,
+      saturate(RENODX_PSYCHOV_GAMUT_COMPRESSION),
+      1,
+      1.f,
+      clamp(RENODX_PSYCHOV_COMPRESSION, 0.f, 2.f));
+  return renodx::color::bt2020::from::BT709(tonemapped_bt709) * white_scale;
+}

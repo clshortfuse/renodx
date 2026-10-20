@@ -1,6 +1,10 @@
 #ifndef SRC_GOW2018REDUX_SHARED_H_
 #define SRC_GOW2018REDUX_SHARED_H_
 
+#define RENODX_TONE_MAP_TYPE_VANILLA   0.f
+#define RENODX_TONE_MAP_TYPE_NEUTWO    1.f
+#define RENODX_TONE_MAP_TYPE_PSYCHOV30 2.f
+
 // #define RENODX_PEAK_WHITE_NITS      400.f
 // #define RENODX_DIFFUSE_WHITE_NITS   100.f
 // #define RENODX_GRAPHICS_WHITE_NITS  100.f
@@ -35,6 +39,10 @@ struct ShaderInjectData {
   float gamma_correction;
   float tone_map_override_brightness;
   float custom_hdr10_encoding;
+  float tone_map_cone_contrast;
+  float psychov_gamut_compression;
+  float psychov_compression;
+  float padding0;
 };
 
 #ifndef __cplusplus
@@ -58,6 +66,9 @@ cbuffer cb11 : register(b11) {
 #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
 #define RENODX_USE_PQ_ENCODING               shader_injection.custom_hdr10_encoding
 #define RENODX_OVERRIDE_BRIGHTNESS           shader_injection.tone_map_override_brightness
+#define RENODX_TONE_MAP_CONE_CONTRAST        shader_injection.tone_map_cone_contrast
+#define RENODX_PSYCHOV_GAMUT_COMPRESSION     shader_injection.psychov_gamut_compression
+#define RENODX_PSYCHOV_COMPRESSION           shader_injection.psychov_compression
 
 #include "../../shaders/renodx.hlsl"
 
