@@ -388,7 +388,6 @@ static void LogLayout(
         // reshade::log::message(reshade::log::level::info, s.str().c_str());
         break;
       }
-#if RESHADE_API_VERSION >= 13
       case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
         for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
           const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
@@ -396,7 +395,7 @@ static void LogLayout(
           s << "logPipelineLayout(";
           s << PRINT_PTR(layout.handle) << "[" << param_index << "]";
           s << " | TBLSS";
-          s << " | " << reinterpret_cast<uintptr_t>(param.descriptor_table.ranges);
+          s << " | " << reinterpret_cast<uintptr_t>(param.descriptor_table_with_static_samplers.ranges);
           s << " | ";
           if (range.static_samplers == nullptr) {
             s << " null ";
@@ -412,17 +411,19 @@ static void LogLayout(
             s << ", min_lod: " << range.static_samplers->min_lod;
             s << ", max_lod: " << range.static_samplers->max_lod;
           }
+          s << ")";
+          s << " [" << range_index << "/" << param.descriptor_table_with_static_samplers.count << "]";
           reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
         break;
       case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
-        for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+        for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
           const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
           std::stringstream s;
           s << "logPipelineLayout(";
           s << PRINT_PTR(layout.handle) << "[" << param_index << "]";
           s << " | PDSS";
-          s << " | " << reinterpret_cast<uintptr_t>(&range);
+          s << " | " << reinterpret_cast<uintptr_t>(param.descriptor_table_with_static_samplers.ranges);
           s << " | ";
           if (range.static_samplers == nullptr) {
             s << "not";
@@ -439,11 +440,10 @@ static void LogLayout(
             s << ", max_lod: " << range.static_samplers->max_lod;
           }
           s << ")";
-          s << " [" << range_index << "/" << param.descriptor_table.count << "]";
+          s << " [" << range_index << "/" << param.descriptor_table_with_static_samplers.count << "]";
           reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
         break;
-#endif
       default: {
         std::stringstream s;
         s << "logPipelineLayout(";
@@ -495,6 +495,61 @@ static void OnInitPipelineLayout(
       push_constant_count += param.push_constants.count;
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       dword_count += 2;
+    } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges) {
+      if (param.descriptor_table.count != 0u && param.descriptor_table.ranges[0].count != 0u) {
+        if (param.descriptor_table.count == 1u
+            && param.descriptor_table.ranges[0].count == 1u
+            && param.descriptor_table.ranges[0].binding == 0u) {
+          switch (param.descriptor_table.ranges[0].type) {
+            case reshade::api::descriptor_type::constant_buffer:
+            case reshade::api::descriptor_type::buffer_shader_resource_view:
+            case reshade::api::descriptor_type::buffer_unordered_access_view:
+            case reshade::api::descriptor_type::acceleration_structure:
+              dword_count += 2u;
+              break;
+            default:
+              dword_count += 1u;
+              break;
+          }
+        } else {
+          dword_count += 1u;
+        }
+      }
+    } else if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers) {
+      for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
+        const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
+        if (range.count == 0u) continue;
+        if (range.type == reshade::api::descriptor_type::sampler && range.static_samplers != nullptr) continue;
+        dword_count += 1u;
+        break;
+      }
+    } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers) {
+      if (param.descriptor_table_with_static_samplers.count != 0u
+          && param.descriptor_table_with_static_samplers.ranges[0].count != 0u) {
+        if (param.descriptor_table_with_static_samplers.count == 1u
+            && param.descriptor_table_with_static_samplers.ranges[0].count == 1u
+            && param.descriptor_table_with_static_samplers.ranges[0].binding == 0u) {
+          switch (param.descriptor_table_with_static_samplers.ranges[0].type) {
+            case reshade::api::descriptor_type::constant_buffer:
+            case reshade::api::descriptor_type::buffer_shader_resource_view:
+            case reshade::api::descriptor_type::buffer_unordered_access_view:
+            case reshade::api::descriptor_type::acceleration_structure:
+              dword_count += 2u;
+              break;
+            default:
+              dword_count += 1u;
+              break;
+          }
+        } else {
+          for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
+            const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
+            if (range.count == 0u) continue;
+            if (range.type == reshade::api::descriptor_type::sampler && range.static_samplers != nullptr) continue;
+            dword_count += 1u;
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -702,10 +757,10 @@ static void OnBindPipeline(
   s << PRINT_PTR(pipeline.handle);
 
   if (pipeline.handle != 0u && stages != reshade::api::pipeline_stage::ray_tracing_shader) {
-    renodx::utils::shader::GetPipelineShaderDetails(pipeline, [&](const auto& details) {
-      s << ", layout: " << PRINT_PTR(details.layout.handle);
-      for (const auto& info : details.subobject_shaders) {
-        s << ", " << info.stage << ": " << PRINT_CRC32(info.shader_hash);
+    renodx::utils::pipeline::GetPipelineInfo(pipeline, [&](const auto& info) {
+      s << ", layout: " << PRINT_PTR(info.layout.handle);
+      for (const auto& identity : info.shader_details) {
+        s << ", " << identity.stage << ": " << PRINT_CRC32(identity.shader_hash);
       }
     });
   }
@@ -1283,24 +1338,17 @@ static void OnBindDescriptorTables(
 
       const auto& param = layout_data.params.at(layout_index);
 
-      uint32_t descriptor_table_count = 0;
-      const reshade::api::descriptor_range* descriptor_table_ranges = nullptr;
       switch (param.type) {
         case reshade::api::pipeline_layout_param_type::descriptor_table:
-          descriptor_table_count = param.descriptor_table.count;
-          descriptor_table_ranges = param.descriptor_table.ranges;
-          break;
         case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-          descriptor_table_count = param.descriptor_table_with_static_samplers.count;
-          descriptor_table_ranges = param.descriptor_table_with_static_samplers.ranges;
           break;
         default:
           continue;
       }
 
-      for (uint32_t k = 0; k < descriptor_table_count; ++k) {
-        const auto& range = descriptor_table_ranges[k];
+      const auto& descriptor_table_ranges = layout_data.ranges[layout_index];
 
+      for (const auto& range : descriptor_table_ranges) {
         // Skip unbounded ranges
         if (range.count == UINT32_MAX) continue;
 
@@ -1448,12 +1496,12 @@ static bool OnCopyDescriptorTables(
 
     uint32_t src_offset = 0;
     reshade::api::descriptor_heap src_heap = {0};
-    device->get_descriptor_heap_offset(
-        copy.source_table, copy.source_binding, copy.source_array_offset, &src_heap, &src_offset);
+    const bool found_src_heap = renodx::utils::descriptor::TryGetDescriptorHeapOffset(
+      device, copy.source_table, copy.source_binding, copy.source_array_offset, &src_heap, &src_offset);
     uint32_t dest_offset = 0;
     reshade::api::descriptor_heap dest_heap = {0};
-    device->get_descriptor_heap_offset(
-        copy.dest_table, copy.dest_binding, copy.dest_array_offset, &dest_heap, &dest_offset);
+    const bool found_dest_heap = renodx::utils::descriptor::TryGetDescriptorHeapOffset(
+      device, copy.dest_table, copy.dest_binding, copy.dest_array_offset, &dest_heap, &dest_offset);
 
     const uint32_t log_count = std::min(copy.count, TRACE_DESCRIPTOR_LOG_LIMIT);
     for (uint32_t j = 0; j < log_count; j++) {
@@ -1467,11 +1515,14 @@ static bool OnCopyDescriptorTables(
       s << "[" << copy.dest_binding << "]";
       s << "[" << copy.dest_array_offset << "]";
 
-      s << ", heap: " << PRINT_PTR(src_heap.handle) << "[" << src_offset + j << "]";
-      s << " => " << PRINT_PTR(dest_heap.handle) << "[" << dest_offset + j << "]";
+      if (found_src_heap && found_dest_heap) {
+        s << ", heap: " << PRINT_PTR(src_heap.handle) << "[" << src_offset + j << "]";
+        s << " => " << PRINT_PTR(dest_heap.handle) << "[" << dest_offset + j << "]";
+      }
 
       if (descriptor_data == nullptr) {
         descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+        assert(descriptor_data != nullptr);
       }
       const std::shared_lock decriptor_lock(descriptor_data->mutex);
       auto origin_primary_key = std::pair<uint64_t, uint32_t>(copy.source_table.handle, copy.source_binding + j);
@@ -1853,6 +1904,7 @@ static void OnPresent(
 }  // namespace internal
 
 static void Use(DWORD fdw_reason) {
+  renodx::utils::descriptor::trace_descriptor_tables = true;
   renodx::utils::descriptor::Use(fdw_reason);
   renodx::utils::shader::Use(fdw_reason);
   renodx::utils::resource::Use(fdw_reason);

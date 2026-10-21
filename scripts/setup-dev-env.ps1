@@ -99,7 +99,7 @@ $toolDefinitions = @{
     ReleaseRepo    = 'microsoft/DirectXShaderCompiler'
     ReleaseTag     = "v$($script:DXC_VERSION)"
     AssetPattern   = '^dxc_\d{4}_\d{2}_\d{2}\.zip$'
-    ExpectedFiles  = @('dxc.exe', 'dxcompiler.dll')
+    ExpectedFiles  = @('dxc.exe', 'dxcompiler.dll', 'x86\dxcompiler.dll')
     PrimaryFile    = 'dxc.exe'
     VersionCommand = @('--version')
     VersionPattern = 'dxcompiler\.dll:.*-\s+([0-9]+(?:\.[0-9]+){2,3})'
@@ -442,8 +442,10 @@ function Install-ToolFromArchive {
       $src = Join-Path $temp 'bin\x64\*'
       try {
         Copy-Item -Path $src -Destination $binDir -Force -ErrorAction Stop
+        New-Item -ItemType Directory -Path (Join-Path $binDir 'x86') -Force -ErrorAction Stop | Out-Null
+        Copy-Item -Path (Join-Path $temp 'bin\x86\dxcompiler.dll') -Destination (Join-Path $binDir 'x86\dxcompiler.dll') -Force -ErrorAction Stop
       } catch {
-        Write-Warn "Could not copy dxc bin/x64 contents: $($_.Exception.Message)"
+        Write-Warn "Could not copy DXC x64 tools and x86 compiler DLL: $($_.Exception.Message)"
         return $false
       }
     } elseif ($Name -eq 'slang') {

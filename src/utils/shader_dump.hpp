@@ -8,6 +8,8 @@
 #include <atomic>
 #include <charconv>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <shared_mutex>
 #include <span>
@@ -148,22 +150,42 @@ static void OnInitDevice(reshade::api::device* device) {
 
 // After CreatePipelineState
 static void OnInitPipeline(
-    reshade::api::device* device,
-    reshade::api::pipeline_layout layout,
+  renodx::utils::pipeline::PipelineInfo* pipeline_info,
     uint32_t subobject_count,
-    const reshade::api::pipeline_subobject* subobjects,
-    reshade::api::pipeline pipeline) {
+    const reshade::api::pipeline_subobject* subobjects) {
+  auto* device = pipeline_info->device;
+  const auto pipeline = pipeline_info->pipeline;
   if (device == nullptr || subobjects == nullptr) return;
   if (pipeline.handle == 0u) return;
 
   auto* data = internal::shared.data;
   if (data == nullptr) return;
 
-  renodx::utils::shader::GetPipelineShaderDetails(pipeline, [&](const auto& details) {
-    for (const auto& info : details.subobject_shaders) {
-      // Store immediately in case pipeline destroyed before present
-      const auto& shader_hash = info.shader_hash;
-      if (info.index >= subobject_count) continue;
+  for (uint32_t i = 0; i < subobject_count; ++i) {
+    const auto& subobject = subobjects[i];
+    switch (subobject.type) {
+      case reshade::api::pipeline_subobject_type::vertex_shader:
+      case reshade::api::pipeline_subobject_type::pixel_shader:
+      case reshade::api::pipeline_subobject_type::compute_shader:
+        break;
+      default:
+        continue;
+    }
+
+    if (subobject.data == nullptr) continue;
+    const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
+    if (desc.code == nullptr || desc.code_size == 0) continue;
+
+    try {
+      uint32_t shader_hash = renodx::utils::hash::ComputeCRC32(
+          static_cast<const uint8_t*>(desc.code),
+          desc.code_size);
+      const auto shader = std::ranges::find_if(
+          pipeline_info->shader_details,
+          [i](const auto& candidate) { return candidate.subobject_index == i; });
+        if (shader != pipeline_info->shader_details.end()) {
+        shader_hash = shader->shader_hash;
+      }
 
       bool skip_shader = false;
       data->shaders.if_contains(shader_hash, [&skip_shader](std::pair<const uint32_t, ShaderInfo>& pair) {
@@ -171,13 +193,8 @@ static void OnInitPipeline(
       });
       if (skip_shader) continue;
 
-      const auto& subobject = subobjects[info.index];
-      if (subobject.data == nullptr) continue;
-      const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
-      if (desc.code == nullptr || desc.code_size == 0) continue;
-      auto shader_data = cross_addon::vector<uint8_t>(
-          static_cast<const uint8_t*>(desc.code),
-          static_cast<const uint8_t*>(desc.code) + desc.code_size);
+      cross_addon::vector<uint8_t> shader_data(desc.code_size);
+      std::memcpy(shader_data.data(), desc.code, desc.code_size);
 
       if (device::IsDirectX(device)) {
         try {
@@ -226,8 +243,27 @@ static void OnInitPipeline(
           });
 
       if (queued) data->pending_dump_count.fetch_add(1u);
+    } catch (const std::exception& e) {
+      char message[256] = {};
+      std::snprintf(
+          message,
+          sizeof(message),
+          "utils::shader::dump(Failed to store shader at subobject %u, size: %zu: %s)",
+          i,
+          desc.code_size,
+          e.what());
+      reshade::log::message(reshade::log::level::error, message);
+    } catch (...) {
+      char message[192] = {};
+      std::snprintf(
+          message,
+          sizeof(message),
+          "utils::shader::dump(Failed to store shader at subobject %u, size: %zu: unknown exception)",
+          i,
+          desc.code_size);
+      reshade::log::message(reshade::log::level::error, message);
     }
-  });
+  }
 }
 
 }  // namespace internal
@@ -449,12 +485,12 @@ static void Use(DWORD fdw_reason) {
         reshade::log::message(reshade::log::level::info, "ShaderDump attached.");
       }
       internal::shared.RegisterEvent<reshade::addon_event::init_device>(internal::OnInitDevice);
-      internal::shared.RegisterEvent<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
+      renodx::utils::pipeline::RegisterOnInitCallback(internal::OnInitPipeline);
 
       break;
     case DLL_PROCESS_DETACH:
       internal::shared.UnregisterEvent<reshade::addon_event::init_device>(internal::OnInitDevice);
-      internal::shared.UnregisterEvent<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
+      renodx::utils::pipeline::UnregisterOnInitCallback(internal::OnInitPipeline);
       internal::shared.UnregisterModule();
       break;
   }

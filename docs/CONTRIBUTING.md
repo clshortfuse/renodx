@@ -69,6 +69,27 @@ Build the project
 
 * `cmake --build --preset clang-x64-release`
 
+### LLVM shader sources
+
+DXIL LLVM text can be checked in as `name_0x12345678.ll` or
+`name_0x12345678.lib_6_6.ll` (other SM6 profiles may be used in the suffix).
+The module itself specifies the shader model and entry points; assembly does
+not compile HLSL or retarget the module. Keep only one active source per hash.
+Rename working variants such as `name_0x12345678.patched.ll` to the canonical
+name before placing them in the addon source folder.
+
+CMake builds `assemble_shader` from `src/assemble_shader.cpp`, loads
+`dxcompiler.dll` from the repo `bin` directory, assembles and
+validates the source, then embeds the generated `.cso` through the normal shader
+pipeline. Validation uses the compiler's internal validator; `dxil.dll` is not
+required with the supported modern DXC toolchain. Generated binaries stay in
+the build tree; do not check them into the game folder. No `dxa.exe` is required.
+Live shader watching does not yet support `.ll`.
+The assembler builds normally for the addon architecture: x64 builds load
+`bin/dxcompiler.dll`, and x86 builds load `bin/x86/dxcompiler.dll`. The setup
+script installs both from the same DXC package. For manual setup, extract the
+package's `bin/x86/dxcompiler.dll` into the repo's `bin/x86` directory as well.
+
 Build the live inspection tooling
 
 * `cmake --build --preset clang-x64-debug --target devkit mcp_bridge`

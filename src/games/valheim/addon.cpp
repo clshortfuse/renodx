@@ -38,6 +38,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xBCC908FC),  // Sun Shafts 2
     CustomShaderEntry(0x9325D090),  // Sun Shafts 3 (+ intermediate pass)
     CustomShaderEntry(0xF70A0EED),  // Lutbuilder
+    CustomShaderEntry(0x56B8D689),  // Lutbuilder (1.0)
     {
         0xF369BD33,
         {
