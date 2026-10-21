@@ -45,7 +45,7 @@ float3 ToneMapLut(float3 untonemapped, float3 graded_sdr, Texture3D<float4> lut,
         RENODX_TONE_MAP_SHADOWS,
         RENODX_TONE_MAP_CONTRAST,
         RENODX_TONE_MAP_SATURATION,
-        RENODX_TONE_MAP_BLOWOUT,
+        0.f,
         100.f,
         1.f,
         1.f,
@@ -58,6 +58,9 @@ float3 ToneMapLut(float3 untonemapped, float3 graded_sdr, Texture3D<float4> lut,
         1.f,
         clamp(RENODX_PSYCHOV_COMPRESSION, 0.f, 2.f),
         (int)RENODX_PSYCHOV_SOURCE_BOUNDARY);
+
+    // psychotm_test30 has no blowout input (that slot is a placeholder), so apply it as the RenoDRT dechroma
+    tonemapped = renodx::color::grade::UserColorGrading(tonemapped, 1.f, 1.f, 1.f, 1.f, 1.f, RENODX_TONE_MAP_BLOWOUT, 0.f);
   } else {
     tonemapped = renodx::draw::ToneMapPass(untonemapped, graded_sdr, neutral_sdr);
   }
