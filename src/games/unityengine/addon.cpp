@@ -3352,13 +3352,12 @@ void DestAlphaClamp_OnDestroyPipeline(reshade::api::device* device, reshade::api
 
 bool DestAlphaClamp_OnDrawIndexed(reshade::api::command_list* cmd_list, uint32_t index_count, uint32_t instance_count,
                                   uint32_t first_index, int32_t vertex_offset, uint32_t first_instance) {
-  const auto* state = renodx::utils::state::GetCurrentState(cmd_list);
-  if (state == nullptr) return false;
-  const auto bound_blend = state->pipelines.find(reshade::api::pipeline_stage::output_merger);
-  if (bound_blend == state->pipelines.end()) return false;
+  const auto bound_blend =
+      renodx::utils::state::GetBoundShaderPipeline(cmd_list, reshade::api::pipeline_stage::output_merger);
+  if (bound_blend.handle == 0u) return false;
 
   reshade::api::pipeline alpha_clamp = {0u};
-  alpha_clamp_by_dest_alpha_blend.if_contains(bound_blend->second.handle, [&](const auto& entry) {
+  alpha_clamp_by_dest_alpha_blend.if_contains(bound_blend.handle, [&](const auto& entry) {
     const auto& [dest_alpha_blend, mapped_alpha_clamp] = entry;
     alpha_clamp = mapped_alpha_clamp;
   });
@@ -3366,7 +3365,7 @@ bool DestAlphaClamp_OnDrawIndexed(reshade::api::command_list* cmd_list, uint32_t
 
   cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, alpha_clamp);
   cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
-  cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, bound_blend->second);
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::output_merger, bound_blend);
   return false;
 }
 
