@@ -177,7 +177,9 @@ inline void to_json(json& j, const RatioStats& value) {
   reshade::api::resource clone_resource = {0u};
   reshade::api::resource_desc clone_resource_desc = {};
   bool resource_destroyed = false;
-  const auto found_resource_info = renodx::utils::resource::GetResourceInfo(resource_view_info->original_resource, [&](const renodx::utils::resource::ResourceInfo& info) {
+  // A clone view describes the clone resource, so reading the original resource with that view's format overruns the readback.
+  const auto backing_resource = (resource_view_info->is_clone ? resource_view_info->clone_resource : resource_view_info->original_resource);
+  const auto found_resource_info = renodx::utils::resource::GetResourceInfo(backing_resource, [&](const renodx::utils::resource::ResourceInfo& info) {
     resolved_resource = info.resource;
     resolved_resource_desc = info.desc;
     clone_enabled = info.clone_enabled;
