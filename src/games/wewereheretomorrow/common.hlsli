@@ -54,7 +54,7 @@ float3 ToneMapLut(float3 untonemapped, float3 graded_sdr, Texture3D<float4> lut,
         float3(MID_GRAY, MID_GRAY, MID_GRAY),
         float3(vanilla_mid_gray_out, vanilla_mid_gray_out, vanilla_mid_gray_out),
         saturate(RENODX_PSYCHOV_GAMUT_COMPRESSION),
-        1,
+        (int)RENODX_PSYCHOV_GAMUT_MODE,
         1.f,
         clamp(RENODX_PSYCHOV_COMPRESSION, 0.f, 2.f),
         (int)RENODX_PSYCHOV_SOURCE_BOUNDARY);

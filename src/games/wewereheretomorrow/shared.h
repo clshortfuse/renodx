@@ -77,6 +77,7 @@ struct ShaderInjectData {
   float psychov_compression;
   float psychov_cone_response;
   float psychov_source_boundary;
+  float psychov_gamut_mode;
 };
 
 #ifndef __cplusplus
@@ -123,6 +124,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_PSYCHOV_COMPRESSION           shader_injection.psychov_compression
 #define RENODX_PSYCHOV_CONE_RESPONSE         shader_injection.psychov_cone_response
 #define RENODX_PSYCHOV_SOURCE_BOUNDARY       shader_injection.psychov_source_boundary
+#define RENODX_PSYCHOV_GAMUT_MODE            shader_injection.psychov_gamut_mode
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
