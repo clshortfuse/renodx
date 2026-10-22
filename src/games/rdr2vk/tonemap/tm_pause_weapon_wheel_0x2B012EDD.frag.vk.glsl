@@ -1,7 +1,7 @@
 #version 450
-
 #extension GL_GOOGLE_include_directive : require
 #include "./tonemap.glsl"
+#include "../output/brightness.glsl"
 
 struct _22 {
   int _m0;
@@ -154,8 +154,10 @@ layout(location = 0) out vec4 _5;
 
 void main() {
   vec4 _112 = texture(sampler2D(_16, _15), _4.xy);
+  vec3 _113 = _112.xyz;
 #if 1
-  vec3 _113 = EncodeLUTInput(_112.xyz);
+  float weapon_wheel_compression_scale;
+  _113 = CompressWeaponWheelInput(_113, weapon_wheel_compression_scale);
 #endif
   vec3 _158;
   if (floatBitsToInt(_12._m47.w) != 0) {
@@ -204,14 +206,16 @@ void main() {
   } else {
     _316 = vec4(_158.x, _158.y, _158.z, _112.w);
   }
-  vec3 lut_input = _316.xyz;
-  float _338 = 1.0;
 #if 1
-  vec3 _339 = CompressLUTInputAlt(lut_input, _10._m3, _10._m7, _10._m8, _10._m9, _338);
+  _316.rgb = RestoreWeaponWheelOutput(_316.rgb, weapon_wheel_compression_scale);
+#endif
+#if 1
+  float _338;
+  vec3 _339 = CompressLUTInput(_316.xyz, true, _10._m3, _10._m7, _10._m8, _10._m9, _338);
 #else
-  float _332 = max(max(lut_input.x, max(lut_input.y, lut_input.z)), 9.9999997473787516355514526367188e-05);
-  _338 = (_10._m3 != 0u) ? (((_332 > _10._m7) ? ((_332 * _10._m8) + _10._m9) : _332) / _332) : 1.0;
-  vec3 _339 = lut_input * _338;
+  float _332 = max(max(_316.x, max(_316.y, _316.z)), 9.9999997473787516355514526367188e-05);
+  float _338 = (_10._m3 != 0u) ? (((_332 > _10._m7) ? ((_332 * _10._m8) + _10._m9) : _332) / _332) : 1.0;
+  vec3 _339 = _316.xyz * _338;
 #endif
   float _342 = _339.z;
   float _344 = floor(_342 * 14.99989986419677734375);
@@ -231,9 +235,14 @@ void main() {
   } else {
     _406 = vec4(_365.x, _365.y, _365.z, _316.w);
   }
-  vec3 _409 = DecodeLUTInput(_406.xyz, lut_input, _338);
+#if 1
+  vec3 _409 = RestoreLUTOutput(_406.xyz, _338, _316.xyz);
+#else
+  vec3 _409 = _406.xyz / vec3(_338);
+#endif
   _5 = vec4(_409.x, _409.y, _409.z, _406.w);
-
-  _5.rgb = ApplyGradingAndDisplayMap(_5.rgb, _4.xy);
+#if 1
+  _5.rgb = ScaleSceneBrightness(_5.rgb);
+#endif
 }
 
