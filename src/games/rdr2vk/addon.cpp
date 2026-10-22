@@ -10,6 +10,9 @@
 // #define DEBUG_LEVEL_3
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
+#include <array>
+#include <cstdint>
+
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
@@ -18,6 +21,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
@@ -326,6 +330,23 @@ void OnPresetOff() {
   });
 }
 
+void OnInitDevice(reshade::api::device* device) {
+  std::uint32_t vendor_id = 0;
+  // NVIDIA only: this format upgrade fails on AMD.
+  if (!device->get_property(reshade::api::device_properties::vendor_id, &vendor_id) || vendor_id != 0x10de) return;
+
+  std::array upgrade_infos = {
+      renodx::utils::resource::ResourceUpgradeInfo{
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .usage_include = reshade::api::resource_usage::render_target,
+      },
+  };
+  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
+}
+
+bool initialized = false;
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -335,36 +356,38 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     if (!reshade::register_addon(h_module)) return FALSE;
 
-    renodx::mods::shader::allow_multiple_push_constants = true;
-    renodx::mods::shader::force_pipeline_cloning = true;
-    renodx::mods::swapchain::use_resource_cloning = true;
-    renodx::mods::swapchain::use_resource_cloning_dx12_only = false;
-    renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
-    renodx::mods::swapchain::swap_chain_proxy_shaders = {
-        {reshade::api::device_api::vulkan, {
-                                               .vertex_shader = __swap_chain_proxy_vertex_shader,
-                                               .pixel_shader = __swap_chain_proxy_pixel_shader,
-                                           }},
-    };
+    if (!initialized) {
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::vulkan;
+      };
+      renodx::mods::shader::allow_multiple_push_constants = true;
+      renodx::mods::shader::force_pipeline_cloning = true;
+
+      renodx::mods::swapchain::SetUseHDR10();
+      renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::use_resource_cloning_dx12_only = false;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+      renodx::mods::swapchain::swap_chain_proxy_shaders = {
+          {reshade::api::device_api::vulkan, {
+                                                 .vertex_shader = __swap_chain_proxy_vertex_shader,
+                                                 .pixel_shader = __swap_chain_proxy_pixel_shader,
+                                             }},
+      };
+      initialized = true;
+    }
+  } else if (fdw_reason == DLL_PROCESS_DETACH) {
+    reshade::unregister_event<reshade::addon_event::init_device>(&OnInitDevice);
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  if (fdw_reason == DLL_PROCESS_ATTACH) {
-    renodx::mods::swapchain::SetUseHDR10();
-
-    for (const auto format : {reshade::api::format::r11g11b10_float}) {
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = format,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
-    }
-  }
   renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
-  if (fdw_reason == DLL_PROCESS_DETACH) {
+  // Register after swapchain's callback so its defaults cannot overwrite the vendor-specific list.
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    reshade::register_event<reshade::addon_event::init_device>(&OnInitDevice);
+  } else if (fdw_reason == DLL_PROCESS_DETACH) {
     reshade::unregister_addon(h_module);
   }
   return TRUE;
