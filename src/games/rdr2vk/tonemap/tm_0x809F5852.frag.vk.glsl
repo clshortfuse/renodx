@@ -1,8 +1,6 @@
 #version 450
-
 #extension GL_GOOGLE_include_directive : require
 #include "./tonemap.glsl"
-
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_samplerless_texture_functions : require
 
@@ -723,7 +721,12 @@ void main() {
     _326 = false;
     _327 = _292;
   }
-  vec3 _331 = min(_327 * texelFetch(_63, ivec2(0), 0).x, vec3(GetTonemapClampMax()));
+#if 1
+  vec3 _331 = _327 * texelFetch(_63, ivec2(0), 0).x;
+  _331 = ConditionalClampMax(_331);
+#else
+  vec3 _331 = min(_327 * texelFetch(_63, ivec2(0), 0).x, vec3(65504.0));
+#endif
   bool _332 = !_326;
   float _445;
   vec3 _446;
@@ -739,7 +742,11 @@ void main() {
     vec3 _444;
     if (floatBitsToInt(_68._m51.w) != 0) {
       vec2 _420 = ((_4.xy - _68._m50.xy) * mat2(vec2(_68._m52.x, _68._m52.y), vec2(_68._m52.z, _68._m52.w))) * _68._m50.zw;
+    #if 1
       float _424 = CUSTOM_VIGNETTE * max((dot(_420, _420) - _68._m53.x) * _68._m53.w, 0.0);
+    #else
+      float _424 = max((dot(_420, _420) - _68._m53.x) * _68._m53.w, 0.0);
+    #endif
       bool _425 = _424 < 1.0;
       _444 = mix(_331, (_331 * _68._m51.xyz) * _68._m51.w, vec3(_425 ? (_425 ? (1.0 - pow(2.0, (-10.0) * _424)) : 1.0) : (0.9980499744415283203125 + (((_424 - 1.0) > 0.0) ? pow(2.0, 10.0 * (_424 - 2.0)) : 0.0))));
     } else {
@@ -753,10 +760,12 @@ void main() {
   }
   vec3 _483 = _446 * mix(mix(_68._m54.xyz, _68._m56.xyz, vec3(clamp(clamp(_4.y * _68._m57.y, 0.0, 1.0) + _68._m54.w, 0.0, 1.0))), mix(_68._m56.xyz, _68._m55.xyz, vec3(clamp(clamp(clamp(_4.y - _68._m56.w, 0.0, 1.0) * _68._m57.x, 0.0, 1.0) - _68._m55.w, 0.0, 1.0))), vec3(_4.y));
   bool _486 = _66._m3 != 0u;
-#if 1
-  vec3 _549 = ApplyToneMap(_483, _486, _445, _66._m6, _66._m4, _66._m10, _295.rgb, _296);
-#else
   vec3 _549;
+#if 1
+    float midgray_in, midgray_out, slope;
+    _549 = ApplyToneMap(_483, _445, _486, _66._m6, _66._m4, _66._m10,
+      _295.x, _295.y, _296.x, _296.y, _296.z, _296.w, _295.z, midgray_in, midgray_out, slope);
+#else
   if (_486) {
     vec3 _526 = max(vec3(0.0), _483 * (_445 / _66._m6));
     vec3 _529 = _526 * _295.x;
@@ -781,13 +790,7 @@ void main() {
     _597 = _549;
   }
   bool _618 = _486 && (!(_66._m2 != 0u));
-
-#if 1
-  vec3 _620 = EncodeLUTInput(_597, _66._m11, _66._m12, _66._m13, _66._m14, _618);
-#else
   vec3 _620 = mix(mix((pow(_597, vec3(_66._m12)) * _66._m13) - vec3(_66._m14), _597 * _66._m11, lessThan(_597, vec3(0.003130800090730190277099609375))), _597, bvec3(_618));
-#endif
-
   vec3 _622 = max(_620 * mat3(vec3(0.514900028705596923828125, 0.324400007724761962890625, 0.1606999933719635009765625), vec3(0.265399992465972900390625, 0.67040002346038818359375, 0.06419999897480010986328125), vec3(0.02480000071227550506591796875, 0.1247999966144561767578125, 0.85039997100830078125)), vec3(0.00999999977648258209228515625, 0.0, 0.0));
   float _623 = _622.y;
   vec3 _648 = mix(_620, clamp((_68._m81.xyz * (_623 * ((1.33000004291534423828125 * (1.0 + ((_623 + _622.z) / _622.x))) - 1.67999994754791259765625))) * _68._m81.w, vec3(0.0), vec3(1.0)), vec3(clamp(((0.039999999105930328369140625 / (0.039999999105930328369140625 + dot(_292 * texelFetch(_63, ivec2(0), 0).x, vec3(0.300000011920928955078125, 0.589999973773956298828125, 0.10999999940395355224609375)))) * _68._m82.x) + _68._m82.y, 0.0, 1.0)));
@@ -797,14 +800,14 @@ void main() {
   } else {
     _678 = _648;
   }
-  float _703 = 1.0;
   vec3 _836;
   if (_332) {
 #if 1
+    float _703;
     vec3 _704 = CompressLUTInput(_678, _618, _66._m5, _66._m7, _66._m8, _66._m9, _703);
 #else
     float _697 = max(max(_678.x, max(_678.y, _678.z)), 9.9999997473787516355514526367188e-05);
-    _703 = (_618 && (!(_66._m5 != 0u))) ? 1.0 : (((_697 > _66._m7) ? ((_697 * _66._m8) + _66._m9) : _697) / _697);
+    float _703 = (_618 && (!(_66._m5 != 0u))) ? 1.0 : (((_697 > _66._m7) ? ((_697 * _66._m8) + _66._m9) : _697) / _697);
     vec3 _704 = _678 * _703;
 #endif
     float _707 = _704.z;
@@ -829,16 +832,19 @@ void main() {
     } else {
       _833 = _730;
     }
-    _836 = _833;
+#if 1
+    _836 = RestoreLUTOutput(_833, _703, _678);
+#else
+    _836 = _833 / vec3(_703);
+#endif
   } else {
     _836 = _678;
   }
-
-#if 1
-  _836 = DecodeLUTInput(_836, _678, _703);
-#endif
-
   vec4 _841 = vec4(_836, dot(_836, vec3(0.2989999949932098388671875, 0.58700001239776611328125, 0.114000000059604644775390625)));
+#if 1
+  vec3 _906 = ApplyDither(_841.xyz, gl_FragCoord.xy, _59._m0[0u]._m22, _62,
+                         _486, _68._m39.xyz, _68._m40.xyz, _68._m41, _68._m42);
+#else
   vec3 _842 = _841.xyz;
   ivec4 _885 = ivec4(uvec4(uvec2(ivec2(uvec2(gl_FragCoord.xy))) & uvec2(63u), uint(int(_59._m0[0u]._m22) & 31), 0u));
   vec3 _893 = (vec3(texelFetch(_62, _885.xyz, _885.w).x) * 2.0) - vec3(1.0);
@@ -848,18 +854,23 @@ void main() {
   } else {
     _904 = _893;
   }
-  vec3 _906 = _842 + CUSTOM_DITHERING * (_904 * mix(_68._m39.xyz, _68._m40.xyz, pow(clamp((mix(vec3(max(_836.x, max(_836.y, _836.z))), _842, bvec3(floatBitsToInt(_68._m41.w) != 0)) - _68._m42.xyz) * _68._m41.xyz, vec3(0.0), vec3(1.0)), vec3(_68._m42.w))));
+  vec3 _906 = _842 + (_904 * mix(_68._m39.xyz, _68._m40.xyz, pow(clamp((mix(vec3(max(_836.x, max(_836.y, _836.z))), _842, bvec3(floatBitsToInt(_68._m41.w) != 0)) - _68._m42.xyz) * _68._m41.xyz, vec3(0.0), vec3(1.0)), vec3(_68._m42.w))));
+#endif
   vec4 _907 = vec4(_906.x, _906.y, _906.z, _841.w);
   vec4 _912;
+#if 1
+  _912 = ConditionalClampOutput(_907, _486);
+#else
   if (!_486) {
     _912 = clamp(_907, vec4(0.0), vec4(1.0));
   } else {
     _912 = _907;
   }
+#endif
+#if 1
+  _6 = vec4(ApplyFinalToneMap(_912.rgb, _4.xy, midgray_in, midgray_out, slope), _912.a);
+#else
   _6 = _912;
-
-
-  _6.rgb = ApplyGradingAndDisplayMap(_6.rgb, _4.xy);
+#endif
 }
-
 
