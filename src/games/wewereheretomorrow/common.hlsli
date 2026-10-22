@@ -4,6 +4,8 @@
 #include "./shared.h"
 
 static const float MID_GRAY = 0.18f;
+// Scene luminance above which the RenoDRT toe correction fades out (vanilla is near white here)
+static const float TOE_PIVOT = 0.5f;
 
 // Luminance the vanilla LUT produces for a neutral gray scene value. This is the game's own tonemap curve.
 float VanillaGrayCurve(Texture3D<float4> lut, SamplerState lut_sampler, float4 lut_params, float gray) {
@@ -62,7 +64,14 @@ float3 ToneMapLut(float3 untonemapped, float3 graded_sdr, Texture3D<float4> lut,
     // psychotm_test30 has no blowout input (that slot is a placeholder), so apply it as the RenoDRT dechroma
     tonemapped = renodx::color::grade::UserColorGrading(tonemapped, 1.f, 1.f, 1.f, 1.f, 1.f, RENODX_TONE_MAP_BLOWOUT, 0.f);
   } else {
-    tonemapped = renodx::draw::ToneMapPass(untonemapped, graded_sdr, neutral_sdr);
+    tonemapped = renodx::draw::ToneMapPass(renodx::draw::ComputeUntonemappedGraded(untonemapped, graded_sdr, neutral_sdr));
+
+    // RenoDRT is nearly linear below white. Follow the vanilla toe there so shadows keep the game's contrast.
+    if (untonemapped_y < TOE_PIVOT) {
+      tonemapped *= min(1.f,
+                        (VanillaGrayCurve(lut, lut_sampler, lut_params, untonemapped_y) / max(untonemapped_y, 1e-5f))
+                            / (VanillaGrayCurve(lut, lut_sampler, lut_params, TOE_PIVOT) / TOE_PIVOT));
+    }
   }
   return renodx::draw::RenderIntermediatePass(tonemapped);
 }
