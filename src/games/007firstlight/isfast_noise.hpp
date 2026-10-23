@@ -131,6 +131,18 @@ inline void AddShader(renodx::mods::shader::CustomShaders& custom_shaders, uint3
 }
 
 inline void AddShaders(renodx::mods::shader::CustomShaders& custom_shaders) {
+  AddShader(custom_shaders, 0x6B725474, __0x6B725474);
+  AddShader(custom_shaders, 0xB20D530F, __0xB20D530F);
+  AddShader(custom_shaders, 0xB440B471, __0xB440B471);
+  AddShader(custom_shaders, 0x8EF9EBF8, __0x8EF9EBF8);
+  AddShader(custom_shaders, 0x8DC1BF22, __0x8DC1BF22);
+  AddShader(custom_shaders, 0xF273B9DE, __0xF273B9DE);
+  AddShader(custom_shaders, 0xFC78528B, __0xFC78528B);
+  AddShader(custom_shaders, 0x77390F8B, __0x77390F8B);
+  AddShader(custom_shaders, 0x4C3103FB, __0x4C3103FB);
+  AddShader(custom_shaders, 0x3EB5AAD9, __0x3EB5AAD9);
+  AddShader(custom_shaders, 0x6BA639BE, __0x6BA639BE);
+
   AddShader(custom_shaders, 0x91447257, __0x91447257);
   AddShader(custom_shaders, 0xABDB27F9, __0xABDB27F9);
   AddShader(custom_shaders, 0x1D61DE2A, __0x1D61DE2A);

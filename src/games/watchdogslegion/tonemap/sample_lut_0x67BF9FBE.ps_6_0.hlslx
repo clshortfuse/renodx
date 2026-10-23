@@ -1,0 +1,130 @@
+#include "tonemap.hlsli"
+
+struct SGlobalDebugValues {
+  float SGlobalDebugValues_000;
+  float SGlobalDebugValues_004;
+  float SGlobalDebugValues_008;
+  float SGlobalDebugValues_012;
+};
+
+struct SGlobalScalars {
+  float SGlobalScalars_000;
+  float SGlobalScalars_004;
+  float SGlobalScalars_008;
+};
+
+
+Texture2D<float4> t0 : register(t0);
+
+Texture2D<float3> t1 : register(t1);
+
+Texture2D<float3> t2 : register(t2);
+
+Texture2D<float4> t3 : register(t3);
+
+Texture3D<float4> t4 : register(t4);
+
+Texture2D<float4> t5 : register(t5);
+
+cbuffer cb0 : register(b0) {
+  float4 Global_000 : packoffset(c000.x);
+  float4 Global_016 : packoffset(c001.x);
+  float4 Global_032 : packoffset(c002.x);
+  float4 Global_048[29] : packoffset(c003.x);
+  float4 Global_512[29] : packoffset(c032.x);
+  float4 Global_976 : packoffset(c061.x);
+  float4 Global_992 : packoffset(c062.x);
+  float4 Global_1008 : packoffset(c063.x);
+  float4 Global_1024[2] : packoffset(c064.x);
+  SGlobalDebugValues Global_1056 : packoffset(c066.x);
+  float3 Global_1072 : packoffset(c067.x);
+  float Global_1084 : packoffset(c067.w);
+  float3 Global_1088 : packoffset(c068.x);
+  float Global_1100 : packoffset(c068.w);
+  float3 Global_1104 : packoffset(c069.x);
+  float Global_1116 : packoffset(c069.w);
+  float3 Global_1120 : packoffset(c070.x);
+  float Global_1132 : packoffset(c070.w);
+  float3 Global_1136 : packoffset(c071.x);
+  float Global_1148 : packoffset(c071.w);
+  SGlobalScalars Global_1152 : packoffset(c072.x);
+  float Global_1164 : packoffset(c072.w);
+  float2 Global_1168 : packoffset(c073.x);
+  float Global_1176 : packoffset(c073.z);
+  float Global_1180 : packoffset(c073.w);
+  float2 Global_1184 : packoffset(c074.x);
+  float Global_1192 : packoffset(c074.z);
+  float Global_1196 : packoffset(c074.w);
+  float2 Global_1200 : packoffset(c075.x);
+  float Global_1208 : packoffset(c075.z);
+  float Global_1212 : packoffset(c075.w);
+  float2 Global_1216 : packoffset(c076.x);
+  float Global_1224 : packoffset(c076.z);
+  float2 Global_1232 : packoffset(c077.x);
+};
+
+cbuffer cb1 : register(b1) {
+  float cb1_006w : packoffset(c006.w);
+  float cb1_007x : packoffset(c007.x);
+};
+
+SamplerState s0 : register(s0);
+
+SamplerState s1 : register(s1);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+
+float4 main(
+  linear float2 TEXCOORD0_centroid : TEXCOORD0_centroid,
+  precise noperspective float4 SV_Position : SV_Position
+) : SV_Target {
+  float4 SV_Target;
+  float4 _15;
+  float _36;
+  float _37;
+  float _25;
+  float _26;
+  float4 _29;
+  float3 _38;
+  float3 _42;
+  float4 _80;
+  float4 _95;
+  float _132;
+  float _133;
+  float _134;
+  _15 = t5.Sample(s1, float2(TEXCOORD0_centroid.x, TEXCOORD0_centroid.y));
+  if (_15.z > 0.0f) {
+    _25 = ((_15.x * 2.0f) + -1.0f) * _15.z;
+    _26 = ((_15.y * 2.0f) + -1.0f) * _15.z;
+    _29 = t5.Sample(s1, float2((_25 + TEXCOORD0_centroid.x), (_26 + TEXCOORD0_centroid.y)));
+    _36 = ((_29.w * _25) + TEXCOORD0_centroid.x);
+    _37 = ((_29.w * _26) + TEXCOORD0_centroid.y);
+  } else {
+    _36 = TEXCOORD0_centroid.x;
+    _37 = TEXCOORD0_centroid.y;
+  }
+  _38 = t2.SampleLevel(s0, float2(_36, _37), 0.0f);
+  _42 = t1.SampleLevel(s0, float2(_36, _37), 0.0f);
+  float lut_input_r = ((max(_42.x, 0.0f) + _38.x) * 1.0f);
+  float lut_input_g = ((max(_42.y, 0.0f) + _38.y) * 1.0f);
+  float lut_input_b = ((max(_42.z, 0.0f) + _38.z) * 1.0f);
+  lut_input_r = (renodx::color::arri::logc::c1000::Encode(lut_input_r, false) - 0.0928f) / (1.0f - 0.0928f);
+  lut_input_g = (renodx::color::arri::logc::c1000::Encode(lut_input_g, false) - 0.0928f) / (1.0f - 0.0928f);
+  lut_input_b = (renodx::color::arri::logc::c1000::Encode(lut_input_b, false) - 0.0928f) / (1.0f - 0.0928f);
+  _80 = t4.SampleLevel(s1,
+                        float3(((cb1_007x * saturate(lut_input_r)) + cb1_006w),
+                               ((cb1_007x * saturate(lut_input_g)) + cb1_006w),
+                               ((cb1_007x * saturate(lut_input_b)) + cb1_006w)),
+                        0.0f);
+  _95 = t0.Load(int3(int(frac(Global_1168.y * SV_Position.x) * Global_1168.x), int(frac(Global_1168.y * SV_Position.y) * Global_1168.x), 0));
+  _132 = select((_80.x <= 0.0031308000907301903f), (_80.x * 12.920000076293945f), ((exp2(log2(abs(_80.x)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)) + ((_95.x + -0.5f) * 0.003921568859368563f);
+  _133 = select((_80.y <= 0.0031308000907301903f), (_80.y * 12.920000076293945f), ((exp2(log2(abs(_80.y)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)) + ((_95.y + -0.5f) * 0.003921568859368563f);
+  _134 = select((_80.z <= 0.0031308000907301903f), (_80.z * 12.920000076293945f), ((exp2(log2(abs(_80.z)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)) + ((_95.z + -0.5f) * 0.003921568859368563f);
+  SV_Target.x = select((_132 <= 0.040449999272823334f), (_132 * 0.07739938050508499f), exp2(log2(abs((_132 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f));
+  SV_Target.y = select((_133 <= 0.040449999272823334f), (_133 * 0.07739938050508499f), exp2(log2(abs((_133 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f));
+  SV_Target.z = select((_134 <= 0.040449999272823334f), (_134 * 0.07739938050508499f), exp2(log2(abs((_134 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f));
+  SV_Target.w = (1.0f - (((float4)(t3.Load(int3(int(SV_Position.x), int(SV_Position.y), 0)))).w));
+  return SV_Target;
+}

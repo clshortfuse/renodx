@@ -1,0 +1,161 @@
+#include "tonemap.hlsli"
+
+struct SCameraDistances {
+  float SCameraDistances_000;
+  float SCameraDistances_004;
+  float SCameraDistances_008;
+  float SCameraDistances_012;
+};
+
+struct SGlobalDebugValues {
+  float SGlobalDebugValues_000;
+  float SGlobalDebugValues_004;
+  float SGlobalDebugValues_008;
+  float SGlobalDebugValues_012;
+};
+
+struct SGlobalScalars {
+  float SGlobalScalars_000;
+  float SGlobalScalars_004;
+  float SGlobalScalars_008;
+};
+
+struct SLCMFrustumPlanes {
+  float4 SLCMFrustumPlanes_000[6];
+};
+
+
+Texture2D<float4> t0 : register(t0);
+
+Texture2D<float3> t1 : register(t1);
+
+Texture2D<float3> t2 : register(t2);
+
+Texture2D<float4> t3 : register(t3);
+
+Texture3D<float4> t4 : register(t4);
+
+cbuffer cb0 : register(b0) {
+  float4 Global_000 : packoffset(c000.x);
+  float4 Global_016 : packoffset(c001.x);
+  float4 Global_032 : packoffset(c002.x);
+  float4 Global_048[29] : packoffset(c003.x);
+  float4 Global_512[29] : packoffset(c032.x);
+  float4 Global_976 : packoffset(c061.x);
+  float4 Global_992 : packoffset(c062.x);
+  float4 Global_1008 : packoffset(c063.x);
+  float4 Global_1024[2] : packoffset(c064.x);
+  SGlobalDebugValues Global_1056 : packoffset(c066.x);
+  float3 Global_1072 : packoffset(c067.x);
+  float Global_1084 : packoffset(c067.w);
+  float3 Global_1088 : packoffset(c068.x);
+  float Global_1100 : packoffset(c068.w);
+  float3 Global_1104 : packoffset(c069.x);
+  float Global_1116 : packoffset(c069.w);
+  float3 Global_1120 : packoffset(c070.x);
+  float Global_1132 : packoffset(c070.w);
+  float3 Global_1136 : packoffset(c071.x);
+  float Global_1148 : packoffset(c071.w);
+  SGlobalScalars Global_1152 : packoffset(c072.x);
+  float Global_1164 : packoffset(c072.w);
+  float2 Global_1168 : packoffset(c073.x);
+  float Global_1176 : packoffset(c073.z);
+  float Global_1180 : packoffset(c073.w);
+  float2 Global_1184 : packoffset(c074.x);
+  float Global_1192 : packoffset(c074.z);
+  float Global_1196 : packoffset(c074.w);
+  float2 Global_1200 : packoffset(c075.x);
+  float Global_1208 : packoffset(c075.z);
+  float Global_1212 : packoffset(c075.w);
+  float2 Global_1216 : packoffset(c076.x);
+  float Global_1224 : packoffset(c076.z);
+  float2 Global_1232 : packoffset(c077.x);
+};
+
+cbuffer cb1 : register(b1) {
+  float cb1_092z : packoffset(c092.z);
+  float cb1_836y : packoffset(c836.y);
+};
+
+cbuffer cb2 : register(b2) {
+  float cb2_006w : packoffset(c006.w);
+  float cb2_007x : packoffset(c007.x);
+};
+
+cbuffer cb3 : register(b3) {
+  float4 HDRLighting_000 : packoffset(c000.x);
+  float4 HDRLighting_016 : packoffset(c001.x);
+  float4 HDRLighting_032 : packoffset(c002.x);
+  float4 HDRLighting_048 : packoffset(c003.x);
+  float4 HDRLighting_064 : packoffset(c004.x);
+  float4 HDRLighting_080 : packoffset(c005.x);
+  float4 HDRLighting_096 : packoffset(c006.x);
+  float3 HDRLighting_112 : packoffset(c007.x);
+  float HDRLighting_124 : packoffset(c007.w);
+  float3 HDRLighting_128 : packoffset(c008.x);
+  float HDRLighting_140 : packoffset(c008.w);
+  float3 HDRLighting_144 : packoffset(c009.x);
+  float HDRLighting_156 : packoffset(c009.w);
+  float3 HDRLighting_160 : packoffset(c010.x);
+  float HDRLighting_172 : packoffset(c010.w);
+  float3 HDRLighting_176 : packoffset(c011.x);
+  float HDRLighting_188 : packoffset(c011.w);
+  float HDRLighting_192 : packoffset(c012.x);
+  float HDRLighting_196 : packoffset(c012.y);
+  float HDRLighting_200 : packoffset(c012.z);
+  float HDRLighting_204 : packoffset(c012.w);
+  float HDRLighting_208 : packoffset(c013.x);
+  float HDRLighting_212 : packoffset(c013.y);
+  float HDRLighting_216 : packoffset(c013.z);
+  float HDRLighting_220 : packoffset(c013.w);
+  float HDRLighting_224 : packoffset(c014.x);
+  float HDRLighting_228 : packoffset(c014.y);
+};
+
+SamplerState s0 : register(s0);
+
+SamplerState s1 : register(s1);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+
+float4 main(
+  linear float2 TEXCOORD0_centroid : TEXCOORD0_centroid,
+  precise noperspective float4 SV_Position : SV_Position
+) : SV_Target {
+  float4 SV_Target;
+  float _25;
+  float _26;
+  float _36;
+  float3 _48;
+  float4 _86;
+  float4 _101;
+  float _138;
+  float _139;
+  float _140;
+  _25 = (TEXCOORD0_centroid.x + -0.5f) * 2.0f;
+  _26 = _25 * _25;
+  _36 = saturate(TEXCOORD0_centroid.y);
+  _48 = t1.SampleLevel(s0, float2(TEXCOORD0_centroid.x, TEXCOORD0_centroid.y), 0.0f);
+  float lut_input_r = ((max(_48.x, 0.0f) + (((float3)(t2.SampleLevel(s0, float2(saturate(saturate(((((HDRLighting_124 * 8.0f) * _26) * cb1_092z) * cb1_836y) + TEXCOORD0_centroid.x)), _36), 0.0f))).x)) * 1.0f);
+  float lut_input_g = ((max(_48.y, 0.0f) + (((float3)(t2.SampleLevel(s0, float2(saturate(saturate(TEXCOORD0_centroid.x)), _36), 0.0f))).y)) * 1.0f);
+  float lut_input_b = ((max(_48.z, 0.0f) + (((float3)(t2.SampleLevel(s0, float2(saturate(saturate(((((HDRLighting_124 * -8.0f) * _26) * cb1_092z) * cb1_836y) + TEXCOORD0_centroid.x)), _36), 0.0f))).z)) * 1.0f);
+  lut_input_r = (renodx::color::arri::logc::c1000::Encode(lut_input_r, false) - 0.0928f) / (1.0f - 0.0928f);
+  lut_input_g = (renodx::color::arri::logc::c1000::Encode(lut_input_g, false) - 0.0928f) / (1.0f - 0.0928f);
+  lut_input_b = (renodx::color::arri::logc::c1000::Encode(lut_input_b, false) - 0.0928f) / (1.0f - 0.0928f);
+  _86 = t4.SampleLevel(s1,
+                        float3(((cb2_007x * saturate(lut_input_r)) + cb2_006w),
+                               ((cb2_007x * saturate(lut_input_g)) + cb2_006w),
+                               ((cb2_007x * saturate(lut_input_b)) + cb2_006w)),
+                        0.0f);
+  _101 = t0.Load(int3(int(frac(Global_1168.y * SV_Position.x) * Global_1168.x), int(frac(Global_1168.y * SV_Position.y) * Global_1168.x), 0));
+  _138 = select((_86.x <= 0.0031308000907301903f), (_86.x * 12.920000076293945f), ((exp2(log2(abs(_86.x)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)) + ((_101.x + -0.5f) * 0.003921568859368563f);
+  _139 = select((_86.y <= 0.0031308000907301903f), (_86.y * 12.920000076293945f), ((exp2(log2(abs(_86.y)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)) + ((_101.y + -0.5f) * 0.003921568859368563f);
+  _140 = select((_86.z <= 0.0031308000907301903f), (_86.z * 12.920000076293945f), ((exp2(log2(abs(_86.z)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)) + ((_101.z + -0.5f) * 0.003921568859368563f);
+  SV_Target.x = select((_138 <= 0.040449999272823334f), (_138 * 0.07739938050508499f), exp2(log2(abs((_138 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f));
+  SV_Target.y = select((_139 <= 0.040449999272823334f), (_139 * 0.07739938050508499f), exp2(log2(abs((_139 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f));
+  SV_Target.z = select((_140 <= 0.040449999272823334f), (_140 * 0.07739938050508499f), exp2(log2(abs((_140 + 0.054999999701976776f) * 0.9478673338890076f)) * 2.4000000953674316f));
+  SV_Target.w = (1.0f - (((float4)(t3.Load(int3(int(SV_Position.x), int(SV_Position.y), 0)))).w));
+  return SV_Target;
+}
