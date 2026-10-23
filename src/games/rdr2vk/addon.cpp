@@ -41,6 +41,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // Apply UI replacements only when writing to the backbuffer.
     CustomSwapchainShader(0x071AB204),
+    CustomSwapchainShader(0x096D7C1F),  // sometimes not UI
     CustomSwapchainShader(0x14BF23D4),
     CustomSwapchainShader(0x1994C234),
     CustomSwapchainShader(0x1B0D650C),
