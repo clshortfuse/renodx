@@ -1,0 +1,38 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "onimusha-wots",
+  "title": "Onimusha: Way of the Sword",
+  "maintainers": [
+    "Musa"
+  ],
+  "support": "bespoke",
+  "summary": "Enhances the native HDR presentation with configurable tone mapping, color grading, UI brightness, and film-grain controls.",
+  "tags": [
+    "hdr",
+    "tone-mapping",
+    "color-grading",
+    "film-grain",
+    "re-engine"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://github.com/praydog/REFramework-nightly/releases",
+      "kind": "reframework-download"
+    }
+  ],
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2638890/ce31174fea86d0bafa21b26e853dcd0b7326e36f/header.jpg",
+  "notes": [
+    "Requires REFramework nightly to function."
+  ],
+  "deploy": {
+    "game_exe": "OnimushaWotS.exe",
+    "process_name": "Onimusha: Way of the Sword",
+    "api": "d3d12",
+    "steam_appid": 2638890,
+    "microsoft_store_id": "9NH6PQ3L7TTP",
+    "architecture": [
+      "x64"
+    ]
+  }
+}

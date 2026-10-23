@@ -215,12 +215,12 @@ void comp_main() {
       if (_305) {
         float4 _1075 = _14.Load(int3(uint2(_795 & 255u, _796 & 255u), 0u));
         // Custom: Replace Film Grain
-        if (injectedData.fxFilmGrain) {
+        if (CUSTOM_FILM_GRAIN_PERCEPTUAL) {
           float3 grainedColor = renodx::effects::ApplyFilmGrain(
               float3(_799, _800, _801),
               _1075.xy,
               frac(cb0[0u].x / 1000.f),
-              injectedData.fxFilmGrain * 0.03f,
+              CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
               (cb6[12u].y == 1.f) ? 1.f : (203.f / 100.f));
           frontier_phi_13_11_ladder = grainedColor.b;
           frontier_phi_13_11_ladder_1 = grainedColor.g;
@@ -229,9 +229,10 @@ void comp_main() {
           frontier_phi_13_11_ladder_4 = _567;
         } else {
           uint _1072 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * float(_795)), uint(cb12[79u].y * float(_796))), 0u)).y & 31u);
-          float _1077 = _1075.x;
-          float _1078 = _1075.y;
-          float _1079 = _1075.z;
+          float3 _1075_scaled = ScaleVanillaFilmGrainNoise(_1075.rgb);
+          float _1077 = _1075_scaled.x;
+          float _1078 = _1075_scaled.y;
+          float _1079 = _1075_scaled.z;
           float _1082 = ((_1077 + _1078) + _1079) * 0.3333333432674407958984375f;
           float _1083 = cb6[12u].x * _799;
           float _1084 = cb6[12u].x * _800;
@@ -279,12 +280,12 @@ void comp_main() {
       if (_305) {
         float4 _817 = _14.Load(int3(uint2(_85 & 255u, _86 & 255u), 0u));
         // Custom: Add Film Grain
-        if (injectedData.fxFilmGrain) {
+        if (CUSTOM_FILM_GRAIN_PERCEPTUAL) {
           float3 grainedColor = renodx::effects::ApplyFilmGrain(
               float3(_579, _580, _581),
               _817.xy,
               frac(cb0[0u].x / 1000.f),
-              injectedData.fxFilmGrain * 0.03f,
+              CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
               (cb6[12u].y == 1.f) ? 1.f : (203.f / 100.f));
           frontier_phi_13_6_ladder = grainedColor.b;
           frontier_phi_13_6_ladder_1 = grainedColor.g;
@@ -293,9 +294,10 @@ void comp_main() {
           frontier_phi_13_6_ladder_4 = _301;
         } else {
           uint _814 = 1u << (_12.Load(int3(uint2(uint(cb12[79u].x * _87), uint(cb12[79u].y * _88)), 0u)).y & 31u);
-          float _819 = _817.x;
-          float _820 = _817.y;
-          float _821 = _817.z;
+          float3 _817_scaled = ScaleVanillaFilmGrainNoise(_817.rgb);
+          float _819 = _817_scaled.x;
+          float _820 = _817_scaled.y;
+          float _821 = _817_scaled.z;
           float _824 = ((_819 + _820) + _821) * 0.3333333432674407958984375f;
           float _825 = cb6[12u].x * _579;
           float _826 = cb6[12u].x * _580;

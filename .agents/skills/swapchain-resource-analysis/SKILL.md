@@ -8,6 +8,10 @@ argument-hint: "game/frame target, graphics API, suspected final pass/resource, 
 
 Use this skill when the target pass/resource is not proven yet, especially when work starts at final presentation, swapchain output, backbuffer format, or a suspected resource bottleneck. The goal is to trace the render pipeline far enough backward to find real scene/HDR data, prove where destructive SDR mapping happens, and decide whether the fix is shader replacement, resource upgrade, `SwapChainPass`/output-format work, UI separation, or rejection of a postprocess-only approach.
 
+If this workflow reaches C++ addon planning, review, creation, or editing under
+`src/`, read `docs/CXX_STYLE.md` in full before that work. Analysis that does not
+touch C++ does not need to load the guide.
+
 ## Related skills and scope
 
 | Need | Use |

@@ -83,24 +83,36 @@ cbuffer CBControl : register(CB_CONTROL_REGISTER) {
 
 SamplerState TrilinearClamp : register(s9, space32);
 
-float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
-  const float3 added_gamma = black_gamma;
+float3 CompensateGradingZeroInputOffset(
+    float3 graded,
+    float3 source,
+    float3 grading_zero_output,
+    float half_weight_stops) {
+  // Split the grading output at zero into a shared RGB offset and its unequal-channel residual.
+  const float common_offset = max(renodx::math::Min(grading_zero_output), 0.f);
+  const float3 channel_residual = grading_zero_output - common_offset;
 
-  // Remove from 0 to mid-gray
-  const float shadow_length = renodx::math::Min(mid_gray_gamma);
-  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
-  const float3 floor_remove = added_gamma * renodx::math::DivideSafe(max(0, shadow_length - shadow_stop), shadow_length, 0.f);
+  // Express the relative linear-light RMS source level in units of the chosen half-weight level.
+  const float source_magnitude = sqrt(dot(source, source) / 3.f);
+  const float source_to_common_offset = renodx::math::DivideSafe(source_magnitude, common_offset, 0.f);
+  const float source_half_weight_units = source_to_common_offset * exp2(half_weight_stops);
+  // Approximate exp2(-x), matching x = 0, 1, and 2 exactly at weights 1, 1/2, and 1/4.
+  const float source_release_denominator = 1.f + 0.5f * source_half_weight_units * (1.f + source_half_weight_units);
 
-  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
-  return unclamped_gamma;
-}
+  // Reduce compensation when the zero-input output contains unequal-channel structure; never subtract that residual.
+  const float common_offset_squared_magnitude = 3.f * common_offset * common_offset;
+  // Combine source release and the relative squared RGB residual weight into one division.
+  const float compensation_weight = renodx::math::DivideSafe(
+      common_offset_squared_magnitude,
+      source_release_denominator
+          * (common_offset_squared_magnitude + dot(channel_residual, channel_residual)),
+      0.f);
 
-float ComputeMaxChCompressionScale(float3 untonemapped, float rolloff_start = 0.18f, float output_max = 1.f) {
-  float peak = renodx::math::Max(untonemapped);
-  float mapped_peak = renodx::tonemap::ReinhardPiecewise(peak, output_max, rolloff_start);
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
+  // Subtract one bounded scalar, preserving channel differences and keeping every channel at or above its source.
+  const float removable_common_offset = max(renodx::math::Min(graded - source), 0.f);
+  const float offset_compensation = min(common_offset * compensation_weight, removable_common_offset);
 
-  return scale;
+  return graded - offset_compensation;
 }
 
 float3 BlendLUTs(float3 color) {
@@ -137,42 +149,22 @@ float3 BlendLUTs(float3 color) {
 }
 
 float3 ApplyColorGradingLUTs(float3 color_input) {
-  float3 color_output_original = BlendLUTs(color_input);
-
-  float3 color_output = color_output_original;
+  float3 color_output = BlendLUTs(color_input);
 
   if (COLOR_GRADE_LUT_SCALING > 0.f) {
-    float3 lut_black = BlendLUTs(0.f);
+    float3 lut_zero_output = BlendLUTs(0.f);
 
-    float lut_black_y = renodx::color::y::from::BT709(lut_black);
-    if (lut_black_y > 0.f) {
-      float3 lut_mid = BlendLUTs(lut_black_y);
-
-      // if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
-      //   color_output = renodx::color::correct::GammaSafe(color_output);
-      //   lut_black = renodx::color::correct::GammaSafe(lut_black);
-      //   lut_mid = renodx::color::correct::GammaSafe(lut_mid);
-      //   // color_input = renodx::color::correct::GammaSafe(color_input);
-      // }
-
-      float3 unclamped_gamma = Unclamp(
-          renodx::color::srgb::EncodeSafe(color_output),
-          renodx::color::srgb::EncodeSafe(lut_black),
-          renodx::color::srgb::EncodeSafe(lut_mid),
-          renodx::color::srgb::EncodeSafe(color_input));
-
-      float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
-
-      // if (RENODX_GAMMA_CORRECTION != 0.f) {  // inverse EOTF emulation
-      //   unclamped_linear = renodx::color::correct::GammaSafe(unclamped_linear, true);
-      // }
-
-      // color_output = color_output_original * lerp(1.f, renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(color_output_original), 1.f), COLOR_GRADE_LUT_SCALING);
-      color_output = renodx::lut::RecolorUnclamped(color_output_original, unclamped_linear, COLOR_GRADE_LUT_SCALING);
+    if (renodx::math::Min(lut_zero_output) > 0.f) {
+      const float3 offset_compensated = CompensateGradingZeroInputOffset(
+          color_output,
+          color_input,
+          lut_zero_output,
+          4.f);
+      color_output = lerp(color_output, offset_compensated, COLOR_GRADE_LUT_SCALING);
     }
   }
 
-  return color_output;
+  return max(0.f, color_output);
 }
 
 void ApplyColorGrading(float r_in, float g_in, float b_in,
@@ -185,7 +177,7 @@ void ApplyColorGrading(float r_in, float g_in, float b_in,
       compression_scale = renodx::math::Max(working_color);
       compression_scale = 1.f / renodx::math::Select(compression_scale > 1.f, compression_scale, 1.f);  // only compress values above 1.f
     } else {
-      compression_scale = ComputeMaxChCompressionScale(working_color);
+      compression_scale = ApplyAnchoredCInfinityShoulderMaxChannelScale(working_color);
     }
 
     {  // max channel compression
@@ -308,13 +300,13 @@ float3 ApplyToneMap(float3 color_bt709, float2 grain_uv) {
 
   float3 color_bt2020;
   if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {
-    float3 purity_and_hue_source = renodx::tonemap::neutwo::PerChannel(color_bt709, PEAK_RATIO);
+    float3 purity_and_hue_source = ApplyAnchoredCInfinityShoulder(color_bt709, PEAK_RATIO);
     color_bt709 = renodx::color::correct::Luminance(purity_and_hue_source, renodx::color::yf::from::BT709(purity_and_hue_source), renodx::color::yf::from::BT709(color_bt709));
     color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
   } else {  // blow out and hue shift in LMS
     const float3 BT2020_WHITE_LMS = renodx::color::lms::from::BT2020(1.f);
     float3 color_lms_normalized = renodx::color::lms::from::BT709(color_bt709) / BT2020_WHITE_LMS;
-    float3 purity_and_hue_source_lms_normalized = renodx::tonemap::neutwo::PerChannel(color_lms_normalized, PEAK_RATIO);
+    float3 purity_and_hue_source_lms_normalized = ApplyAnchoredCInfinityShoulder(color_lms_normalized, PEAK_RATIO);
     color_lms_normalized = renodx::color::correct::Luminance(
         purity_and_hue_source_lms_normalized,
         renodx::color::yf::from::LMS(purity_and_hue_source_lms_normalized),
@@ -328,7 +320,7 @@ float3 ApplyToneMap(float3 color_bt709, float2 grain_uv) {
   }
 
   {
-    color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, PEAK_RATIO);
+    color_bt2020 *= ApplyAnchoredCInfinityShoulderMaxChannelScale(color_bt2020, PEAK_RATIO);
   }
   color_bt709 = renodx::color::bt709::from::BT2020(color_bt2020);
 

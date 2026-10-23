@@ -2,6 +2,9 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "digimonstorytimestranger",
   "title": "Digimon Story: Time Stranger",
+  "maintainers": ["theonlyames (Riha)"],
+  "compatibility": "in-progress",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/digimonstorytimestranger/mods/71"}],
   "deploy": {
     "steam_appid": 1984270
   }

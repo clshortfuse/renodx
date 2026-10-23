@@ -1,0 +1,348 @@
+#include "../denoising.hlsli"
+
+Texture2D<float> g_depth_buffer : register(t0);
+
+Texture2D<float4> g_normal_roughness : register(t1);
+
+Texture2D<float3> g_average_radiance : register(t2);
+
+Texture2D<float4> g_in_radiance : register(t3);
+
+Texture2D<float> g_in_variance : register(t4);
+
+StructuredBuffer<uint> g_denoiser_tile_list : register(t5);
+
+RWTexture2D<float4> g_out_radiance : register(u0);
+
+RWTexture2D<float> g_out_variance : register(u1);
+
+cbuffer SceneInfo : register(b0) {
+  row_major float4x4 viewProjMat : packoffset(c000.x);
+  row_major float3x4 transposeViewMat : packoffset(c004.x);
+  row_major float3x4 transposeViewInvMat : packoffset(c007.x);
+  float4 projElement[2] : packoffset(c010.x);
+  float4 projInvElements[2] : packoffset(c012.x);
+  row_major float4x4 viewProjInvMat : packoffset(c014.x);
+  row_major float4x4 prevViewProjMat : packoffset(c018.x);
+  float3 ZToLinear : packoffset(c022.x);
+  float subdivisionLevel : packoffset(c022.w);
+  float2 screenSize : packoffset(c023.x);
+  float2 screenInverseSize : packoffset(c023.z);
+  float2 cullingHelper : packoffset(c024.x);
+  float cameraNearPlane : packoffset(c024.z);
+  float cameraFarPlane : packoffset(c024.w);
+  float4 viewFrustum[8] : packoffset(c025.x);
+  float4 clipplane : packoffset(c033.x);
+  float2 vrsVelocityThreshold : packoffset(c034.x);
+  uint GPUVisibleMask : packoffset(c034.z);
+  uint resolutionRatioPacked : packoffset(c034.w);
+  float3 worldOffset : packoffset(c035.x);
+  uint sceneInfoMisc : packoffset(c035.w);
+  uint4 rayTracingParams : packoffset(c036.x);
+  float4 sceneExtendedData : packoffset(c037.x);
+  float2 projectionSpaceJitterOffset : packoffset(c038.x);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  float SceneInfo_Reserve2 : packoffset(c039.x);
+};
+
+cbuffer FFX_SSSR_Constants : register(b1) {
+  uint2 g_buffer_dimensions : packoffset(c000.x);
+  float2 g_inv_buffer_dimensions : packoffset(c000.z);
+  float g_temporal_stability_factor : packoffset(c001.x);
+  float g_depth_buffer_thickness : packoffset(c001.y);
+  float g_roughness_threshold : packoffset(c001.z);
+  float g_temporal_variance_threshold : packoffset(c001.w);
+  uint g_frame_index : packoffset(c002.x);
+  uint g_max_traversal_intersections : packoffset(c002.y);
+  uint g_min_traversal_occupancy : packoffset(c002.z);
+  uint g_most_detailed_mip : packoffset(c002.w);
+  uint g_samples_per_quad : packoffset(c003.x);
+  uint g_temporal_variance_guided_tracing_enabled : packoffset(c003.y);
+  uint g_vignetting_enabled : packoffset(c003.z);
+  float g_max_ray_length : packoffset(c003.w);
+  float g_secondary_ray_offset : packoffset(c004.x);
+  float g_fade_border_roughness : packoffset(c004.y);
+  uint g_reserve_0 : packoffset(c004.z);
+  uint g_reserve_1 : packoffset(c004.w);
+};
+
+SamplerState BilinearClamp : register(s5, space32);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+static const int _global_0[4] = { 0, 8, 0, 8 };
+static const int _global_1[4] = { 0, 0, 8, 8 };
+groupshared uint _global_2[256];
+groupshared uint _global_3[256];
+groupshared uint _global_4[256];
+groupshared uint _global_5[256];
+groupshared float _global_6[256];
+static const int _global_7[30] = { 0, 1, -2, 1, 2, -3, -3, 0, 1, 2, -1, -2, 3, 0, -3, 3, 0, -3, -1, -1, 2, 1, -2, -2, 1, 0, 0, 2, 3, -1 };
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  int _20;
+  int _31;
+  int _36;
+  int _39;
+  int _40;
+  float4 _44;
+  int _50;
+  int _51;
+  int _52;
+  float _84;
+  float _85;
+  half _138;
+  half _139;
+  half _140;
+  half _141;
+  half _142;
+  half _143;
+  half _144;
+  float _145;
+  half _295;
+  half _296;
+  half _297;
+  half _298;
+  half _299;
+  int _300;
+  half _397;
+  half _398;
+  half _399;
+  half _400;
+  uint _53;
+  uint _54;
+  float4 _56;
+  float _68;
+  float _69;
+  float _71;
+  float _72;
+  float _73;
+  float _76;
+  float _87;
+  float _88;
+  float _89;
+  float _90;
+  float4 _116;
+  uint _146;
+  uint _147;
+  uint _158;
+  int _185;
+  int _189;
+  int _191;
+  int _194;
+  int _195;
+  int _199;
+  half _208;
+  half _209;
+  half _212;
+  int _216;
+  int _220;
+  half _232;
+  float _236;
+  float3 _255;
+  half _259;
+  half _260;
+  half _261;
+  half _271;
+  half _272;
+  half _273;
+  half _281;
+  half _284;
+  uint _309;
+  uint _310;
+  int _314;
+  half _323;
+  half _324;
+  half _327;
+  int _331;
+  int _335;
+  half _363;
+  half _364;
+  half _365;
+  half _377;
+  half _378;
+  half _382;
+  half _383;
+  half _384;
+  half _387;
+  int _388;
+  float _403;
+  _20 = g_denoiser_tile_list[(int)(SV_GroupID.x)];
+  _31 = (((uint)(SV_GroupIndex) >> 2) & 6) | ((int)(SV_GroupIndex) & 1);
+  _36 = (((uint)(SV_GroupIndex) >> 1) & 3) | (((uint)(SV_GroupIndex) >> 3) & 4);
+  _39 = ((((int)(((uint)(_20 & 32767)) + SV_GroupThreadID.x)) / 8) << 3) | _31;
+  _40 = ((((int)(((uint)(((uint)(_20) >> 15) & 32767)) + SV_GroupThreadID.y)) / 8) << 3) | _36;
+  _44 = g_normal_roughness.Load(int3(_39, _40, 0));
+  _50 = 0;
+  _51 = 0;
+  _52 = 0;
+  bool _loop_break_0 = false;
+  bool _loop_exit_0 = false;
+  while (true) {
+    _53 = (_39 + (uint)(-4)) + _51;
+    _54 = (_40 + (uint)(-4)) + _50;
+    _56 = g_normal_roughness.Load(int3(_53, _54, 0));
+    if ((_56.z * _56.z) < (g_roughness_threshold * g_roughness_threshold)) {
+      _68 = (_56.x * 2.0f) + -1.0f;
+      _69 = (_56.y * 2.0f) + -1.0f;
+      _71 = 1.0f - abs(_68);
+      _72 = abs(_69);
+      _73 = _71 - _72;
+      do {
+        _84 = _68;
+        _85 = _69;
+        if (_73 < 0.0f) {
+          _76 = 1.0f - _72;
+          _84 = select((_68 >= 0.0f), _76, (-0.0f - _76));
+          _85 = select((_69 >= 0.0f), _71, (-0.0f - _71));
+        }
+        _87 = rsqrt(dot(float3(_84, _85, _73), float3(_84, _85, _73)));
+        _88 = _87 * _84;
+        _89 = _87 * _85;
+        _90 = _87 * _73;
+        _116 = g_in_radiance.Load(int3(_53, _54, 0));
+        _138 = (half)(half(_116.z));
+        _139 = (half)(half(_116.y));
+        _140 = (half)(half(_116.x));
+        _141 = (half)(half((g_in_variance.Load(int3(_53, _54, 0))).x));
+        _142 = (half)(half(mad(_90, (transposeViewMat[2].z), mad(_89, (transposeViewMat[1].z), ((transposeViewMat[0].z) * _88)))));
+        _143 = (half)(half(mad(_90, (transposeViewMat[2].y), mad(_89, (transposeViewMat[1].y), ((transposeViewMat[0].y) * _88)))));
+        _144 = (half)(half(mad(_90, (transposeViewMat[2].x), mad(_89, (transposeViewMat[1].x), ((transposeViewMat[0].x) * _88)))));
+        _145 = (ZToLinear.z / (ZToLinear.x - (ZToLinear.y * ((g_depth_buffer.Load(int3(_53, _54, 0))).x))));
+      } while (false);
+      if (_loop_break_0) {
+        _loop_break_0 = false;
+        continue;
+      }
+    } else {
+      _138 = 0.0h;
+      _139 = 0.0h;
+      _140 = 0.0h;
+      _141 = 1.0h;
+      _142 = 0.0h;
+      _143 = 0.0h;
+      _144 = 0.0h;
+      _145 = 0.0f;
+    }
+    _146 = _51 + _31;
+    _147 = _50 + _36;
+    _global_2[(uint)(((int)(_146 + (_147 * 16))))] = (((int)((int)(f32tof16(float(_139))) << 16)) | (int)(f32tof16(float(_140))));
+    _158 = f32tof16(float(_138));
+    _global_3[(uint)(((int)(_146 + (_147 * 16))))] = (((int)(_158 << 16)) | _158);
+    _global_4[(uint)(((int)(_146 + (_147 * 16))))] = (((int)((int)(f32tof16(float(_143))) << 16)) | (int)(f32tof16(float(_144))));
+    _global_5[(uint)(((int)(_146 + (_147 * 16))))] = (((int)((int)(f32tof16(float(_141))) << 16)) | (int)(f32tof16(float(_142))));
+    _global_6[(uint)(((int)(_146 + (_147 * 16))))] = _145;
+    _185 = _52 + 1;
+    if (!(_185 == 4)) {
+      _189 = _global_0[(uint)(_185)];
+      _191 = _global_1[(uint)(_185)];
+      _50 = _191;
+      _51 = _189;
+      _52 = _185;
+      continue;
+    } else {
+      GroupMemoryBarrierWithGroupSync();
+      _194 = _31 + 4;
+      _195 = _36 + 4;
+      _199 = _global_2[(uint)(((int)(_194 + (_195 * 16))))];
+      _208 = half(f16tof32(((uint)(_199 & 65535))));
+      _209 = half(f16tof32(((uint)((uint)(_199) >> 16))));
+      _212 = half(f16tof32(((uint)((_global_3[(uint)(((int)(_194 + (_195 * 16))))]) & 65535))));
+      _216 = _global_4[(uint)(((int)(_194 + (_195 * 16))))];
+      _220 = _global_5[(uint)(((int)(_194 + (_195 * 16))))];
+      _232 = half(f16tof32(((uint)((uint)(_220) >> 16))));
+      _236 = _global_6[(uint)(((int)(_194 + (_195 * 16))))];
+      _255 = g_average_radiance.SampleLevel(BilinearClamp, float2(((float((int)(_39)) + 0.5f) / ((float)((uint)(uint)(select(((g_buffer_dimensions.x & -8) == g_buffer_dimensions.x), g_buffer_dimensions.x, ((int)((uint)(g_buffer_dimensions.x) + 8u))))))), ((float((int)(_40)) + 0.5f) / ((float)((uint)(uint)(select(((g_buffer_dimensions.y & -8) == g_buffer_dimensions.y), g_buffer_dimensions.y, ((int)((uint)(g_buffer_dimensions.y) + 8u)))))))), 0.0f);
+      _259 = half(_255.x);
+      _260 = half(_255.y);
+      _261 = half(_255.z);
+      if (_232 > 0.0h) {
+        if (float(half(_44.z * _44.z)) < (g_roughness_threshold * g_roughness_threshold)) {
+          _271 = _259 - _208;
+          _272 = _260 - _209;
+          _273 = _261 - _212;
+          _281 = -0.86572266h - ((half)(_232 * 0.14416504h));
+          _284 = max((half)(exp2((half)((half)(sqrt((half)(((half)(((half)(_271 * _271)) + ((half)(_272 * _272)))) + ((half)(_273 * _273))))) * _281))), 0.010002136h);
+          _295 = _284;
+          _296 = ((half)(_284 * _208));
+          _297 = ((half)(_284 * _209));
+          _298 = ((half)(_284 * _212));
+          _299 = ((half)(((half)(_284 * _284)) * _232));
+          _300 = 0;
+          bool _loop_break_1 = false;
+          while (true) {
+            _309 = ((uint)(_global_7[(uint)(((int)(0u + (_300 * 2))))])) + _194;
+            _310 = ((uint)(_global_7[(uint)(((int)(1u + (_300 * 2))))])) + _195;
+            _314 = _global_2[(uint)(((int)(_309 + (_310 * 16))))];
+            _323 = half(f16tof32(((uint)(_314 & 65535))));
+            _324 = half(f16tof32(((uint)((uint)(_314) >> 16))));
+            _327 = half(f16tof32(((uint)((_global_3[(uint)(((int)(_309 + (_310 * 16))))]) & 65535))));
+            _331 = _global_4[(uint)(((int)(_309 + (_310 * 16))))];
+            _335 = _global_5[(uint)(((int)(_309 + (_310 * 16))))];
+            _363 = _259 - _323;
+            _364 = _260 - _324;
+            _365 = _261 - _327;
+            _377 = ((half)(((half)((half)(exp2((half)((half)(log2((half)(max((half)(dot(half3((half)(half(f16tof32(((uint)(_216 & 65535))))), (half)(half(f16tof32(((uint)((uint)(_216) >> 16))))), (half)(half(f16tof32(((uint)(_220 & 65535)))))), half3((half)(half(f16tof32(((uint)(_331 & 65535))))), (half)(half(f16tof32(((uint)((uint)(_331) >> 16))))), (half)(half(f16tof32(((uint)(_335 & 65535)))))))), 0.0h)))) * 512.0h))) * (half)(max(0.099975586h, ((half)(1.0h - (half)(exp2((half)(_232 * -6.34375h))))))))) * (half)(half(exp2((_236 * -5.770780086517334f) * abs(_236 - (_global_6[(uint)(((int)(_309 + (_310 * 16))))])))))) * (half)(max((half)(exp2((half)((half)(sqrt((half)(((half)(((half)(_364 * _364)) + ((half)(_363 * _363)))) + ((half)(_365 * _365))))) * _281))), 0.010002136h)));
+            _378 = _377 + _295;
+            _382 = ((half)(_377 * _323)) + _296;
+            _383 = ((half)(_377 * _324)) + _297;
+            _384 = ((half)(_377 * _327)) + _298;
+            _387 = ((half)(((half)(_377 * _377)) * (half)(half(f16tof32(((uint)((uint)(_335) >> 16))))))) + _299;
+            _388 = _300 + 1;
+            do {
+              if (!(_388 == 15)) {
+                _295 = _378;
+                _296 = _382;
+                _297 = _383;
+                _298 = _384;
+                _299 = _387;
+                _300 = _388;
+                _loop_break_1 = true;
+                break;
+              }
+              _397 = ((half)(_382 / _378));
+              _398 = ((half)(_383 / _378));
+              _399 = ((half)(_384 / _378));
+              _400 = ((half)(_387 / ((half)(_378 * _378))));
+            } while (false);
+            if (_loop_break_1 && !_loop_break_0) {
+              _loop_break_1 = false;
+              continue;
+            }
+            break;
+          }
+          if (_loop_break_0) {
+            _loop_break_0 = false;
+            continue;
+          }
+        } else {
+          _397 = _259;
+          _398 = _260;
+          _399 = _261;
+          _400 = _232;
+        }
+      } else {
+        _397 = _259;
+        _398 = _260;
+        _399 = _261;
+        _400 = _232;
+      }
+      _403 = float(_399);
+      g_out_radiance[int2(_39, _40)] = float4(float(_397), float(_398), _403, _403);
+      g_out_variance[int2(_39, _40)] = float(_400);
+    }
+    break;
+  }
+}

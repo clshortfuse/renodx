@@ -1,0 +1,9 @@
+{
+  "id": "kingdomcome-luma",
+  "title": "Kingdom Come: Deliverance - Luma Native HDR (Steam ONLY)",
+  "category": "related",
+  "maintainers": ["Lilium", "Ersh"],
+  "compatibility": "in-progress",
+  "notes": ["Steam only."],
+  "urls": [{"kind": "discord", "url": "https://discord.gg/RjEmFCAtr3"}]
+}

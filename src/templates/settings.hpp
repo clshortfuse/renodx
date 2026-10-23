@@ -1,9 +1,6 @@
-#include <exception>
 #include <initializer_list>
-#include <map>
 #include <optional>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
 #define ImTextureID ImU64
@@ -16,32 +13,42 @@ namespace renodx::templates::settings {
 
 const std::vector<std::string> LABELS_UNSET = {};
 
-struct SettingConfig {
+template <typename T = float>
+struct SettingConfigT {
   std::optional<std::string> key = std::nullopt;
   std::optional<float*> binding = std::nullopt;
+  std::optional<char*> text_binding = std::nullopt;
+  std::optional<size_t> text_binding_size = std::nullopt;
   std::optional<renodx::utils::settings::SettingValueType> value_type = std::nullopt;
   std::optional<float> default_value = std::nullopt;
+  std::optional<std::string> default_text = std::nullopt;
   std::optional<bool> can_reset = std::nullopt;
   std::optional<std::string> label = std::nullopt;
   std::optional<std::string> section = std::nullopt;
   std::optional<std::string> group = std::nullopt;
   std::optional<std::string> tooltip = std::nullopt;
+  std::optional<std::string> placeholder = std::nullopt;
   std::vector<std::string> labels = LABELS_UNSET;
+  std::optional<renodx::utils::settings::SettingStyle> style = std::nullopt;
   std::optional<uint32_t> tint;  // HEX notatio = std::nullopt;
   std::optional<float> min = std::nullopt;
   std::optional<float> max = std::nullopt;
   std::optional<std::string> format = std::nullopt;
+  std::optional<ImGuiInputTextFlags> input_text_flags = std::nullopt;
   std::optional<std::function<bool()>> is_enabled = std::nullopt;
   std::optional<std::function<float(float value)>> parse = std::nullopt;
   std::optional<std::function<void()>> on_change = std::nullopt;
-  std::optional<std::function<void(float previous, float current)>> on_change_value = std::nullopt;
+  std::optional<renodx::utils::settings::SettingChangeCallback<T>> on_change_value = std::nullopt;
   std::optional<std::function<bool()>> on_click = std::nullopt;
   std::optional<std::function<bool()>> on_draw = std::nullopt;
   std::optional<bool> is_global = std::nullopt;
   std::optional<std::function<bool()>> is_visible = std::nullopt;
 };
 
-float current_settings_mode = 0.f;
+using SettingConfig = SettingConfigT<>;
+using TextSettingConfig = SettingConfigT<std::string_view>;
+
+inline float current_settings_mode = 0.f;
 
 static const SettingConfig VISIBLE_INTERMEDIATE_CONFIG = {
     .is_visible = []() { return current_settings_mode >= 1.f; }};
@@ -361,27 +368,47 @@ static const SettingConfig FX_VIGNETTE_CONFIG = {
     .parse = [](float value) { return value * 0.02f; },
 };
 
-static renodx::utils::settings::Setting* CreateSetting(const std::vector<SettingConfig>& configs) {
+template <typename T>
+static renodx::utils::settings::Setting* CreateSettingTyped(const std::vector<SettingConfigT<T>>& configs) {
   auto* new_setting = new renodx::utils::settings::Setting();
   for (const auto& config : configs) {
     if (config.key.has_value()) new_setting->key = config.key.value();
     if (config.binding.has_value()) new_setting->binding = config.binding.value();
+    if (config.text_binding.has_value()) new_setting->text_binding = config.text_binding.value();
+    if (config.text_binding_size.has_value()) new_setting->text_binding_size = config.text_binding_size.value();
     if (config.value_type.has_value()) new_setting->value_type = config.value_type.value();
     if (config.default_value.has_value()) new_setting->default_value = config.default_value.value();
+    if (config.default_text.has_value()) new_setting->default_text = config.default_text.value();
     if (config.can_reset.has_value()) new_setting->can_reset = config.can_reset.value();
     if (config.label.has_value()) new_setting->label = config.label.value();
     if (config.section.has_value()) new_setting->section = config.section.value();
     if (config.group.has_value()) new_setting->group = config.group.value();
     if (config.tooltip.has_value()) new_setting->tooltip = config.tooltip.value();
+    if (config.placeholder.has_value()) new_setting->placeholder = config.placeholder.value();
     if (!config.labels.empty()) new_setting->labels = config.labels;
+    if (config.style.has_value()) new_setting->style = config.style.value();
     if (config.tint.has_value()) new_setting->tint = config.tint.value();
     if (config.min.has_value()) new_setting->min = config.min.value();
     if (config.max.has_value()) new_setting->max = config.max.value();
     if (config.format.has_value()) new_setting->format = config.format.value();
+    if (config.input_text_flags.has_value()) new_setting->input_text_flags = config.input_text_flags.value();
     if (config.is_enabled.has_value()) new_setting->is_enabled = config.is_enabled.value();
     if (config.parse.has_value()) new_setting->parse = config.parse.value();
     if (config.on_change.has_value()) new_setting->on_change = config.on_change.value();
-    if (config.on_change_value.has_value()) new_setting->on_change_value = config.on_change_value.value();
+    if (config.on_change_value.has_value()) {
+      using ValueType = std::remove_cv_t<std::remove_reference_t<T>>;
+      if constexpr (std::is_same_v<ValueType, std::string>
+                    || std::is_same_v<ValueType, std::string_view>
+                    || std::is_same_v<ValueType, const char*>) {
+        new_setting->on_change_text = config.on_change_value.value();
+      } else if constexpr (std::is_same_v<ValueType, float>) {
+        new_setting->on_change_value = config.on_change_value.value();
+      } else {
+        new_setting->on_change_value = [callback = config.on_change_value.value()](float previous, float current) {
+          callback(static_cast<ValueType>(previous), static_cast<ValueType>(current));
+        };
+      }
+    }
     if (config.on_click.has_value()) new_setting->on_click = config.on_click.value();
     if (config.on_draw.has_value()) new_setting->on_draw = config.on_draw.value();
     if (config.is_global.has_value()) new_setting->is_global = config.is_global.value();
@@ -390,11 +417,35 @@ static renodx::utils::settings::Setting* CreateSetting(const std::vector<Setting
   return new_setting;
 }
 
+static renodx::utils::settings::Setting* CreateSetting(const std::vector<SettingConfig>& configs) {
+  return CreateSettingTyped<float>(configs);
+}
+
 static renodx::utils::settings::Setting* CreateSetting(const SettingConfig& config) {
   return CreateSetting(std::vector<SettingConfig>({config}));
 }
 
+template <typename T>
+static renodx::utils::settings::Setting* CreateSetting(const std::vector<SettingConfigT<T>>& configs) {
+  return CreateSettingTyped<T>(configs);
+}
+
+template <typename T>
+static renodx::utils::settings::Setting* CreateSetting(const SettingConfigT<T>& config) {
+  return CreateSetting(std::vector<SettingConfigT<T>>({config}));
+}
+
 static std::vector<renodx::utils::settings::Setting*> CreateSettings(const std::vector<std::vector<SettingConfig>>& configs) {
+  std::vector<renodx::utils::settings::Setting*> settings;
+  for (const auto& config : configs) {
+    auto* setting = CreateSetting(config);
+    settings.push_back(setting);
+  }
+  return settings;
+}
+
+template <typename T>
+static std::vector<renodx::utils::settings::Setting*> CreateSettings(const std::vector<std::vector<SettingConfigT<T>>>& configs) {
   std::vector<renodx::utils::settings::Setting*> settings;
   for (const auto& config : configs) {
     auto* setting = CreateSetting(config);

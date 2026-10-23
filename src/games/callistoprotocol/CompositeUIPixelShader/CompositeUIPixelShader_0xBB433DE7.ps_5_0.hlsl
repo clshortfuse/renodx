@@ -33,7 +33,7 @@ void main(
   r0.xyzw = t0.Sample(s0_s, v0.xy).xyzw;
   r1.xyz = t1.Sample(s1_s, v0.xy).xyz;
 
-  if (ComposeUIAndSceneSCRGB(r1.xyz, r0.xyzw, o0, v0.xy)) {
+  if (ComposeUIAndScene(r1.xyz, r0.xyzw, o0, v0.xy)) {
     return;
   }
 

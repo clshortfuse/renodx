@@ -1,0 +1,199 @@
+#include "../denoising.hlsli"
+
+cbuffer RayTracingTransparentCB : register(b0, space0) {
+  uint2 rtScreenSize : packoffset(c000.x);
+  float2 rtScreenInverseSize : packoffset(c000.z);
+  float2 resScaler : packoffset(c001.x);
+  float2 uvAdjuster : packoffset(c001.z);
+  float2 prevRTScreenSize : packoffset(c002.x);
+  float boost : packoffset(c002.z);
+  float reserved : packoffset(c002.w);
+};
+Texture2D<float> DepthSRV : register(t0);
+Texture2D<float4> ColorSRV : register(t1);
+RWTexture2D<float4> ColorUAV : register(u0);
+SamplerState PointClamp : register(s1, space32);
+
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input {
+  uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+void comp_main() {
+  uint4 _44 = uint4(rtScreenSize, asuint(rtScreenInverseSize));
+  if ((gl_GlobalInvocationID.x < _44.x) && (gl_GlobalInvocationID.y < _44.y)) {
+    float _63 = (rtScreenInverseSize.x * float(int(gl_GlobalInvocationID.x))) * uvAdjuster.x;
+    float _64 = (rtScreenInverseSize.y * float(int(gl_GlobalInvocationID.y))) * uvAdjuster.y;
+    float4 _71 = DepthSRV.GatherRed(PointClamp, float2(_63, _64));
+    float _73 = _71.y;
+    float _39[9];
+    _39[0u] = _71.w;
+    _39[1u] = _71.z;
+    _39[3u] = _71.x;
+    _39[4u] = _73;
+    if (!(_73 <= 0.0f)) {
+      float4 _89 = DepthSRV.GatherRed(PointClamp, float2(_63, _64), int2(1, 0));
+      _39[2u] = _89.z;
+      _39[5u] = _89.y;
+      float4 _99 = DepthSRV.GatherRed(PointClamp, float2(_63, _64), int2(0, 1));
+      _39[6u] = _99.x;
+      _39[7u] = _99.y;
+      _39[8u] = DepthSRV.GatherRed(PointClamp, float2(_63, _64), int2(1, 1)).y;
+      uint _114;
+      float _117;
+      float _36[9];
+      float _37[9];
+      float _38[9];
+      uint _121;
+      float _122;
+      uint _123;
+      uint _113 = 0u;
+      float _115 = 1.0f;
+      uint _118 = 4294967295u;
+      for (;;) {
+        _121 = _113;
+        _122 = _115;
+        _123 = 4294967295u;
+        uint _124;
+        uint _125;
+        uint _126;
+        bool _128;
+        for (;;) {
+          _125 = _123 + gl_GlobalInvocationID.x;
+          _126 = _118 + gl_GlobalInvocationID.y;
+          _128 = int(_125 | _126) < int(0u);
+          uint frontier_phi_9_pred;
+          uint frontier_phi_9_pred_1;
+          float frontier_phi_9_pred_2;
+          for (;;) {
+            if (!_128) {
+              uint4 _142 = uint4(rtScreenSize, asuint(rtScreenInverseSize));
+              if ((_125 < _142.x) && (_126 < _142.y)) {
+                uint _148 = _123 + 1u;
+                if (!(_39[_148 + ((_118 + 1u) * 3u)] <= 0.0f)) {
+                  float4 _159 = ColorSRV.Load(int3(uint2(_125, _126), 0u));
+                  uint _167 = (_123 + 4u) + (_118 * 3u);
+                  _36[_167] = _159.x;
+                  _37[_167] = _159.y;
+                  _38[_167] = _159.z;
+                  frontier_phi_9_pred = _148;
+                  frontier_phi_9_pred_1 = _121 + 1u;
+                  frontier_phi_9_pred_2 = _122;
+                  break;
+                }
+              }
+            }
+            float _129 = _122 * 100000.0f;
+            uint _133 = (_123 + 4u) + (_118 * 3u);
+            _36[_133] = _129;
+            _37[_133] = _129;
+            _38[_133] = _129;
+            frontier_phi_9_pred = _123 + 1u;
+            frontier_phi_9_pred_1 = _121;
+            frontier_phi_9_pred_2 = (-0.0f) - _122;
+            break;
+          }
+          _124 = frontier_phi_9_pred;
+          _114 = frontier_phi_9_pred_1;
+          _117 = frontier_phi_9_pred_2;
+          if (_124 == 2u) {
+            break;
+          } else {
+            _121 = _114;
+            _122 = _117;
+            _123 = _124;
+            continue;
+          }
+        }
+        uint _120 = _118 + 1u;
+        if (_120 == 2u) {
+          break;
+        } else {
+          _113 = _114;
+          _115 = _117;
+          _118 = _120;
+          continue;
+        }
+      }
+      float _344;
+      float _345;
+      float _346;
+      if (int(_114) > int(2u)) {
+        float _178 = _36[8u];
+        float _179 = _37[8u];
+        float _180 = _38[8u];
+        float _184 = _36[7u];
+        float _185 = _37[7u];
+        float _186 = _38[7u];
+        float _190 = _36[6u];
+        float _191 = _37[6u];
+        float _192 = _38[6u];
+        float _196 = _36[5u];
+        float _197 = _37[5u];
+        float _198 = _38[5u];
+        float _199 = _36[4u];
+        float _200 = _37[4u];
+        float _201 = _38[4u];
+        float _205 = _36[3u];
+        float _206 = _37[3u];
+        float _207 = _38[3u];
+        float _211 = _36[2u];
+        float _212 = _37[2u];
+        float _213 = _38[2u];
+        float _217 = _36[1u];
+        float _218 = _37[1u];
+        float _219 = _38[1u];
+        float _223 = _36[0u];
+        float _224 = _37[0u];
+        float _225 = _38[0u];
+        float _227 = max(_223, _217);
+        float _228 = max(_224, _218);
+        float _229 = max(_225, _219);
+        float _248 = min(min(_227, max(_211, _217)), max(_211, _223));
+        float _249 = min(min(_228, max(_212, _218)), max(_212, _224));
+        float _250 = min(min(_229, max(_213, _219)), max(_213, _225));
+        float _251 = max(_205, _199);
+        float _252 = max(_206, _200);
+        float _253 = max(_207, _201);
+        float _272 = min(min(_251, max(_196, _199)), max(_196, _205));
+        float _273 = min(min(_252, max(_197, _200)), max(_197, _206));
+        float _274 = min(min(_253, max(_198, _201)), max(_198, _207));
+        float _275 = max(_190, _184);
+        float _276 = max(_191, _185);
+        float _277 = max(_192, _186);
+        float _296 = min(min(_275, max(_178, _184)), max(_178, _190));
+        float _297 = min(min(_276, max(_179, _185)), max(_179, _191));
+        float _298 = min(min(_277, max(_180, _186)), max(_180, _192));
+        float _302 = max(max(min(min(_223, _217), _211), min(min(_205, _199), _196)), min(min(_190, _184), _178));
+        float _303 = max(max(min(min(_224, _218), _212), min(min(_206, _200), _197)), min(min(_191, _185), _179));
+        float _304 = max(max(min(min(_225, _219), _213), min(min(_207, _201), _198)), min(min(_192, _186), _180));
+        float _308 = min(min(max(_227, _211), max(_251, _196)), max(_275, _178));
+        float _309 = min(min(max(_228, _212), max(_252, _197)), max(_276, _179));
+        float _310 = min(min(max(_229, _213), max(_253, _198)), max(_277, _180));
+        float _323 = min(min(max(_248, _272), max(_296, _272)), max(_296, _248));
+        float _324 = min(min(max(_249, _273), max(_297, _273)), max(_297, _249));
+        float _325 = min(min(max(_250, _274), max(_298, _274)), max(_298, _250));
+        float _338 = min(min(max(_302, _308), max(_323, _308)), max(_323, _302));
+        float _339 = min(min(max(_303, _309), max(_324, _309)), max(_324, _303));
+        float _340 = min(min(max(_304, _310), max(_325, _310)), max(_325, _304));
+        _36[4u] = _338;
+        _37[4u] = _339;
+        _38[4u] = _340;
+        _344 = _340;
+        _345 = _339;
+        _346 = _338;
+      } else {
+        _344 = _38[4u];
+        _345 = _37[4u];
+        _346 = _36[4u];
+      }
+      ColorUAV[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4(_346, _345, _344, 1.0f);
+    }
+  }
+}
+
+[numthreads(8, 8, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+  comp_main();
+}

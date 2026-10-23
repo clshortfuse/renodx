@@ -26,8 +26,4 @@ void DrawFloatRow(
   renodx::canvas::NewLine(context);
 }
 
-float YfFromAP1(float3 ap1) {
-  return renodx::color::yf::from::BT2020(renodx::color::bt2020::from::AP1(ap1));
-}
-
 #endif  // SRC_ONIMUSHA_COMMON_HLSLI_

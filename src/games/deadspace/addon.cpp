@@ -17,6 +17,10 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "shared.h"
+#if DEADSPACE_FORCE_HDR10
+#include "../../utils/swapchain.hpp"
+#endif
 #include "pipeline_layouts.hpp"
 #include "resource_upgrades.hpp"
 
@@ -32,67 +36,67 @@ float applied_game_nits = 152.32879f;
 float applied_tone_map_working_color_space = 1.f;
 
 void SetToneMapLutInvalidated(bool invalidated) {
-    tone_map_lut_invalidated.store(invalidated, std::memory_order_relaxed);
+  tone_map_lut_invalidated.store(invalidated, std::memory_order_relaxed);
 }
 
 bool ToneMapLutValuesDirty() {
-    return shader_injection.tone_map_type != applied_tone_map_type
-                 || shader_injection.peak_white_nits != applied_peak_nits
-                 || shader_injection.override_game_brightness != applied_override_game_brightness
-                 || shader_injection.diffuse_white_nits != applied_game_nits
-                 || shader_injection.tone_map_working_color_space != applied_tone_map_working_color_space;
+  return shader_injection.tone_map_type != applied_tone_map_type
+         || shader_injection.peak_white_nits != applied_peak_nits
+         || shader_injection.override_game_brightness != applied_override_game_brightness
+         || shader_injection.diffuse_white_nits != applied_game_nits
+         || shader_injection.tone_map_working_color_space != applied_tone_map_working_color_space;
 }
 
 void RefreshToneMapLutDirtyState() {
-    SetToneMapLutInvalidated(ToneMapLutValuesDirty());
+  SetToneMapLutInvalidated(ToneMapLutValuesDirty());
 }
 
 void MarkToneMapLutApplied() {
-    applied_tone_map_type = shader_injection.tone_map_type;
-    applied_peak_nits = shader_injection.peak_white_nits;
-    applied_override_game_brightness = shader_injection.override_game_brightness;
-    applied_game_nits = shader_injection.diffuse_white_nits;
-    applied_tone_map_working_color_space = shader_injection.tone_map_working_color_space;
-    RefreshToneMapLutDirtyState();
+  applied_tone_map_type = shader_injection.tone_map_type;
+  applied_peak_nits = shader_injection.peak_white_nits;
+  applied_override_game_brightness = shader_injection.override_game_brightness;
+  applied_game_nits = shader_injection.diffuse_white_nits;
+  applied_tone_map_working_color_space = shader_injection.tone_map_working_color_space;
+  RefreshToneMapLutDirtyState();
 }
 
 void InitializeAppliedValues() {
-    applied_tone_map_type = shader_injection.tone_map_type;
-    applied_peak_nits = shader_injection.peak_white_nits;
-    applied_override_game_brightness = shader_injection.override_game_brightness;
-    applied_game_nits = shader_injection.diffuse_white_nits;
-    applied_tone_map_working_color_space = shader_injection.tone_map_working_color_space;
+  applied_tone_map_type = shader_injection.tone_map_type;
+  applied_peak_nits = shader_injection.peak_white_nits;
+  applied_override_game_brightness = shader_injection.override_game_brightness;
+  applied_game_nits = shader_injection.diffuse_white_nits;
+  applied_tone_map_working_color_space = shader_injection.tone_map_working_color_space;
 }
 
 void OnToneMapLutBuilderDrawn(reshade::api::command_list* /*cmd_list*/) {
-    MarkToneMapLutApplied();
+  MarkToneMapLutApplied();
 }
 
 void OnToneMapLutControlledSettingChanged(float /*previous*/, float /*current*/) {
-    RefreshToneMapLutDirtyState();
+  RefreshToneMapLutDirtyState();
 }
 
 void OnPresetChangedInvalidateIfChanged() {
-    RefreshToneMapLutDirtyState();
+  RefreshToneMapLutDirtyState();
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-        {0xEC2192B4, {
-                                         .crc32 = 0xEC2192B4,
-                                         .code = __0xEC2192B4,
-                                         .on_drawn = &OnToneMapLutBuilderDrawn,
-                                 }},
-        {0x6F0456CD, {
-                                         .crc32 = 0x6F0456CD,
-                                         .code = __0x6F0456CD,
-                                         .on_drawn = &OnToneMapLutBuilderDrawn,
-                                 }},
-        {0xD97D273F, {
-                                         .crc32 = 0xD97D273F,
-                                         .code = __0xD97D273F,
-                                         .on_drawn = &OnToneMapLutBuilderDrawn,
-                                 }},
-        __ALL_CUSTOM_SHADERS};
+    {0xEC2192B4, {
+                     .crc32 = 0xEC2192B4,
+                     .code = __0xEC2192B4,
+                     .on_drawn = &OnToneMapLutBuilderDrawn,
+                 }},
+    {0x6F0456CD, {
+                     .crc32 = 0x6F0456CD,
+                     .code = __0x6F0456CD,
+                     .on_drawn = &OnToneMapLutBuilderDrawn,
+                 }},
+    {0xD97D273F, {
+                     .crc32 = 0xD97D273F,
+                     .code = __0xD97D273F,
+                     .on_drawn = &OnToneMapLutBuilderDrawn,
+                 }},
+    __ALL_CUSTOM_SHADERS};
 
 bool ShouldInjectShaderCBuffer(
     reshade::api::device* device,
@@ -103,6 +107,26 @@ bool ShouldInjectShaderCBuffer(
 
   return allow_injection;
 }
+
+#if DEADSPACE_FORCE_HDR10
+bool OnCreateSwapchain(reshade::api::device_api device_api, reshade::api::swapchain_desc& desc, void* /*hwnd*/) {
+  if (device_api != reshade::api::device_api::d3d12 || desc.back_buffer.texture.format != reshade::api::format::r16g16b16a16_float) {
+    return false;
+  }
+
+  desc.back_buffer.texture.format = reshade::api::format::r10g10b10a2_unorm;
+  return true;
+}
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
+  if (swapchain->get_device()->get_api() != reshade::api::device_api::d3d12) return;
+
+  const auto back_buffer_desc = swapchain->get_device()->get_resource_desc(swapchain->get_current_back_buffer());
+  if (back_buffer_desc.texture.format != reshade::api::format::r10g10b10a2_unorm) return;
+
+  renodx::utils::swapchain::ChangeColorSpace(swapchain, reshade::api::color_space::hdr10_st2084);
+}
+#endif
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -401,7 +425,7 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
   });
 
-    RefreshToneMapLutDirtyState();
+  RefreshToneMapLutDirtyState();
 }
 
 bool initialized = false;
@@ -426,21 +450,29 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       };
 
       if (!initialized) {
-        renodx::utils::settings::use_presets = false;
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::expected_constant_buffer_space = 0;
         renodx::mods::shader::force_pipeline_cloning = true;
-                renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&OnPresetChangedInvalidateIfChanged);
+        renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&OnPresetChangedInvalidateIfChanged);
 
         initialized = true;
       }
+
+#if DEADSPACE_FORCE_HDR10
+      reshade::register_event<reshade::addon_event::create_swapchain>(OnCreateSwapchain);
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+#endif
 #if DEADSPACE_ENABLE_RESOURCE_UPGRADES
       deadspace::resource_upgrades::Register();
 #endif
 
       break;
     case DLL_PROCESS_DETACH:
+#if DEADSPACE_FORCE_HDR10
+      reshade::unregister_event<reshade::addon_event::create_swapchain>(OnCreateSwapchain);
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+#endif
 #if DEADSPACE_ENABLE_RESOURCE_UPGRADES
       deadspace::resource_upgrades::Unregister();
 #endif
@@ -450,10 +482,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-    if (fdw_reason == DLL_PROCESS_ATTACH) {
-        InitializeAppliedValues();
-        RefreshToneMapLutDirtyState();
-    }
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    InitializeAppliedValues();
+    RefreshToneMapLutDirtyState();
+  }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;

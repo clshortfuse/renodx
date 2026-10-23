@@ -245,6 +245,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
 
 static void Use(DWORD fdw_reason, ShaderInjectData* new_shader_injection) {
   renodx::utils::resource::Use(fdw_reason);
+  renodx::utils::state::use_snapshot = true;
   renodx::utils::state::Use(fdw_reason);
 
   switch (fdw_reason) {

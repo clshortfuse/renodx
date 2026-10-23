@@ -1,0 +1,7 @@
+{
+  "id": "aptrequiem",
+  "title": "A Plague Tale: Requiem",
+  "maintainers": ["Hartapfel"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/aplaguetalerequiem/mods/50"}]
+}

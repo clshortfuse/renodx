@@ -6,6 +6,7 @@
     globalThis['@shortfuse/materialdesignweb'].svgAlias;
   const viewBox = '0 -960 960 960';
   const aliases = [
+    ['info', 'M440-280h80v-240h-80v240Zm40-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z'],
     ['sports_esports', 'M182-200q-51 0-79-35.5T82-322l42-300q9-60 53.5-99T282-760h396q60 0 104.5 39t53.5 99l42 300q7 51-21 86.5T778-200q-21 0-39-7.5T706-230l-90-90H344l-90 90q-15 15-33 22.5t-39 7.5Zm16-86 114-114h336l114 114q2 2 16 6 11 0 17.5-6.5T800-304l-44-308q-4-29-26-48.5T678-680H282q-30 0-52 19.5T204-612l-44 308q-2 11 4.5 17.5T182-280q2 0 16-6Zm510.5-165.5Q720-463 720-480t-11.5-28.5Q697-520 680-520t-28.5 11.5Q640-497 640-480t11.5 28.5Q663-440 680-440t28.5-11.5Zm-80-120Q640-583 640-600t-11.5-28.5Q617-640 600-640t-28.5 11.5Q560-617 560-600t11.5 28.5Q583-560 600-560t28.5-11.5ZM310-440h60v-70h70v-60h-70v-70h-60v70h-70v60h70v70Zm170-40Z'],
     ['sports_esports#filled', 'M182-200q-51 0-79-35.5T82-322l42-300q9-60 53.5-99T282-760h396q60 0 104.5 39t53.5 99l42 300q7 51-21 86.5T778-200q-21 0-39-7.5T706-230l-90-90H344l-90 90q-15 15-33 22.5t-39 7.5Zm526.5-251.5Q720-463 720-480t-11.5-28.5Q697-520 680-520t-28.5 11.5Q640-497 640-480t11.5 28.5Q663-440 680-440t28.5-11.5Zm-80-120Q640-583 640-600t-11.5-28.5Q617-640 600-640t-28.5 11.5Q560-617 560-600t11.5 28.5Q583-560 600-560t28.5-11.5ZM310-440h60v-70h70v-60h-70v-70h-60v70h-70v60h70v70Z'],
     ['code', 'M320-240 80-480l240-240 57 57-184 184 183 183-56 56Zm320 0-57-57 184-184-183-183 56-56 240 240-240 240Z'],
@@ -76,21 +77,31 @@ const RdxModBrowser = CustomElement
   .extend()
   .observe({
     _games: { type: 'array', value: () => [] },
+    _infoMods: { type: 'array', value: () => [] },
+    _infoTitle: { type: 'string', value: '' },
     _loading: { type: 'boolean', value: true },
     _error: 'string',
     query: { type: 'string', value: '' },
+    hideInactive: { type: 'boolean', value: true },
     _filteredGames: {
       type: 'array',
-      get({ _games, query }) {
+      get({ _games, query, hideInactive }) {
         if (!Array.isArray(_games)) return [];
 
         const normalizedQuery = String(query || '').trim().toLocaleLowerCase();
-        if (!normalizedQuery) return _games;
-
-        return _games.filter((game) => {
-          const values = [game?.title, game?.id, game?.status, ...(game?.tags ?? [])];
+        return _games.map(game => {
+          const mods = game.mods.filter(mod => !hideInactive || !mod.inactive);
+          return {
+            ...game,
+            mods: mods.map(mod => ({ ...mod, showStatusBadge: mods.length > 1 && ['beta', 'experimental'].includes(mod.status), statusBadge: mod.status })),
+            showStatusBadge: mods.length === 1 && ['beta', 'experimental'].includes(mods[0].status),
+            statusBadge: mods.length === 1 ? mods[0].status : '',
+          };
+        }).filter(game => game.mods.length > 0).filter((game) => {
+          if (!normalizedQuery) return true;
+          const values = [game?.title, game?.id, game?.status, ...(game?.aliases ?? []), ...(game?.tags ?? [])];
           for (const mod of game?.mods ?? []) {
-            values.push(mod?.title, mod?.mod_name, mod?.id, mod?.variant, mod?.summary, mod?.status, ...(mod?.tags ?? []));
+            values.push(mod?.title, mod?.mod_name, mod?.id, mod?.variant, mod?.summary, mod?.status, mod?.category, mod?.compatibility, ...(mod?.maintainers ?? []), ...(mod?.notes ?? []), ...(mod?.tags ?? []));
           }
           return values.some(value => String(value || '').toLocaleLowerCase().includes(normalizedQuery));
         });
@@ -98,6 +109,36 @@ const RdxModBrowser = CustomElement
     },
   })
   .expressions({
+    showModTitle(_, { m, gm }) {
+      return !!m && (gm?.mods?.length > 1 || m.category === 'engine');
+    },
+    showModCompatibility(_, { m }) {
+      return ['in-progress', 'unsupported'].includes(m?.compatibility);
+    },
+    showGameCompatibility(_, { gm }) {
+      return gm?.mods?.length === 1 && ['in-progress', 'unsupported'].includes(gm.mods[0].compatibility);
+    },
+    showGameBadges(_, { gm }) {
+      return !!gm?.showStatusBadge || (gm?.mods?.length === 1 && ['in-progress', 'unsupported'].includes(gm.mods[0].compatibility));
+    },
+    gameCompatibility(_, { gm }) {
+      return ({ 'in-progress': 'WIP', unsupported: 'Unsupported' })[gm?.mods?.[0]?.compatibility] || '';
+    },
+    showVariantBadges(_, { gm, m }) {
+      return gm?.mods?.length > 1 && (m?.showStatusBadge || ['in-progress', 'unsupported'].includes(m?.compatibility));
+    },
+    showModSummary(_, { m }) {
+      return !!m?.summary?.trim();
+    },
+    showModCredits(_, { m }) {
+      return !!m?.maintainers?.length;
+    },
+    modCredits(_, { m }) {
+      return m?.maintainers?.length ? `By ${m.maintainers.join(', ')}` : '';
+    },
+    showModRequirements(_, { m }) {
+      return !!m?.deploy?.reshade_version_range;
+    },
     showResults({ _filteredGames, _loading }) {
       return !_loading && Array.isArray(_filteredGames) && _filteredGames.length > 0;
     },
@@ -106,10 +147,6 @@ const RdxModBrowser = CustomElement
     },
     hasError({ _error }) {
       return !!_error;
-    },
-    resultLabel({ _filteredGames, _games, query }) {
-      if (query) return `${_filteredGames.length} of ${_games.length} games`;
-      return `${_games.length} games`;
     },
     gameImageHeader(_, { gm }) {
       return getGameImageCandidates(gm)[0] ?? null;
@@ -120,10 +157,34 @@ const RdxModBrowser = CustomElement
     hasGameHeader(_, { gm }) {
       return getGameImageCandidates(gm).length > 0;
     },
-    modDisplayTitle(_, { m }) {
+    modDisplayTitle(_, { m, gm }) {
       if (!m) return '';
       const title = m.title || m.mod_name || m.id || 'RenoDX addon';
+      if (!m.variant && title === gm?.title && gm?.mods?.length === 1) return '';
       return m.variant ? `${title} (${m.variant})` : title;
+    },
+    modCompatibility(_, { m }) {
+      if (!m) return '';
+      return ({ 'in-progress': 'WIP', unsupported: 'Unsupported' })[m.compatibility] || '';
+    },
+    hasModDetails(_, { m }) {
+      return !!(m?.notes?.some(note => note.trim()) || m?.deploy?.reshade_version_range);
+    },
+    modRequirements(_, { m }) {
+      if (!m) return '';
+      return m.deploy?.reshade_version_range ? `Requires ReShade ${m.deploy.reshade_version_range}` : '';
+    },
+    linkLabel(_, { link }) {
+      if (!link) return '';
+      return link.label || ({ nexus: 'Nexus Mods', nexus_mods: 'Nexus Mods', snapshot: 'Snapshot', discord: 'Discord', gamebanana: 'GameBanana', discussion: 'Compatibility discussion', replacement: 'Replacement mod' })[link.kind] || link.kind;
+    },
+    linkIcon(_, { link }) {
+      if (!link) return '';
+      return ({ nexus: '', nexus_mods: '', snapshot: 'download', discord: 'forum', discussion: 'forum', support: 'forum', gamebanana: 'sports_esports', source: 'code', github: 'code' })[link.kind] ?? 'open_in_new';
+    },
+    linkIconSource(_, { link }) {
+      // Inset the full-bleed brand mark to 18px within the standard 24px icon.
+      return ['nexus', 'nexus_mods'].includes(link?.kind) ? './nexusmods.svg#svgView(viewBox(-4,-4,32,32))' : null;
     },
     artifactLabel(_, { v }) {
       if (!v) return '';
@@ -132,12 +193,49 @@ const RdxModBrowser = CustomElement
     },
   })
   .methods({
+    changeInactiveFilter({ currentTarget }) {
+      this.hideInactive = currentTarget.checked;
+    },
+    openModInfo({ currentTarget }) {
+      const game = this._games.find(game => game.id === currentTarget.dataset.gameId);
+      const mod = game?.mods.find(mod => mod.id === currentTarget.dataset.modId);
+      if (!mod) return;
+      this._infoMods = [mod];
+      this._infoTitle = mod.title || game.title;
+      this.shadowRoot.querySelector('#mod-info').showModal();
+    },
+    closeModInfo({ currentTarget }) {
+      currentTarget.closest('mdw-dialog').close();
+    },
     async refresh() {
       this._loading = true;
       this._error = '';
       try {
         const gamesIndex = await loadJson('./games-index.json');
-        this._games = gamesIndex.games || [];
+        this._games = (gamesIndex.games || []).map(game => ({
+          ...game,
+          mods: (game.mods ?? []).filter(mod => mod.category !== 'related'),
+        })).filter(game => game.mods.length > 0).map(game => ({
+          ...game,
+          showStatusBadge: game.mods?.length === 1 && ['beta', 'experimental'].includes(game.mods[0].status),
+          statusBadge: game.mods?.length === 1 && ['beta', 'experimental'].includes(game.mods[0].status)
+            ? game.mods[0].status : '',
+          mods: (game.mods ?? []).map(mod => ({
+            ...mod,
+            inactive: mod.category === 'deprecated' || mod.compatibility === 'unsupported'
+              || ['legacy', 'abandoned', 'deprecated'].includes(mod.support)
+              || (mod.notes ?? []).some(note => /^(abandoned|currently broken|superseded by|no longer supported|not working with|needs to be redone)\b/i.test(note.trim())),
+            showStatusBadge: game.mods.length > 1 && ['beta', 'experimental'].includes(mod.status),
+            statusBadge: game.mods.length > 1 && ['beta', 'experimental'].includes(mod.status)
+              ? mod.status : '',
+            safeUrls: (mod.urls ?? []).filter(link => {
+              try {
+                const url = new URL(link.url);
+                return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password;
+              } catch { return false; }
+            }),
+          })),
+        }));
       } catch (error) {
         console.error('Unable to load RenoDX downloads:', error);
         this._error = 'Downloads are temporarily unavailable. Visit GitHub for current releases.';
@@ -168,35 +266,56 @@ const RdxModBrowser = CustomElement
     },
   })
   .html`
-    <mdw-grid gap="16" y="center" padding-y="24">
-      <mdw-input id="search" type="search" label="Search games or mods" icon="search" col-span-4="4" col-span-8="5" col-span-12="5"></mdw-input>
-      <mdw-box col-span-4="4" col-span-8="3" col-span-12="7" x="end">
-        <mdw-label mdw-if="{!_loading}" ink="on-surface-variant" size="medium" text-padding="0">{resultLabel}</mdw-label>
+    <mdw-box row wrap gap="16" y="center" padding-y="24">
+      <mdw-input id="search" style="flex: 1 1 240px;" type="search" label="Search games or mods" icon="search"></mdw-input>
+      <mdw-box row wrap gap="8">
+        <mdw-filter-chip checked="{hideInactive}" on-change="{changeInactiveFilter}">Active</mdw-filter-chip>
       </mdw-box>
-    </mdw-grid>
+    </mdw-box>
 
     <mdw-card mdw-if="{_loading}" outlined shape-style="extra-large" padding="24" gap="16" x="center" y="center">
       <mdw-progress circle></mdw-progress>
       <mdw-body ink="on-surface-variant" size="large" align="center" text-padding="0">Loading current builds…</mdw-body>
     </mdw-card>
 
-    <mdw-grid mdw-if="{showResults}" gap="16" y="stretch">
+    <mdw-grid mdw-if="{showResults}" class="results-grid" gap="16" y="stretch">
       <mdw-card mdw-for="{gm of _filteredGames}" elevated shape-style="extra-large" color="surface-container" col-span-4="4" col-span-8="4" col-span-12="4">
         <mdw-box class="game-art">
           <img mdw-if="{hasGameHeader}" src="{gameImageHeader}" data-fallback-srcs="{gameImageFallbacks}" alt="" on-load="{onGameHeaderLoad}" on-error="{onGameHeaderError}">
-          <mdw-box class="game-art-copy" padding="20">
+          <mdw-box class="game-art-copy" row y="center" gap="8" padding="16">
             <mdw-title role="heading" aria-level="2" size="large" ink="on-surface" text-padding="0">{gm.title}</mdw-title>
+            <mdw-box mdw-if="{showGameBadges}" class="game-badges" gap="4" x="end">
+              <span mdw-if="{gm.showStatusBadge}" class="status-badge">{gm.statusBadge}</span>
+              <span mdw-if="{showGameCompatibility}" class="status-badge">{gameCompatibility}</span>
+            </mdw-box>
           </mdw-box>
         </mdw-box>
-        <mdw-box mdw-for="{m of gm.mods}" gap="12" padding="20">
-          <mdw-title size="medium" text-padding="0">{modDisplayTitle}</mdw-title>
-          <mdw-box row wrap gap="8">
-            <mdw-button mdw-for="{v of m.artifacts}" outlined icon="download" href="{v.url}">{artifactLabel}</mdw-button>
+        <mdw-box class="mod-content" mdw-for="{m of gm.mods}" gap="8" padding="16">
+          <mdw-title mdw-if="{showModTitle}" size="medium" text-padding="0">{modDisplayTitle}</mdw-title>
+          <mdw-box mdw-if="{showVariantBadges}" row wrap gap="4" x="end">
+            <span mdw-if="{m.showStatusBadge}" class="status-badge">{m.statusBadge}</span>
+            <span mdw-if="{showModCompatibility}" class="status-badge">{modCompatibility}</span>
           </mdw-box>
-          <mdw-divider></mdw-divider>
+          <mdw-body mdw-if="{showModCredits}" class="mod-credits" size="medium" text-padding="0">{modCredits}</mdw-body>
+          <mdw-body mdw-if="{showModSummary}" size="medium" text-padding="0">{m.summary}</mdw-body>
+          <mdw-box class="mod-actions" row wrap gap="4" aria-label="Downloads and resources">
+            <mdw-icon-button mdw-if="{hasModDetails}" icon="info" data-game-id="{gm.id}" data-mod-id="{m.id}" aria-label="Mod information" aria-haspopup="dialog" on-click="{openModInfo}">Mod information</mdw-icon-button>
+            <mdw-icon-button mdw-for="{link of m.safeUrls}" icon="{linkIcon}" src="{linkIconSource}" href="{link.url}" aria-label="{linkLabel}" target="_blank" rel="noopener noreferrer">{linkLabel}</mdw-icon-button>
+            <mdw-icon-button mdw-for="{v of m.artifacts}" icon="download" href="{v.url}" aria-label="{artifactLabel}">{artifactLabel}</mdw-icon-button>
+          </mdw-box>
         </mdw-box>
       </mdw-card>
     </mdw-grid>
+
+    <mdw-dialog id="mod-info" headline="{_infoTitle}" aria-label="Mod information">
+      <mdw-box mdw-for="{m of _infoMods}" gap="16">
+        <mdw-body mdw-if="{showModCredits}" size="medium" text-padding="0">{modCredits}</mdw-body>
+        <mdw-body mdw-if="{showModSummary}" size="medium" text-padding="0">{m.summary}</mdw-body>
+        <mdw-body mdw-if="{showModRequirements}" size="medium" text-padding="0">{modRequirements}</mdw-body>
+        <mdw-body class="metadata-note" mdw-for="{note of m.notes}" size="medium" text-padding="0">{note}</mdw-body>
+      </mdw-box>
+      <mdw-button slot="actions" autofocus on-click="{closeModInfo}">Close</mdw-button>
+    </mdw-dialog>
 
     <mdw-card mdw-if="{showEmpty}" outlined shape-style="extra-large" padding="24" gap="16" x="center" y="center">
       <mdw-icon ink="primary" icon="search_off"></mdw-icon>
@@ -215,8 +334,41 @@ const RdxModBrowser = CustomElement
       display: block;
     }
 
+    summary { cursor: pointer; }
+    mdw-icon-button[src] { filter: invert(1); }
+    .mod-actions > mdw-icon-button[icon="download"] { order: 1; }
+    .results-grid > mdw-card { height: 100%; }
+    .mod-content { flex: 1; flex-direction: row; flex-wrap: wrap; align-content: flex-start; align-items: center; }
+    .mod-content > :not(.mod-credits):not(.mod-actions) { flex-basis: 100%; }
+    .game-badges { flex: 0 0 auto; margin-inline-start: auto; max-width: 100%; min-width: 0; }
+    .mod-credits { flex: 1 1 auto; }
+    .mod-actions { order: 0; margin-inline-start: auto; flex: 0 1 auto; }
+    .mod-content + .mod-content { border-top: 1px solid rgb(var(--mdw-color__outline-variant)); }
+    .game-art-copy mdw-title { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+    .status-badge {
+      flex: none;
+      align-self: flex-end;
+      border: 1px solid rgb(var(--mdw-color__primary) / 45%);
+      border-radius: 999px;
+      padding: 3px 9px;
+      background: rgb(0 0 0 / 72%);
+      color: rgb(var(--mdw-color__primary));
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 18px;
+      text-transform: capitalize;
+      box-sizing: border-box;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .metadata-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+
     .game-art {
       position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      flex-shrink: 0;
       overflow: hidden;
       aspect-ratio: 460 / 215;
       background: linear-gradient(135deg, rgb(var(--mdw-color__primary) / 32%), transparent), rgb(var(--mdw-color__surface-container-high));
@@ -241,9 +393,14 @@ const RdxModBrowser = CustomElement
     }
 
     .game-art-copy {
-      position: absolute;
-      inset: auto 0 0;
-      background: linear-gradient(transparent, rgb(0 0 0 / 88%));
+      position: relative;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      box-sizing: border-box;
+      width: 100%;
+      background: rgb(40 40 40 / 75%);
     }
 
     @media (prefers-reduced-motion: reduce) {

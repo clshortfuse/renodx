@@ -515,51 +515,6 @@ uint firstbithigh_msb(uint value) {
   return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
 }
 
-float3 HueAndChrominanceOKLab(
-    float3 incorrect_color, float3 reference_color,
-    float hue_correct_strength = 0.f,
-    float chrominance_correct_strength = 0.f,
-    float clamp_chrominance_loss = 0.f,
-    float clamp_chrominance_gain = 0.f,
-    float saturation = 1.f) {
-  if (hue_correct_strength != 0.f || chrominance_correct_strength != 0.f) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color);
-    const float3 reference_oklab = renodx::color::oklab::from::BT709(reference_color);
-
-    float chrominance_current = length(perceptual_new.yz);
-    float chrominance_ratio_hue = 1.f;
-    float chrominance_ratio = 1.f;
-
-    if (hue_correct_strength != 0.f) {
-      const float chrominance_pre = chrominance_current;
-      perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, hue_correct_strength);
-      const float chrominancePost = length(perceptual_new.yz);
-      chrominance_ratio_hue = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
-      chrominance_current = chrominancePost;
-    }
-
-    if (chrominance_correct_strength != 0.f) {
-      const float reference_chrominance = length(reference_oklab.yz);
-      float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-      chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_correct_strength);
-    }
-
-    // Combine hue-preservation scaling and chroma correction, then clamp gain/loss.
-    float chroma_scale = chrominance_ratio_hue * chrominance_ratio;
-    const float chroma_gain_mask = step(1.f, chroma_scale);        // 1 when scaling up
-    const float chroma_loss_mask = 1.f - step(1.f, chroma_scale);  // 1 when scaling down
-    chroma_scale = lerp(chroma_scale, 1.f, chroma_gain_mask * clamp_chrominance_gain);
-    chroma_scale = lerp(chroma_scale, 1.f, chroma_loss_mask * clamp_chrominance_loss);
-
-    perceptual_new.yz *= chroma_scale;
-    perceptual_new.yz *= saturation;
-
-    incorrect_color = renodx::color::bt709::from::OkLab(perceptual_new);
-    incorrect_color = renodx::color::bt709::clamp::AP1(incorrect_color);
-  }
-  return incorrect_color;
-}
-
 static const float LOCAL_TONEMAP_LUMINANCE_SCALE = 5464.f;
 static const float LOCAL_TONEMAP_INVERSE_LUMINANCE_SCALE = 0.0001830161054385826f;
 
@@ -587,17 +542,14 @@ struct LocalToneMapParams {
   float local_adaptation_log;
   float input_log_slope;
   float local_detail_contribution;
-  float uncompressed_local_detail_contribution;
 };
 
 struct LocalToneMapDetail {
   float contribution;
-  float uncompressed_contribution;
 };
 
 struct LocalToneMapResult {
   float scale;
-  float scale_without_toe_and_shoulder;
 };
 
 struct LocalToneMapSharedContext {
@@ -670,7 +622,6 @@ LocalToneMapDetail ComputeLocalToneMapDetail(
 
   LocalToneMapDetail detail;
   detail.contribution = (1.f - detail_gain) * local_detail_delta * detail_adaptation;
-  detail.uncompressed_contribution = local_detail_delta * detail_adaptation;
   return detail;
 }
 
@@ -708,10 +659,11 @@ LocalToneMapSharedContext ComputeLocalToneMapSharedContext(float2 texcoord) {
       * LOCAL_TONEMAP_LUMINANCE_SCALE);
 
   context.shoulder_gain = ComputeLimitedLocalDetailGain(
-      environment_log_delta,
-      context.config.shoulder_environment_scale,
-      context.config.shoulder_strength,
-      context.config.shoulder_max);
+                              environment_log_delta,
+                              context.config.shoulder_environment_scale,
+                              context.config.shoulder_strength,
+                              context.config.shoulder_max)
+                          * RENODX_LOCAL_EXPOSURE_SHOULDER;
 
   const float negative_environment_delta = max(
       0.f,
@@ -720,7 +672,7 @@ LocalToneMapSharedContext ComputeLocalToneMapSharedContext(float2 texcoord) {
       negative_environment_delta,
       context.config.toe_environment_scale,
       context.config.toe_strength,
-      context.config.toe_max);
+      context.config.toe_max) * RENODX_LOCAL_EXPOSURE_TOE;
 
   return context;
 }
@@ -737,7 +689,7 @@ LocalToneMapParams ComputeLocalToneMapParams(
       s8_space98,
       float3(context.texcoord, grid_z),
       0.f);
-  const float bilateral_log = (bilateral_sample.x / max(bilateral_sample.y, 1.0000000116860974e-07f)
+  const float bilateral_log = (bilateral_sample.x / max(bilateral_sample.y, 1.0e-07f)
                                + context.grid_min_log * context.inverse_grid_log_range)
                               / context.inverse_grid_log_range;
 
@@ -766,85 +718,41 @@ LocalToneMapParams ComputeLocalToneMapParams(
                                context.config.slope_adaptation_strength,
                                1.f);
   params.local_detail_contribution = detail.contribution;
-  params.uncompressed_local_detail_contribution = detail.uncompressed_contribution;
   return params;
 }
 
 float SanitizeLocalToneMapScale(float scale) {
   const uint exponent_bits = asuint(scale) & 0x7F800000u;
-  const bool invalid_scale = isinf(scale)
-                             || exponent_bits > 0x7F7FFFFFu;
+  const bool invalid_scale = isinf(scale) || exponent_bits > 0x7F7FFFFFu;
   return select(invalid_scale, 1.f, scale);
 }
 
 LocalToneMapResult ComputeLocalToneMapResult(
     float local_tonemap_input,
-    LocalToneMapParams params) {
+    LocalToneMapParams params,
+    LocalToneMapSharedContext context) {
   LocalToneMapResult result;
   if (local_tonemap_input == 0.f) {
     result.scale = 1.f;
-    result.scale_without_toe_and_shoulder = 1.f;
     return result;
   }
 
-  const float output_log_base = params.output_log_base
-                                + params.input_log_slope
-                                      * (params.input_log - params.local_adaptation_log);
-  const float output_log_without_toe_and_shoulder = output_log_base
-                                                    + params.uncompressed_local_detail_contribution;
-  const float output_log = output_log_base + params.local_detail_contribution;
-  result.scale_without_toe_and_shoulder = SanitizeLocalToneMapScale(
-      exp2(output_log_without_toe_and_shoulder)
-      * LOCAL_TONEMAP_INVERSE_LUMINANCE_SCALE
-      / local_tonemap_input);
-  result.scale = SanitizeLocalToneMapScale(
-      exp2(output_log)
-      * LOCAL_TONEMAP_INVERSE_LUMINANCE_SCALE
-      / local_tonemap_input);
+  const float local_output_log_base = params.output_log_base + params.input_log_slope * (params.input_log - params.local_adaptation_log);
+  const float local_output_log = local_output_log_base + params.local_detail_contribution;
+  float output_log = local_output_log;
+  [branch]
+  if (RENODX_LOCAL_EXPOSURE_STRENGTH != 1.f) {
+    const float global_adaptation_log = context.grid_min_log + context.config.grid_log_range * 0.5f;
+    const float global_positive_detail_mask = select(global_adaptation_log > context.output_log_base, 1.f, 0.f);
+    const float global_adaptation_strength = saturate((context.config.adaptation_log_threshold - context.reference_log) / context.config.adaptation_log_range) * global_positive_detail_mask;
+    const float global_input_log_slope = context.config.base_slope * mad(global_adaptation_strength, context.config.slope_adaptation_strength, 1.f);
+    const float global_detail_adaptation = mad(global_adaptation_strength, context.config.detail_adaptation_scale - 1.f, 1.f);
+    const float global_uncompressed_detail = (global_adaptation_log - context.output_log_base) * global_detail_adaptation;
+    const float global_output_log = context.output_log_base + global_input_log_slope * (params.input_log - global_adaptation_log) + global_uncompressed_detail;
+    output_log = lerp(global_output_log, local_output_log, saturate(RENODX_LOCAL_EXPOSURE_STRENGTH));
+  }
+  result.scale = SanitizeLocalToneMapScale(exp2(output_log) * LOCAL_TONEMAP_INVERSE_LUMINANCE_SCALE / local_tonemap_input);
   return result;
-}
-
-float3 ApplyLocalToneMapToeAndShoulderLMS(
-    float3 input_lms,
-    float3 precompression_lms,
-    float3 white_lms,
-    LocalToneMapParams luminance_params,
-    LocalToneMapSharedContext context) {
-  const float3 normalized_input_lms = input_lms / white_lms;
-  const float3 channel_input_logs = float3(
-      ComputeLocalToneMapInputLog(normalized_input_lms.x),
-      ComputeLocalToneMapInputLog(normalized_input_lms.y),
-      ComputeLocalToneMapInputLog(normalized_input_lms.z));
-
-  // Carry each cone's log offset into the luminance-derived local adaptation point.
-  const float3 channel_adaptation_logs = luminance_params.local_adaptation_log
-                                         + channel_input_logs
-                                         - luminance_params.input_log;
-
-  // Select one smoothly varying toe/shoulder gain from luminance. Independent
-  // hard branch changes in L, M, and S produce visible chromatic gradients.
-  const float luminance_detail_delta = luminance_params.local_adaptation_log
-                                       - luminance_params.output_log_base;
-  const float shoulder_weight = smoothstep(-0.5f, 0.5f, luminance_detail_delta);
-  const float adaptation_strength = saturate(
-                                        (context.config.adaptation_log_threshold - context.reference_log)
-                                        / context.config.adaptation_log_range)
-                                    * shoulder_weight;
-  const float detail_gain = lerp(context.toe_gain, context.shoulder_gain, shoulder_weight);
-  const float detail_adaptation = mad(
-      adaptation_strength,
-      context.config.detail_adaptation_scale - 1.f,
-      1.f);
-  const float3 channel_detail_deltas = channel_adaptation_logs - context.output_log_base;
-  const float3 toe_and_shoulder_log_delta = -detail_gain
-                                            * channel_detail_deltas
-                                            * detail_adaptation;
-
-  // Apply only the toe/shoulder delta; exposure, grid adaptation, and slope stay luminance-driven.
-  const float3 normalized_precompression_lms = precompression_lms / white_lms;
-  const float3 normalized_tonemapped_lms = normalized_precompression_lms
-                                           * exp2(toe_and_shoulder_log_delta);
-  return normalized_tonemapped_lms * white_lms;
 }
 
 float4 main(
@@ -852,41 +760,11 @@ float4 main(
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
   const float3 input_color = t0_space3.SampleLevel(s0_space99, TEXCOORD, 0.f).rgb;
-  const bool use_enhanced_local_tonemap = CUSTOM_LOCAL_TONE_MAP_TYPE != 0.f;
-  const float input_luminance = use_enhanced_local_tonemap
-                                    ? renodx::color::yf::from::BT709(input_color)
-                                    : renodx::color::y::from::BT709(input_color);
+  const float input_luminance = renodx::color::y::from::BT709(input_color);
   const LocalToneMapSharedContext context = ComputeLocalToneMapSharedContext(TEXCOORD);
   const LocalToneMapParams params = ComputeLocalToneMapParams(input_luminance, context);
-  const LocalToneMapResult local_tonemap = ComputeLocalToneMapResult(input_luminance, params);
-  const float3 local_tonemapped_color = local_tonemap.scale * input_color;
-  const float3 local_tonemapped_without_toe_and_shoulder = local_tonemap.scale_without_toe_and_shoulder * input_color;
-
-  float3 output_color;
-  if (use_enhanced_local_tonemap) {
-    const float3 bt709_white_lms = renodx::color::lms::from::BT709(1.f.xxx);
-    const float3 input_lms = renodx::color::lms::from::BT709(input_color);
-    const float3 precompression_lms = renodx::color::lms::from::BT709(local_tonemapped_without_toe_and_shoulder);
-    float3 lms_tonemapped_color = renodx::color::bt709::from::LMS(
-        ApplyLocalToneMapToeAndShoulderLMS(
-            input_lms,
-            precompression_lms,
-            bt709_white_lms,
-            params,
-            context));
-    lms_tonemapped_color = renodx::color::correct::Luminance(
-        lms_tonemapped_color,
-        renodx::color::yf::from::BT709(lms_tonemapped_color),
-        renodx::color::yf::from::BT709(local_tonemapped_color));
-    output_color = lerp(
-        lms_tonemapped_color,
-        local_tonemapped_color,
-        saturate(renodx::color::yf::from::BT709(local_tonemapped_color) / 0.5f));
-    output_color = lerp(output_color, local_tonemapped_color, 0.35f);
-    output_color = max(0, output_color);
-  } else {
-    output_color = local_tonemapped_color;
-  }
+  const LocalToneMapResult local_tonemap = ComputeLocalToneMapResult(input_luminance, params, context);
+  const float3 output_color = local_tonemap.scale * input_color;
 
   return float4(output_color, 1.f);
 }

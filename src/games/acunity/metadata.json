@@ -1,0 +1,7 @@
+{
+  "id": "acunity",
+  "title": "Assassin’s Creed® Unity",
+  "maintainers": ["Voosh"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/assassinscreedunity/mods/321"}]
+}

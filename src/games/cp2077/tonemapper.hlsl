@@ -162,7 +162,7 @@ struct SPIRV_Cross_Input {
 };
 
 float3 Sample3DLUT(Texture3D<float4> texture, const float3 color, float4 lutSettings) {
-  bool use_tetrahedral = false;
+  bool use_tetrahedral = true;
   if (use_tetrahedral) {
     return renodx::lut::SampleTetrahedral(texture, color).rgb;
   }
@@ -173,15 +173,42 @@ float3 Sample3DLUT(Texture3D<float4> texture, const float3 color, float4 lutSett
   return texture.SampleLevel(SAMPLER, coordinates, 0.0f).rgb;
 }
 
-float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex, bool force_sdr = false) {
+float EvaluateBoundedNeutralLUTModel(
+    float unbounded_output,
+    float black_output,
+    float midgray_output,
+    float peak_output) {
+  // Generalized rational response constrained to the sampled black, mid-gray,
+  // and peak. Its derivative with respect to unbounded_output is 1 at mid-gray.
+  float exponent = midgray_output * (peak_output - black_output)
+                   / ((midgray_output - black_output) * (peak_output - midgray_output));
+  float ratio = pow(max(0.f, unbounded_output / midgray_output), exponent)
+                * (midgray_output - black_output) / (peak_output - midgray_output);
+  return black_output + (peak_output - black_output) * ratio / (1.f + ratio);
+}
+
+float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex, bool bypass_input_scaling = false) {
   float3 color = inputColor;
   if (lutSettings.x > 0.0f) {           // LUT Strength
     uint _503 = asuint(lutSettings).w;  // lut Type
     uint _504 = _503 & 15u;
 
     float scale = 1.f;
+    float3 lut_peak_sample = 1.f;
+    if (CUSTOM_LUT_CORRECTION_MIDGRAY_ACTIVE) {
+      lut_peak_sample = Sample3DLUT(LUT_TEXTURES[textureIndex], 1.f, lutSettings);
+    }
 
-    if (_504 < 2u) {
+    if (!bypass_input_scaling && CUSTOM_LUT_CORRECTION_MIDGRAY_ACTIVE && _504 <= 2u) {
+      float3 lut_peak_linear = ((_503 & 240u) == 16u)
+                                   ? renodx::color::srgb::DecodeSafe(lut_peak_sample)
+                                   : lut_peak_sample;
+      float lut_output_peak = max(1e-6f, renodx::math::Max(abs(lut_peak_linear)));
+      scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(
+          color,
+          lut_output_peak);
+      color *= scale;
+    } else if (!bypass_input_scaling && _504 < 2u) {
       float gMax = max(color.r, max(color.g, color.b));
       gMax = max(gMax, 1e-6);
       float gClamped = renodx::tonemap::SmoothClamp(gMax);
@@ -208,73 +235,208 @@ float3 SampleLUT(float4 lutSettings, const float3 inputColor, uint textureIndex,
       color = renodx::color::srgb::DecodeSafe(color);
     }
 
-    float3 lutOutputLinear = color;
+    if (injectedData.processingLUTScaling > 0.f) {
+      float correction_strength = saturate(injectedData.processingLUTScaling);
+      if (CUSTOM_LUT_CORRECTION_MIDGRAY_ACTIVE) {
+        const float reconstruction_midgray_output_gamma = renodx::color::srgb::Encode(0.18f);
+        const float reconstruction_slope_delta_gamma = 0.005f;
 
-    if (injectedData.processingLUTScaling != 0.f) {
-      float3 lut_black = 0.f;
-      float3 lut_white = 1.f;
-      float3 lut_mid_gray = 0.18f;
-      if (_504 == 1u) {
-        lut_black = Sample3DLUT(LUT_TEXTURES[textureIndex], 0.f, lutSettings);
-        lut_mid_gray = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::srgb::Encode(0.18f), lutSettings);
-        lut_white = Sample3DLUT(LUT_TEXTURES[textureIndex], 1.f, lutSettings);
-      } else if (_504 == 2u) {
-        lut_black = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(0.f), lutSettings);
-        lut_mid_gray = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(0.18f), lutSettings);
-        lut_white = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(100.f), lutSettings);
-      }
+        float neutral_input = max(0.f, renodx::color::y::from::BT709(linear_input_color));
+        float neutral_coordinate = neutral_input;
+        float black_coordinate = 0.f;
+        if (_504 == 1u) {
+          neutral_coordinate = renodx::color::srgb::EncodeSafe(neutral_input);
+          black_coordinate = renodx::color::srgb::Encode(0.f);
+        } else if (_504 == 2u) {
+          neutral_coordinate = renodx::color::arri::logc::c800::Encode(neutral_input);
+          black_coordinate = renodx::color::arri::logc::c800::Encode(0.f);
+        }
 
-      float3 output_gamma = lutOutputColor;
-      float3 black_gamma = lut_black;
-      float3 midgray_gamma = lut_mid_gray;
-      float3 peak_gamma = lut_white;
-      float3 input_gamma = lutInputColor;
+        float3 neutral_lut_gamma = Sample3DLUT(LUT_TEXTURES[textureIndex], neutral_coordinate, lutSettings);
+        float3 lut_black_gamma = Sample3DLUT(LUT_TEXTURES[textureIndex], black_coordinate, lutSettings);
+        float3 lut_peak_gamma = lut_peak_sample;
+        float3 output_gamma = lutOutputColor;
+        if ((_503 & 240u) != 16u) {
+          output_gamma = renodx::color::srgb::EncodeSafe(color);
+          neutral_lut_gamma = renodx::color::srgb::EncodeSafe(neutral_lut_gamma);
+          lut_black_gamma = renodx::color::srgb::EncodeSafe(lut_black_gamma);
+          lut_peak_gamma = renodx::color::srgb::EncodeSafe(lut_peak_gamma);
+        }
 
-      if ((_503 & 240u) == 16u) {
-        // noop
-      } else {
-        float mid_gray = renodx::color::y::from::BT709(lut_mid_gray);
-        float peak = renodx::color::y::from::BT709(lut_white);
+        float neutral_lut_luma = renodx::color::y::from::BT709(neutral_lut_gamma);
+        float black_output_gamma = max(0.f, renodx::color::y::from::BT709(lut_black_gamma));
+        float peak_output_gamma = max(0.f, renodx::color::y::from::BT709(lut_peak_gamma));
+        float floor_correction = 0.f;
+        if (black_output_gamma + 1e-6f < reconstruction_midgray_output_gamma
+            && reconstruction_midgray_output_gamma + 1e-6f < peak_output_gamma) {
+          // Solve the neutral LUT inverse at output mid-gray. This makes the
+          // reconstruction pivot follow LUT exposure rather than assuming that
+          // scene input 0.18 is the perceptually relevant point.
+          float lower_coordinate = black_coordinate;
+          float upper_coordinate = 1.f;
+          [loop]
+          for (int i = 0; i < 12; ++i) {
+            float candidate_coordinate = (lower_coordinate + upper_coordinate) * 0.5f;
+            float3 candidate_gamma = Sample3DLUT(
+                LUT_TEXTURES[textureIndex],
+                candidate_coordinate,
+                lutSettings);
+            if ((_503 & 240u) != 16u) {
+              candidate_gamma = renodx::color::srgb::EncodeSafe(candidate_gamma);
+            }
+            if (renodx::color::y::from::BT709(candidate_gamma) < reconstruction_midgray_output_gamma) {
+              lower_coordinate = candidate_coordinate;
+            } else {
+              upper_coordinate = candidate_coordinate;
+            }
+          }
 
-        // Correct peak
-        float3 neutral_tonemapped = renodx::tonemap::ReinhardScalable(linear_input_color, peak, 0, 0.18f, mid_gray);
-        float3 graded_color = renodx::tonemap::UpgradeToneMap(
-            linear_input_color * mid_gray / 0.18f,
-            neutral_tonemapped,
+          float reference_coordinate = (lower_coordinate + upper_coordinate) * 0.5f;
+          float reference_linear_input = reference_coordinate;
+          if (_504 == 1u) {
+            reference_linear_input = renodx::color::srgb::Decode(reference_coordinate);
+          } else if (_504 == 2u) {
+            reference_linear_input = renodx::color::arri::logc::c800::Decode(reference_coordinate);
+          }
+          float reference_input_gamma = max(
+              renodx::color::srgb::Encode(max(0.f, reference_linear_input)),
+              1e-6f);
+          float slope_low_input_gamma = max(0.f, reference_input_gamma - reconstruction_slope_delta_gamma);
+          float slope_high_input_gamma = reference_input_gamma + reconstruction_slope_delta_gamma;
+          float slope_low_linear_input = renodx::color::srgb::Decode(slope_low_input_gamma);
+          float slope_high_linear_input = renodx::color::srgb::Decode(slope_high_input_gamma);
+          float slope_low_coordinate = slope_low_linear_input;
+          float slope_high_coordinate = slope_high_linear_input;
+          if (_504 == 1u) {
+            slope_low_coordinate = renodx::color::srgb::Encode(slope_low_linear_input);
+            slope_high_coordinate = renodx::color::srgb::Encode(slope_high_linear_input);
+          } else if (_504 == 2u) {
+            slope_low_coordinate = renodx::color::arri::logc::c800::Encode(slope_low_linear_input);
+            slope_high_coordinate = renodx::color::arri::logc::c800::Encode(slope_high_linear_input);
+          }
+
+          float3 lut_slope_low_gamma = Sample3DLUT(LUT_TEXTURES[textureIndex], slope_low_coordinate, lutSettings);
+          float3 lut_slope_high_gamma = Sample3DLUT(LUT_TEXTURES[textureIndex], slope_high_coordinate, lutSettings);
+          if ((_503 & 240u) != 16u) {
+            lut_slope_low_gamma = renodx::color::srgb::EncodeSafe(lut_slope_low_gamma);
+            lut_slope_high_gamma = renodx::color::srgb::EncodeSafe(lut_slope_high_gamma);
+          }
+          float reference_output_slope = max(
+              0.f,
+              renodx::math::DivideSafe(
+                  renodx::color::y::from::BT709(lut_slope_high_gamma)
+                      - renodx::color::y::from::BT709(lut_slope_low_gamma),
+                  slope_high_input_gamma - slope_low_input_gamma,
+                  0.f));
+          float neutral_contrast = max(
+              0.01f,
+              reference_input_gamma * reference_output_slope / reconstruction_midgray_output_gamma);
+          float neutral_unbounded_gamma = reconstruction_midgray_output_gamma * pow(max(0.f, renodx::color::srgb::EncodeSafe(neutral_input) / reference_input_gamma), neutral_contrast);
+          float bounded_with_floor = EvaluateBoundedNeutralLUTModel(
+              neutral_unbounded_gamma,
+              black_output_gamma,
+              reconstruction_midgray_output_gamma,
+              peak_output_gamma);
+          float bounded_without_floor = EvaluateBoundedNeutralLUTModel(
+              neutral_unbounded_gamma,
+              0.f,
+              reconstruction_midgray_output_gamma,
+              peak_output_gamma);
+
+          // Preserve the LUT's residual neutral shape rather than replacing it:
+          // sampled = bounded model + toe/style residual. Remove only the modeled
+          // floor component. Highlight headroom is reconstructed multiplicatively
+          // by the N2 max-channel bridge instead of adding a neutral
+          // extension toward a fictitious PsychoV source clip.
+          floor_correction = bounded_without_floor - bounded_with_floor;
+        }
+        float neutral_target_gamma = neutral_lut_luma
+                                     + floor_correction * saturate(injectedData.processing_lut_black_floor);
+        float3 decompressed_gamma = max(
+            0.f,
+            output_gamma
+                + neutral_target_gamma - neutral_lut_luma);
+
+        color = renodx::lut::RecolorUnclamped(
             color,
-            1.f);
-        color = lerp(color, graded_color, injectedData.processingLUTScaling);
+            renodx::color::srgb::DecodeSafe(decompressed_gamma),
+            correction_strength);
+      } else {
+        float3 lut_black = 0.f;
+        float3 lut_white = 1.f;
+        float3 lut_mid_gray = 0.18f;
+        if (_504 == 1u) {
+          lut_black = Sample3DLUT(LUT_TEXTURES[textureIndex], 0.f, lutSettings);
+          lut_mid_gray = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::srgb::Encode(0.18f), lutSettings);
+          lut_white = Sample3DLUT(LUT_TEXTURES[textureIndex], 1.f, lutSettings);
+        } else if (_504 == 2u) {
+          lut_black = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(0.f), lutSettings);
+          lut_mid_gray = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(0.18f), lutSettings);
+          lut_white = Sample3DLUT(LUT_TEXTURES[textureIndex], renodx::color::arri::logc::c800::Encode(100.f), lutSettings);
+        }
 
-        // linear to gamma
-        output_gamma = renodx::color::srgb::EncodeSafe(color);
-        black_gamma = renodx::color::srgb::EncodeSafe(lut_black);
-        midgray_gamma = renodx::color::srgb::EncodeSafe(lut_mid_gray);
-        peak_gamma = 1.f;  // Peak already corrected
-        input_gamma = renodx::color::srgb::EncodeSafe(linear_input_color);
+        float3 output_gamma = lutOutputColor;
+        float3 black_gamma = lut_black;
+        float3 midgray_gamma = lut_mid_gray;
+        float3 peak_gamma = lut_white;
+        float3 input_gamma = lutInputColor;
+
+        if ((_503 & 240u) == 16u) {
+          // noop
+        } else {
+          float mid_gray = renodx::color::y::from::BT709(lut_mid_gray);
+          float peak = renodx::color::y::from::BT709(lut_white);
+
+          // Correct peak
+          float3 neutral_tonemapped = renodx::tonemap::ReinhardScalable(linear_input_color, peak, 0, 0.18f, mid_gray);
+          float3 graded_color = renodx::tonemap::UpgradeToneMap(
+              linear_input_color * mid_gray / 0.18f,
+              neutral_tonemapped,
+              color,
+              1.f);
+          color = lerp(color, graded_color, correction_strength);
+
+          // linear to gamma
+          output_gamma = renodx::color::srgb::EncodeSafe(color);
+          black_gamma = renodx::color::srgb::EncodeSafe(lut_black);
+          midgray_gamma = renodx::color::srgb::EncodeSafe(lut_mid_gray);
+          peak_gamma = 1.f;  // Peak already corrected
+          input_gamma = renodx::color::srgb::EncodeSafe(linear_input_color);
+        }
+
+        float3 unclamped = renodx::lut::Unclamp(
+            output_gamma,
+            black_gamma,
+            midgray_gamma,
+            peak_gamma,
+            input_gamma);
+
+        float3 recolored = renodx::lut::RecolorUnclamped(
+            color,
+            renodx::color::srgb::DecodeSafe(unclamped));
+
+        color = lerp(color, recolored, correction_strength);
       }
-
-      float3 unclamped = renodx::lut::Unclamp(
-          output_gamma,
-          black_gamma,
-          midgray_gamma,
-          peak_gamma,
-          input_gamma);
-
-      float3 recolored = renodx::lut::RecolorUnclamped(
-          color,
-          renodx::color::srgb::DecodeSafe(unclamped));
-
-      color = lerp(color, recolored, injectedData.processingLUTScaling);
     }
 
-    color /= scale;
+    if (!bypass_input_scaling) {
+      float reconstruction_scale = scale;
+      if (CUSTOM_LUT_CORRECTION_MIDGRAY) {
+        reconstruction_scale = lerp(
+            1.f,
+            scale,
+            saturate(injectedData.processing_lut_ceiling));
+      }
+      color /= reconstruction_scale;
+    }
   }
   color *= lutSettings.z;  // lut blending
   return color;
 }
 
-float3 sampleAllLUTs(const float3 color, bool force_sdr = false) {
+float3 sampleAllLUTs(const float3 color, bool bypass_input_scaling = false) {
   uint textureCount = asuint(cb6[41u]).x;
+  if (textureCount == 0u) return color;
 
   float3 compositedColor = 0;
 
@@ -282,14 +444,179 @@ float3 sampleAllLUTs(const float3 color, bool force_sdr = false) {
   if (injectedData.colorGradeLUTStrength != 0) {
     for (uint i = 0; i < textureCount; i++) {
       float4 lutSettings = cb6[33u + i];
-      compositedColor += SampleLUT(lutSettings, color, i, force_sdr);
+      compositedColor += SampleLUT(lutSettings, color, i, bypass_input_scaling);
     }
     compositedColor = lerp(color, compositedColor, injectedData.colorGradeLUTStrength);
   } else {
-    compositedColor = color;
+    return color;
+    for (uint i = 0; i < textureCount; i++) {
+      float4 lutSettings = cb6[33u + i];
+      compositedColor += SampleLUT(lutSettings, color, i, bypass_input_scaling);
+    }
+
+    // float3 aces_color = renodx::tonemap::aces::RRTAndODT(color * 2.f, 0.1f, 1900.f) / 48.f;
+    float3 aces_color = renodx::tonemap::aces::RRTAndODT(color * 2.f, 0.02f, 48.f) / 48.f;
+
+    // aces_color *= 1.4f;
+    float3 upgraded = renodx::tonemap::UpgradeToneMap(
+        color * 2.f,
+        aces_color,
+        compositedColor,
+        1.f);
+    compositedColor = aces_color;
+    // compositedColor = aces_color;
+    // float3 retonemapped = renodx::tonemap::aces::RRTAndODT(upgraded, 0.1f, 10000.f / 48.f) / 48.f;
+    // compositedColor = renodx::color::correct::Luminance(compositedColor, retonemapped);
+    // compositedColor = color * 2.f;
+    // compositedColor = renodx::tonemap::ACESFittedAP1(color);
+    // compositedColor = color;
   }
 
   return compositedColor;
+}
+
+float EvaluateVanillaNeutralTonemap(float neutral_input, SegmentedSplineParams_c9 odt_config) {
+  float3 neutral_color = float3(neutral_input, neutral_input, neutral_input);
+  float3 outputXYZ = mul(renodx::color::BT709_TO_XYZ_MAT, neutral_color);
+  float3 outputXYZD60 = mul(renodx::color::D65_TO_D60_CAT, outputXYZ);
+  float3 aces = mul(renodx::color::XYZ_TO_AP0_MAT, outputXYZD60);
+  float3 rgbPost = aces_rrt_ap0(aces);
+
+  float3 toneMappedColor = float3(
+      segmented_spline_c9_fwd(rgbPost.r, odt_config),
+      segmented_spline_c9_fwd(rgbPost.g, odt_config),
+      segmented_spline_c9_fwd(rgbPost.b, odt_config));
+
+  if (cb6[28u].w != 0.0f) {
+    float ap1Y = max(dot(rgbPost, AP1_RGB2Y), 1e-6f);
+    float toneMappedByLuminance = segmented_spline_c9_fwd(ap1Y, odt_config);
+    float scaleFactor = toneMappedByLuminance / ap1Y;
+    float3 scaledAndToneMapped = rgbPost * scaleFactor;
+    toneMappedColor = (cb6[29u].x * (scaledAndToneMapped - toneMappedColor)) + toneMappedColor;
+  }
+
+  float minNits = cb6[27u].x;
+  float peakNits = cb6[27u].y;
+  float yRange = peakNits - minNits;
+
+  toneMappedColor = max(toneMappedColor, minNits);
+  float3 linearCV = renodx::tonemap::aces::YToLinCV(toneMappedColor, peakNits, minNits);
+
+  if (cb6[28u].y != 0.0f) {
+    float3 odtXYZ = mul(renodx::color::AP1_TO_XYZ_MAT, linearCV);
+    odtXYZ = renodx::tonemap::aces::DarkToDim(odtXYZ, cb6[27u].w);
+    linearCV = mul(renodx::color::XYZ_TO_AP1_MAT, odtXYZ);
+  }
+
+  if (cb6[28u].x != 0.0f) {
+    linearCV = mul(renodx::tonemap::aces::ODT_SAT_MAT, linearCV);
+  }
+
+  float3 odtXYZ = mul(renodx::color::AP1_TO_XYZ_MAT, linearCV);
+
+  if (CUSTOM_WHITE_POINT_D65 || (!CUSTOM_WHITE_POINT_D60 && cb6[28u].z != 0.0f)) {
+    odtXYZ = mul(renodx::color::D60_TO_D65_MAT, odtXYZ);
+  }
+
+  float3x3 customMatrix0 = float3x3(
+      cb6[21u].x, cb6[21u].y, cb6[21u].z,
+      cb6[22u].x, cb6[22u].y, cb6[22u].z,
+      cb6[23u].x, cb6[23u].y, cb6[23u].z);
+
+  float3 odtUnknown = mul(customMatrix0, odtXYZ);
+  if (cb6[27u].z == 0.0f || cb6[27u].z == 1.f) {
+    odtUnknown = saturate(odtUnknown);
+  } else if (cb6[27u].z == 2.0f) {
+    odtUnknown = max((yRange * odtUnknown) + minNits, 0);
+    odtUnknown = float3(
+        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x)));
+    odtUnknown = mul(renodx::color::XYZ_TO_BT709_MAT, odtUnknown);
+    odtUnknown /= min(80.0f, peakNits);
+  } else if (cb6[27u].z == 3.0f) {
+    odtUnknown = max((yRange * odtUnknown) + minNits, 0);
+    odtUnknown = float3(
+        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x)));
+    odtUnknown = mul(renodx::color::XYZ_TO_BT2020_MAT, odtUnknown);
+  } else if (cb6[27u].z == 4.0f) {
+    odtUnknown = max(odtUnknown, 0.f);
+    float scale = max(peakNits, 80.0f) * 0.001000000047497451305389404296875f;
+    odtUnknown = float3(
+        mad(cb6[24u].z, odtUnknown.z, mad(cb6[24u].y, odtUnknown.y, cb6[24u].x * odtUnknown.x)),
+        mad(cb6[25u].z, odtUnknown.z, mad(cb6[25u].y, odtUnknown.y, cb6[25u].x * odtUnknown.x)),
+        mad(cb6[26u].z, odtUnknown.z, mad(cb6[26u].y, odtUnknown.y, cb6[26u].x * odtUnknown.x)));
+    odtUnknown *= scale;
+    odtUnknown = saturate(odtUnknown);
+    odtUnknown = pow(odtUnknown, 0.1593017578125f);
+    odtUnknown = ((odtUnknown * 18.8515625f) + 0.8359375f) / ((odtUnknown * 18.6875f) + 1.0f);
+    odtUnknown = pow(odtUnknown, 78.84375f);
+    odtUnknown = saturate(odtUnknown);
+  } else {
+    odtUnknown = max((yRange * odtUnknown) + minNits, 0);
+  }
+
+  return renodx::color::y::from::BT709(max(0.f, odtUnknown));
+}
+
+float ResolvePsychoVReferenceOutput(float vanilla_output) {
+  float reference_output = max(0.f, vanilla_output) * (100.f / 203.f);
+  if (RENODX_GAMMA_CORRECTION >= 2.f) {
+    reference_output = renodx::color::correct::GammaSafe(reference_output, true, 2.2f);
+  }
+  return max(0.f, reference_output);
+}
+
+float EvaluatePsychoVHDRReferenceOutput(float neutral_input, SegmentedSplineParams_c9 odt_config) {
+  return ResolvePsychoVReferenceOutput(EvaluateVanillaNeutralTonemap(neutral_input, odt_config));
+}
+
+float SolvePsychoVHDRReferenceInputForOutput(float target_output, float fallback_input, SegmentedSplineParams_c9 odt_config) {
+  float lower_input = 0.f;
+  float upper_input = max(max(fallback_input, target_output), 1e-4f);
+  float upper_output = EvaluateVanillaNeutralTonemap(upper_input, odt_config);
+
+  [loop]
+  for (int i = 0; i < 8; ++i) {
+    if (upper_output >= target_output) break;
+    upper_input *= 2.f;
+    upper_output = EvaluateVanillaNeutralTonemap(upper_input, odt_config);
+  }
+
+  [loop]
+  for (int j = 0; j < 16; ++j) {
+    float mid_input = (lower_input + upper_input) * 0.5f;
+    float mid_output = EvaluateVanillaNeutralTonemap(mid_input, odt_config);
+    if (mid_output < target_output) {
+      lower_input = mid_input;
+    } else {
+      upper_input = mid_input;
+    }
+  }
+
+  return upper_input;
+}
+
+float3 ApplyAfterToneMapLUTs(float3 color) {
+  if (injectedData.colorGradeLUTStrength == 0.f) return color;
+
+  float3 graded;
+  if (CUSTOM_LUT_CORRECTION_MIDGRAY_ACTIVE) {
+    // SampleLUT applies N2 from each LUT's measured linear output endpoint,
+    // then reconstructs with the same scale.
+    graded = sampleAllLUTs(color);
+  } else {
+    float lut_peak_nits = max(1.f, cb6[27u].y);
+    float lut_min_nits = min(max(0.f, cb6[27u].x), lut_peak_nits - 0.001f);
+    float lut_nits_scale = max(1.f, RENODX_DIFFUSE_WHITE_NITS);
+    float lut_nits_range = lut_peak_nits - lut_min_nits;
+    float3 lut_input_domain = max(0.f, ((color * lut_nits_scale) - lut_min_nits) / lut_nits_range);
+    float3 lut_output_domain = sampleAllLUTs(lut_input_domain, true);
+    graded = ((lut_output_domain * lut_nits_range) + lut_min_nits) / lut_nits_scale;
+  }
+  return graded;
 }
 
 // [41u].w = 0.59960937f
@@ -306,7 +633,7 @@ float4 tonemap(bool isACESMode = false) {
 
   const float3 position = float3(gl_GlobalInvocationID.xyz) / (float(lutSize) - 1.f);
   float3 inputColor;
-  if (injectedData.processingInternalSampling == 1.f) {
+  if (CUSTOM_SAMPLING_ENCODE_PQ) {
     inputColor = renodx::color::pq::Decode(position, 100.f);
   } else {
     inputColor = exp2((position - cb6[41u].w) / cb6[41u].z);
@@ -416,10 +743,10 @@ float4 tonemap(bool isACESMode = false) {
 
   // outputRGB = lerp(inputColor, outputRGB, injectedData.debugValue03);
 
-  float exposure = cb6[42u].z;  // "baked with tonemapper midpoint"
+  float exposure = lerp(1.f, cb6[42u].z, CUSTOM_DYNAMIC_EXPOSURE);  // "baked with tonemapper midpoint"
 
   if (isACESMode) {
-    if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
+    if ((CUSTOM_LUT_ORDER_BEFORE || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
       outputRGB = sampleAllLUTs(outputRGB);
     }
 
@@ -428,20 +755,35 @@ float4 tonemap(bool isACESMode = false) {
     float peakNits = cb6[27u].y;           // User peak Nits
     const float midGrayNits = cb6[18u].w;  // Usually 10.0
     float toneMapperType = injectedData.toneMapType;
+    bool useCustomToneMapperOutputTransform = false;
 
     if (toneMapperType != TONE_MAPPER_TYPE__NONE) {
       outputRGB *= exposure;
     }
 
-    if (injectedData.toneMapHueCorrection == 1.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::Reinhard(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
-    } else if (injectedData.toneMapHueCorrection == 2.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
-    } else if (injectedData.toneMapHueCorrection == 3.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
-    } else if (injectedData.toneMapHueCorrection == 4.f) {
-      outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::uncharted2::BT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
+    if (toneMapperType != TONE_MAPPER_TYPE__PSYCHOV17
+        && toneMapperType != TONE_MAPPER_TYPE__PSYCHOV22
+        && toneMapperType != TONE_MAPPER_TYPE__PSYCHOV30) {
+      if (injectedData.toneMapHueCorrection == 1.f) {
+        outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::Reinhard(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
+      } else if (injectedData.toneMapHueCorrection == 2.f) {
+        outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedBT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
+      } else if (injectedData.toneMapHueCorrection == 3.f) {
+        outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::ACESFittedAP1(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
+      } else if (injectedData.toneMapHueCorrection == 4.f) {
+        outputRGB = renodx::color::correct::Hue(outputRGB, renodx::tonemap::uncharted2::BT709(outputRGB), 1.f, (uint)injectedData.toneMapHueProcessor);
+      }
     }
+
+    const SegmentedSplineParams_c9 ODT_CONFIG = {
+      { cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x },  // coefsLow[10]
+      { cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y },  // coefsHigh[10]
+      { cb6[18u].x, cb6[18u].y },                                                                                                // minPoint
+      { cb6[18u].z, midGrayNits },                                                                                               // midPoint
+      { cb6[19u].x, cb6[19u].y },                                                                                                // maxPoint - doesn't always match peak nits?
+      cb6[19u].z,                                                                                                                // slopeLow
+      cb6[19u].w                                                                                                                 // slopeHigh
+    };
 
     if (toneMapperType == TONE_MAPPER_TYPE__VANILLA) {
       outputRGB = renodx::color::grade::UserColorGrading(
@@ -471,16 +813,6 @@ float4 tonemap(bool isACESMode = false) {
       // cb6[19u].w 0.059738
 
       // Scales with paperwhite, which can be reversed
-
-      const SegmentedSplineParams_c9 ODT_CONFIG = {
-        { cb6[8u].x, cb6[9u].x, cb6[10u].x, cb6[11u].x, cb6[12u].x, cb6[13u].x, cb6[14u].x, cb6[15u].x, cb6[16u].x, cb6[17u].x },  // coefsLow[10]
-        { cb6[8u].y, cb6[9u].y, cb6[10u].y, cb6[11u].y, cb6[12u].y, cb6[13u].y, cb6[14u].y, cb6[15u].y, cb6[16u].y, cb6[17u].y },  // coefsHigh[10]
-        { cb6[18u].x, cb6[18u].y },                                                                                                // minPoint
-        { cb6[18u].z, midGrayNits },                                                                                               // midPoint
-        { cb6[19u].x, cb6[19u].y },                                                                                                // maxPoint - doesn't always match peak nits?
-        cb6[19u].z,                                                                                                                // slopeLow
-        cb6[19u].w                                                                                                                 // slopeHigh
-      };
 
       float yRange = peakNits - minNits;
 
@@ -516,7 +848,7 @@ float4 tonemap(bool isACESMode = false) {
 
       float3 odtXYZ = mul(renodx::color::AP1_TO_XYZ_MAT, linearCV);
 
-      if (injectedData.colorGradeWhitePoint == 1.f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z != 0.0f)) {
+      if (CUSTOM_WHITE_POINT_D65 || (!CUSTOM_WHITE_POINT_D60 && cb6[28u].z != 0.0f)) {
         odtXYZ = mul(renodx::color::D60_TO_D65_MAT, odtXYZ);
       }
 
@@ -578,25 +910,153 @@ float4 tonemap(bool isACESMode = false) {
       }
 
       outputRGB = odtUnknown;
+    } else if (toneMapperType == TONE_MAPPER_TYPE__PSYCHOV17
+               || toneMapperType == TONE_MAPPER_TYPE__PSYCHOV22
+               || toneMapperType == TONE_MAPPER_TYPE__PSYCHOV30) {
+      useCustomToneMapperOutputTransform = true;
+      const float psychovReferenceSceneInput = 0.18f;
+      const float psychovReferenceOutputTarget = 0.18f;
+      float psychovReferenceInput = max(0.f, renodx::color::y::from::BT709(renodx::color::grade::UserColorGrading(
+                                                 float3(psychovReferenceSceneInput * exposure, psychovReferenceSceneInput * exposure, psychovReferenceSceneInput * exposure),
+                                                 injectedData.colorGradeExposure,
+                                                 injectedData.colorGradeHighlights,
+                                                 injectedData.colorGradeShadows,
+                                                 injectedData.colorGradeContrast,
+                                                 injectedData.colorGradeSaturation)));
+      float psychovReferenceOutput = psychovReferenceInput;
+      if (CUSTOM_PSYCHOV_EXPOSURE_MATCH) {
+        psychovReferenceInput = SolvePsychoVHDRReferenceInputForOutput(psychovReferenceOutputTarget, psychovReferenceInput, ODT_CONFIG);
+        psychovReferenceOutput = EvaluatePsychoVHDRReferenceOutput(psychovReferenceInput, ODT_CONFIG);
+      }
+
+      float psychovConeResponse = CUSTOM_CONE_RESPONSE;
+      if (CUSTOM_PSYCHOV_VANILLA_HDR_SLOPE > 0.f) {
+        float psychovSlopeReferenceInput = CUSTOM_PSYCHOV_EXPOSURE_MATCH
+                                               ? psychovReferenceInput
+                                               : SolvePsychoVHDRReferenceInputForOutput(psychovReferenceOutputTarget, psychovReferenceInput, ODT_CONFIG);
+        float psychovSlopeReferenceOutput = EvaluatePsychoVHDRReferenceOutput(psychovSlopeReferenceInput, ODT_CONFIG);
+        float psychovReferenceDelta = max(0.005f, psychovSlopeReferenceInput * 0.01f);
+        float psychovReferenceLowInput = max(0.f, psychovSlopeReferenceInput - psychovReferenceDelta);
+        float psychovReferenceHighInput = psychovSlopeReferenceInput + psychovReferenceDelta;
+        float psychovReferenceHigh = EvaluatePsychoVHDRReferenceOutput(psychovReferenceHighInput, ODT_CONFIG);
+        float psychovReferenceLow = EvaluatePsychoVHDRReferenceOutput(psychovReferenceLowInput, ODT_CONFIG);
+        float psychovReferenceSlope = max(
+            0.f,
+            renodx::math::DivideSafe(
+                psychovReferenceHigh - psychovReferenceLow,
+                psychovReferenceHighInput - psychovReferenceLowInput,
+                0.f));
+        float psychovVanillaHDRSlope = max(
+            0.f,
+            renodx::math::DivideSafe(
+                psychovSlopeReferenceInput * psychovReferenceSlope,
+                psychovSlopeReferenceOutput,
+                1.f));
+        psychovConeResponse *= lerp(1.f, psychovVanillaHDRSlope, saturate(CUSTOM_PSYCHOV_VANILLA_HDR_SLOPE));
+      }
+
+      float psychovPeakNits = RENODX_PEAK_WHITE_NITS;
+      float psychovOutputScaleNits = max(1.f, RENODX_DIFFUSE_WHITE_NITS);
+      float psychovPeakValue = max(
+          1.f,
+          renodx::math::DivideSafe(psychovPeakNits, psychovOutputScaleNits, 1.f));
+      if (RENODX_GAMMA_CORRECTION >= 2.f) {
+        psychovPeakValue = renodx::color::correct::Gamma(psychovPeakValue, true, 2.2f);
+      }
+      if (toneMapperType == TONE_MAPPER_TYPE__PSYCHOV17) {
+        outputRGB = renodx::tonemap::psychov::psychotm_test17(
+            outputRGB,  // bt709_input
+            psychovPeakValue,
+            injectedData.colorGradeExposure,
+            injectedData.colorGradeHighlights,
+            injectedData.colorGradeShadows,
+            injectedData.colorGradeContrast,
+            injectedData.colorGradeSaturation,
+            1.f,
+            100.f,
+            1.f,  // hue_restore
+            1.f,  // adaptation_contrast
+            1,
+            psychovConeResponse,
+            float3(psychovReferenceInput, psychovReferenceInput, psychovReferenceInput),
+            float3(psychovReferenceOutput, psychovReferenceOutput, psychovReferenceOutput),
+            1.f,
+            1,
+            1.f);
+      } else if (toneMapperType == TONE_MAPPER_TYPE__PSYCHOV22) {
+        outputRGB = renodx::tonemap::psychov::psychotm_test22(
+            outputRGB,  // bt709_input
+            psychovPeakValue,
+            injectedData.colorGradeExposure,
+            injectedData.colorGradeHighlights,
+            injectedData.colorGradeShadows,
+            injectedData.colorGradeContrast,
+            injectedData.colorGradeSaturation,
+            1.f,
+            100.f,
+            1.f,  // hue_restore
+            1.f,  // adaptation_contrast
+            1,
+            psychovConeResponse,
+            float3(psychovReferenceInput, psychovReferenceInput, psychovReferenceInput),
+            float3(psychovReferenceOutput, psychovReferenceOutput, psychovReferenceOutput),
+            1.f,
+            1,
+            1.f,
+            CUSTOM_CONE_COMPRESSION);
+      } else {
+        outputRGB = renodx::tonemap::psychov::psychotm_test30(
+            outputRGB,  // bt709_input
+            psychovPeakValue,
+            injectedData.colorGradeExposure,
+            injectedData.colorGradeHighlights,
+            injectedData.colorGradeShadows,
+            injectedData.colorGradeContrast,
+            injectedData.colorGradeSaturation,
+            1.f,
+            100.f,
+            1.f,  // hue_restore
+            1.f,  // adaptation_contrast
+            1,
+            psychovConeResponse,
+            float3(psychovReferenceInput, psychovReferenceInput, psychovReferenceInput),
+            float3(psychovReferenceOutput, psychovReferenceOutput, psychovReferenceOutput),
+            1.f,
+            1,
+            1.f,
+            CUSTOM_CONE_COMPRESSION,
+            renodx::tonemap::psychov::PSYCHO30_SOURCE_BOUNDARY_AP1);
+      }
+
+      // float3 signs = sign(outputRGB);
+      // outputRGB = abs(outputRGB);
+      // outputRGB = renodx::tonemap::ACESFittedBT709(outputRGB);
+      // outputRGB *= injectedData.colorGradeExposure;
+      // // outputRGB = outputRGB / (outputRGB + 1.f);
+      // outputRGB = pow(outputRGB, injectedData.colorGradeContrast);
+      // outputRGB = outputRGB * signs;
+
     } else {
+      useCustomToneMapperOutputTransform = true;
       renodx::tonemap::Config config = renodx::tonemap::config::Create();
 
       config.type = injectedData.toneMapType;
-      config.peak_nits = injectedData.toneMapPeakNits;
-      config.game_nits = (injectedData.toneMapType == 2.f ? (100.f / 203.f) : 1.f) * injectedData.toneMapGameNits;
+      config.peak_nits = RENODX_PEAK_WHITE_NITS;
+      // config.game_nits = (injectedData.toneMapType == 2.f ? (100.f / 203.f) : (100.f / 203.f)) * injectedData.toneMapGameNits;
+      config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
       config.gamma_correction = (RENODX_GAMMA_CORRECTION == 2.f) ? 1.f : 0.f;
       config.exposure = injectedData.colorGradeExposure;
       config.highlights = injectedData.colorGradeHighlights;
       config.shadows = injectedData.colorGradeShadows;
       config.contrast = injectedData.colorGradeContrast;
       config.saturation = injectedData.colorGradeSaturation;
-      config.mid_gray_value = 2.3f * (midGrayNits / 100.f);
-      config.mid_gray_nits = midGrayNits;
-      config.reno_drt_highlights = 1.20f;
-      config.reno_drt_shadows = 1.20f;
-      config.reno_drt_contrast = 1.3f;
-      config.reno_drt_saturation = 1.20f;
+      // config.mid_gray_value = 2.3f * (midGrayNits / 100.f);
+      // config.mid_gray_nits = midGrayNits;
+      config.reno_drt_highlights = 1.00f;  // Match SDR
+      config.reno_drt_contrast = 1.0f;
+      config.reno_drt_saturation = 1.0f;
       config.reno_drt_blowout = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
+      config.reno_drt_white_clip = 100.f;
       if (injectedData.toneMapPerChannel == 1.f) {
         config.reno_drt_per_channel = true;
         config.reno_drt_working_color_space = 2u;
@@ -605,22 +1065,41 @@ float4 tonemap(bool isACESMode = false) {
       config.reno_drt_dechroma = injectedData.colorGradeBlowout;
       config.reno_drt_flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
       config.reno_drt_hue_correction_method = (uint)injectedData.toneMapHueProcessor;
-      config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
+      config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE;
 
       outputRGB = renodx::tonemap::config::Apply(outputRGB, config);
-      bool useD60 = (injectedData.colorGradeWhitePoint == -1.0f || (injectedData.colorGradeWhitePoint == 0.f && cb6[28u].z == 0.f));
+
+      // float3 signs = sign(outputRGB);
+      // outputRGB = abs(outputRGB);
+      // outputRGB = renodx::tonemap::ACESFittedBT709(outputRGB);
+      // outputRGB *= injectedData.colorGradeExposure;
+      // // outputRGB = outputRGB / (outputRGB + 1.f);
+      // outputRGB = pow(outputRGB, injectedData.colorGradeContrast);
+      // outputRGB = outputRGB * signs;
+    }
+    if (useCustomToneMapperOutputTransform) {
+      bool useD60 = (CUSTOM_WHITE_POINT_D60 || (!CUSTOM_WHITE_POINT_D65 && cb6[28u].z == 0.f));
       if (useD60) {
         outputRGB = mul(renodx::color::BT709_TO_BT709D60_MAT, outputRGB);
       }
-
+    }
+    if (CUSTOM_LUT_ORDER_AFTER || asuint(cb6[42u]).y == 0u) {
+      uint textureCount = asuint(cb6[41u]).x;
+      if (textureCount != 0u) {
+        outputRGB = useCustomToneMapperOutputTransform ? ApplyAfterToneMapLUTs(outputRGB) : sampleAllLUTs(outputRGB);
+      }
+    }
+    if (useCustomToneMapperOutputTransform) {
       if (RENODX_GAMMA_CORRECTION >= 2.f) {
         outputRGB = renodx::color::correct::GammaSafe(outputRGB, false, 2.2f);
       }
 
-      outputRGB *= config.game_nits / 100.f;
+      outputRGB *= RENODX_DIFFUSE_WHITE_NITS / 100.f;
     }
-
   } else {
+    float3 input_color = outputRGB;
+
+    // SDR
     outputRGB = renodx::color::grade::UserColorGrading(
         outputRGB,
         injectedData.colorGradeExposure,
@@ -628,18 +1107,29 @@ float4 tonemap(bool isACESMode = false) {
         injectedData.colorGradeShadows,
         injectedData.colorGradeContrast,
         injectedData.colorGradeSaturation);
+
     outputRGB = max(0, outputRGB);
-    if ((injectedData.processingLUTOrder == -1.f || asuint(cb6[42u]).y == 1u) && (_69.x != 0u)) {
-      outputRGB = sampleAllLUTs(outputRGB, true);
-    }
+    // float3 lut_input_color = outputRGB;
+    outputRGB = sampleAllLUTs(outputRGB, true);
+    // float3 upgraded = renodx::tonemap::UpgradeToneMap(
+    //     lut_input_color * 2.f,
+    //     aces_color,
+    //     outputRGB,
+    //     1.f);
+    // if (injectedData.colorGradeLUTStrength == 0.f) {
+    //   if (RENODX_TONE_MAP_TYPE == 2.f) {
+    //     outputRGB = renodx::tonemap::aces::RRTAndODT(input_color * 2.f, 0.02f, 48.f) / 48.f;
+    //   } else if (RENODX_TONE_MAP_TYPE == 3.f) {
+    //     outputRGB = renodx::tonemap::ACESFittedBT709(input_color / 0.6f * 0.93f);
+    //     // outputRGB = renodx::tonemap::ACESFittedAP1(input_color * 2.f);
+    //   }
+    // }
+
     outputRGB *= exposure;
   }
 
-  if (injectedData.processingLUTOrder == 1.f || asuint(cb6[42u]).y == 0u) {
-    uint textureCount = asuint(cb6[41u]).x;
-    if (textureCount != 0u) {
-      outputRGB = sampleAllLUTs(outputRGB);
-    }
+  if (CUSTOM_SAMPLING_DECODE_PQ) {
+    outputRGB = sign(outputRGB) * renodx::color::pq::Encode(abs(outputRGB), 100.f);
   }
 
   return float4(outputRGB.rgb, 0.f);

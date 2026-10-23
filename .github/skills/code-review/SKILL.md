@@ -7,6 +7,12 @@ description: "RenoDX pull request code review checklist for HDR/SDR matching, ne
 
 Use this skill when reviewing RenoDX pull requests. Apply it together with root `AGENTS.md`, the nearest nested `AGENTS.md`, `.agents/skills/swapchain-resource-analysis/SKILL.md`, and `.agents/skills/handle-sdr-tonemap-lut/SKILL.md` when relevant.
 
+Before reviewing any RenoDX-authored C++ under `src/`, read
+`docs/CXX_STYLE.md` in full and review every touched C++ region against it. Do
+not rely on summaries in `AGENTS.md`, scoped instructions, or prior knowledge of
+the guide. Treat style-guide violations as review findings even when the code
+builds and passes formatting checks.
+
 ## Review stance
 
 Copilot review should comment when a PR is technically buildable but violates RenoDX HDR behavior. Do not let a PR pass silently just because it compiles if the mod changes the default look, clips HDR through SDR, or treats the final swapchain frame as an HDR source.

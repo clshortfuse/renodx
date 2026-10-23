@@ -1,0 +1,8 @@
+{
+  "id": "ds2lightingengine",
+  "title": "Dark Souls 2 - DS2LightingEngine SotFS",
+  "category": "related",
+  "maintainers": ["Ganaboy (ragevitamins)"],
+  "compatibility": "in-progress",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/darksouls2/mods/1146"}]
+}

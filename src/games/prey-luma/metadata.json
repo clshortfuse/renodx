@@ -1,0 +1,8 @@
+{
+  "id": "prey-luma",
+  "title": "Prey Remastered - Luma",
+  "category": "related",
+  "maintainers": ["Pumbo", "Ersh"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/prey2017/mods/149"}]
+}

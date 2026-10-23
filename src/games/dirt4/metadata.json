@@ -1,0 +1,7 @@
+{
+  "id": "dirt4",
+  "title": "DiRT 4",
+  "maintainers": ["Bit Viper"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/dirt4/mods/3"}]
+}

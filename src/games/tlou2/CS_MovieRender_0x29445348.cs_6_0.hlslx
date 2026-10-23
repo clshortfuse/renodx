@@ -1,0 +1,53 @@
+#include "./common.hlsli"
+
+struct MovieRenderParams {
+  int MovieRenderParams_000;
+  int MovieRenderParams_004;
+  int MovieRenderParams_008;
+  int MovieRenderParams_012;
+  int MovieRenderParams_016;
+  int MovieRenderParams_020;
+};
+
+Texture2D<float4> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
+
+Texture2D<float4> t2 : register(t2);
+
+RWTexture2D<float4> u0 : register(u0);
+
+cbuffer cb0 : register(b0) {
+  MovieRenderParams g_movieRenderConstants_000 : packoffset(c000.x);
+};
+
+SamplerState s0 : register(s0);
+
+[numthreads(32, 2, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float _20;
+  float _22;
+  float _35;
+  float _36;
+  float4 _37;
+  float _41;
+  float _44;
+  if ((uint)(int)(SV_DispatchThreadID.x) < (uint)g_movieRenderConstants_000.MovieRenderParams_016) {
+    if ((uint)(int)(SV_DispatchThreadID.y) < (uint)g_movieRenderConstants_000.MovieRenderParams_020) {
+      _20 = float((int)(g_movieRenderConstants_000.MovieRenderParams_008));
+      _22 = float((int)(g_movieRenderConstants_000.MovieRenderParams_012));
+      _35 = (0.5f / _20) + ((1.0f / _20) * ((_20 * ((float)((uint)SV_DispatchThreadID.x))) / float((int)(g_movieRenderConstants_000.MovieRenderParams_016))));
+      _36 = (0.5f / _22) + ((1.0f / _22) * ((_22 * ((float)((uint)SV_DispatchThreadID.y))) / float((int)(g_movieRenderConstants_000.MovieRenderParams_020))));
+      _37 = t0.SampleLevel(s0, float2(_35, _36), 0.0f);
+      _41 = (((float4)(t2.SampleLevel(s0, float2(_35, _36), 0.0f))).x) + -0.5019599795341492f;
+      _44 = (((float4)(t1.SampleLevel(s0, float2(_35, _36), 0.0f))).x) + -0.5019599795341492f;
+      u0[int2(((int)((uint)(g_movieRenderConstants_000.MovieRenderParams_000) + SV_DispatchThreadID.x)), ((int)((uint)(g_movieRenderConstants_000.MovieRenderParams_004) + SV_DispatchThreadID.y)))] = float4(saturate(dot(float3(1.0f, 0.0f, 1.4019999504089355f), float3(_37.x, _41, _44))),
+                                                                                                                                                                                                              saturate(dot(float3(1.0f, -0.3440999984741211f, -0.7141000032424927f), float3(_37.x, _41, _44))),
+                                                                                                                                                                                                              saturate(dot(float3(1.0f, 1.7719999551773071f, 0.0f), float3(_37.x, _41, _44))), 1.0f);
+    }
+  }
+}

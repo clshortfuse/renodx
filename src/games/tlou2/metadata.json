@@ -1,0 +1,28 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "tlou2",
+  "title": "The Last of Us Part II Remastered",
+  "maintainers": [
+    "Musa"
+  ],
+  "summary": "Adds configurable HDR tone mapping and perceptual film grain to The Last of Us Part II Remastered.",
+  "tags": [
+    "hdr",
+    "tone-mapping",
+    "film-grain"
+  ],
+  "status": "beta",
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2531310/header.jpg",
+  "notes": [
+    "Beta: functionality is incomplete and still under development.",
+    "Keep the in-game Brightness slider at 0 and HUD Brightness slider at 5.",
+    "For HDR output, enable HDR in Windows and in game."
+  ],
+  "deploy": {
+    "steam_appid": 2531310,
+    "api": "d3d12",
+    "architecture": [
+      "x64"
+    ]
+  }
+}

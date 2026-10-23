@@ -1,7 +1,7 @@
 #include "../common.hlsli"
 #include "./displaymapping.hlsli"
 
-bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout float4 output_color, float2 position) {
+bool ComposeUIAndScene(float3 scene_color, float4 ui_color_gamma, inout float4 output_color, float2 position) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
   ui_color_gamma = max(0, ui_color_gamma);
@@ -24,11 +24,6 @@ bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout flo
     const float3 PEAK_LMS = renodx::color::lms::from::BT2020(PEAK_RATIO);
     const float3 CLIP_LMS = renodx::color::lms::from::BT2020(CLIP);
     scene_lms = ApplyAnchoredCubicShoulder(scene_lms, PEAK_LMS, ANCHOR_LMS, 1.3f);
-    // scene_lms = ApplyAnchoredHillShoulder(scene_lms, PEAK_LMS, ANCHOR_LMS, CLIP_LMS);
-    // scene_lms = renodx::tonemap::neutwo::PerChannel(scene_lms, PEAK_LMS);
-    // scene_lms = ApplyAnchoredNeutwoShoulder(scene_lms, PEAK_LMS, ANCHOR_LMS, 0.15f);
-    // scene_lms = ApplyNakaRushton(scene_lms, PEAK_LMS, ANCHOR_LMS, 1.5f);
-    // scene_lms = ReinhardPiecewise(scene_lms, PEAK_LMS, ANCHOR_LMS);
 
     scene_color = renodx::color::bt709::from::LMS(scene_lms);
   }
@@ -41,8 +36,9 @@ bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout flo
   float3 scene_color_gamma = renodx::color::gamma::EncodeSafe(scene_color);
   float3 composited_color_gamma = mad(scene_color_gamma, 1.f - ui_alpha, ui_color_gamma.rgb);
   float3 composited_color = renodx::color::gamma::DecodeSafe(composited_color_gamma);
-  composited_color *= RENODX_GRAPHICS_WHITE_NITS;
 
-  output_color = float4(composited_color / 80.f, ui_alpha);
+  composited_color *= RENODX_GRAPHICS_WHITE_NITS / 80.f;
+
+  output_color = float4(composited_color, ui_alpha);
   return true;
 }

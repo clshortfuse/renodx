@@ -1,0 +1,7 @@
+{
+  "id": "ac3original",
+  "title": "Assassin’s Creed® III Original",
+  "maintainers": ["Hartapfel"],
+  "compatibility": "working",
+  "urls": [{"kind": "nexus", "url": "https://www.nexusmods.com/assassinscreediii/mods/161"}]
+}

@@ -263,6 +263,7 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::pipeline_layout::Use(fdw_reason);
   renodx::utils::shader::Use(fdw_reason);
+  renodx::utils::state::use_snapshot = true;
   renodx::utils::state::Use(fdw_reason);
 
   switch (fdw_reason) {
