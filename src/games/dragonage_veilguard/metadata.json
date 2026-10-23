@@ -1,0 +1,16 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "dragonage_veilguard",
+  "title": "Dragon Age: The Veilguard",
+  "status": "experimental",
+  "summary": "Frostbite (D3D12) native HDR10. Replaces the final output pass (0x4564BB42) to tone map the HDR scene to the display peak with independent UI brightness. No swapchain upgrades.",
+  "deploy": {
+    "steam_appid": 1845910,
+    "game_exe": "Dragon Age The Veilguard.exe",
+    "process_name": "Dragon Age The Veilguard.exe",
+    "api": "d3d12",
+    "architecture": [
+      "x64"
+    ]
+  }
+}
