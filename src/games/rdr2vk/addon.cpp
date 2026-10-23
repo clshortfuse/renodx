@@ -36,21 +36,29 @@ bool OnSceneDraw(reshade::api::command_list* cmd_list) {
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x0C1275BE),
     CustomShaderEntryCallback(0x1FC46AC9, &OnSceneDraw),  // Final scene blit.
     CustomShaderEntryCallback(0x2B012EDD, &OnSceneDraw),  // Also runs offscreen during pause.
-    CustomShaderEntry(0x4205843B),
-    CustomShaderEntry(0x54F0BD84),
-    CustomShaderEntry(0x6B9382CA),
-    CustomShaderEntry(0x809F5852),
-    CustomShaderEntry(0x9B304112),
-    CustomShaderEntry(0x9F191B0B),
-    CustomShaderEntry(0xA2ED1CB7),
-    CustomShaderEntry(0xCD6F15F2),
-    CustomShaderEntry(0xCF7FE0D7),
-    CustomShaderEntry(0xDA9A5AA0),
-    CustomShaderEntry(0xDD04030E),
-    CustomShaderEntry(0xE3E0B5C4),
+
+    // Apply UI replacements only when writing to the backbuffer.
+    CustomSwapchainShader(0x071AB204),
+    CustomSwapchainShader(0x14BF23D4),
+    CustomSwapchainShader(0x1994C234),
+    CustomSwapchainShader(0x1B0D650C),
+    CustomSwapchainShader(0x250D4A71),
+    CustomSwapchainShader(0x26B3FAA9),
+    CustomSwapchainShader(0x2C748C70),
+    CustomSwapchainShader(0x76A78879),
+    CustomSwapchainShader(0x7BE28339),
+    CustomSwapchainShader(0x82DD0BD4),
+    CustomSwapchainShader(0x8B9C89F1),
+    CustomSwapchainShader(0x9FB1B729),
+    CustomSwapchainShader(0xB419118A),
+    CustomSwapchainShader(0xB7AB1DCE),
+    CustomSwapchainShader(0xC0BDBB14),
+    CustomSwapchainShader(0xF59D9A59),
+    CustomSwapchainShader(0xFCD82342),
+
+    __ALL_CUSTOM_SHADERS,
 };
 
 renodx::utils::settings::Settings settings = {
