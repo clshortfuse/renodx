@@ -13,6 +13,8 @@ The final pass composites the UI layer over the graded scene in linear light, ap
 | Vanilla | The original path, including the display-mapping LUT, accessibility and watermark blocks. |
 | None, ACES, RenoDRT | Tone maps the graded scene to Peak Brightness with Game Brightness as paper white, then composites the UI at UI Brightness. |
 
+The default Tone Mapper is RenoDRT (Peak Brightness 1000, Game Brightness 105), which tone maps to the display peak; **Preset Off restores Vanilla**. With Gamma Correction Off, measured midtones and shadows match the original (median 6.5 nits against 6.1 for Vanilla, same scene, HDR on) while highlights follow Peak Brightness.
+
 Settings are injected as `b13` in space 0 (`shared.h`). `addon.cpp` sets `expected_constant_buffer_index = 13` because the shader is SM5.0 DXBC; with the default index RenoDX would inject at the first free slot of each root signature and the shader would read zeros. The game's root signatures already have root constants, hence `allow_multiple_push_constants`.
 
 Keep **Gamma Correction** on Off: the scene is already linear HDR, so 2.2 darkens midtones and shadows.
