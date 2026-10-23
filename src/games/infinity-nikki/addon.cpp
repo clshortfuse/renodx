@@ -429,7 +429,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .aspect_ratio = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
           .usage_include = reshade::api::resource_usage::render_target,
           .name = "Infinity Nikki RGBA10 Resource Pool and Render",
-          .resource_tag = CUSTOM_RESOURCE_TAG_RENDER,
+          .resource_tag = CUSTOM_RESOURCE_TAG_RENDER
+      });
+
+      // I really hate Unreal Engine sometimes, for some reason it adds +2 pixels
+      // when outputting to my MacBook Pro notchless resolution (3024x1890)
+      // breaking the above aspect ratio detection.
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .dimensions = {.width = 3024, .height = 1892},
+          .usage_include = reshade::api::resource_usage::render_target,
+          .name = "Infinity Nikki RGBA10 Resource Pool and Render",
+          .resource_tag = CUSTOM_RESOURCE_TAG_RENDER
       });
 
       break;
