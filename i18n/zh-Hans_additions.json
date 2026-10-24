@@ -1,0 +1,19 @@
+{
+  "Build: ": "构建版本：",
+  "Clean UI Mode": "简洁界面模式",
+  "Hide the 72-index DX12 status draw and 6/12/36/18 UI draws (plus 24/30 in controller mode), independently of UID, ping, and location.": "独立于 UID、延迟与地点显示，隐藏索引 72 的 DX12 状态绘制以及索引 6/12/36/18 的界面绘制（手柄模式下另有 24/30）。",
+  "DX12: 0 hides UID, ping, and location draws; any positive value shows them. DX11 retains shader opacity.": "DX12 下 0 表示隐藏 UID、延迟和地点绘制，任意正值则显示它们；DX11 下则保留着色器自带的不透明度。",
+  "Lumen Improvements": "Lumen 增强",
+  "Ray Tracing": "光线追踪",
+  "Original: stock Lumen reflections and global illumination.\nImproved: reflections with temporal accumulation cap 32 and relaxed confidence, an 8-sample\nspatial filter and depth-coherent resolve reconstruction; GI that blends all four nearby screen\nprobes per pixel instead of picking one at random, with FAST blue noise for probe and GGX directions.\nThe GI blue noise switches on a game restart.": "原版：游戏自带的 Lumen 反射与全局光照。\n增强：反射使用上限 32 的时域累积与放宽的置信度、8 采样的空域滤波以及深度连贯的 resolve 重建；全局光照不再每像素随机挑选单个屏幕探针，而是将邻近的四个屏幕探针全部混合，并为探针与 GGX 方向使用 FAST 蓝噪声。\n全局光照蓝噪声的切换需重启游戏后生效。",
+  "Ambient Occlusion": "环境光遮蔽",
+  "Original: stock screen-space ambient occlusion.\nImproved: GT-VBAO (visibility bitmask) with finite occluder thickness,\nso thin objects no longer cast dark halos, plus multi-bounce AO (bright materials keep lighter\ncreases). Skips the stock lower-resolution SSAO passes it no longer uses.\nWorks with ray tracing on or off.": "原版：游戏自带的屏幕空间环境光遮蔽。\n增强：GT-VBAO（可见性位掩码）具备有限的遮挡体厚度，细小物体不再产生暗色光晕，并加入多次反弹 AO（明亮材质的折痕处更亮），同时跳过由此不再使用的低分辨率 SSAO 通道。\n开启或关闭光线追踪时均可工作。",
+  "Material Model": "材质模型",
+  "Original: stock Lambert diffuse and single-scattering GGX specular.\nImproved: energy-preserving Oren-Nayar (EON) diffuse for rough surfaces, with diffuse reduced by\nthe light the specular layer already reflects (OpenPBR layering), and GGX multi-scatter energy\ncompensation for rough specular, and specular occlusion on ambient reflections (view- and\nroughness-aware instead of plain AO). Default-lit materials only; characters and rect lights are unchanged.": "原版：游戏自带的 Lambert 漫反射与单次散射 GGX 高光。\n增强：粗糙表面使用能量守恒的 Oren-Nayar（EON）漫反射，漫反射会扣除高光层已反射的光量（OpenPBR 分层），对粗糙高光应用 GGX 多次散射能量补偿，并在环境反射上应用高光遮蔽（基于视角与粗糙度，而非普通 AO）。仅影响默认光照材质；角色与矩形光源保持不变。",
+  "Ray Traced Shadows": "光线追踪阴影",
+  "Original: stock ray traced shadows.\nImproved: shadow rays toward 4x larger light sources with a matching denoiser penumbra,\nso shadows soften with distance from the occluder (contact hardening).\nRequires a game restart.": "原版：游戏自带的光线追踪阴影。\n增强：阴影光线射向 4 倍大小的光源，并配合相应的降噪器半影，使阴影随远离遮挡体而逐渐变软（接触硬化）。\n需要重启游戏。",
+  "Original": "原版",
+  "Improved": "增强",
+  "Traces and dumps LUT shaders and DXR ray tracing libraries (renodx-dev\\dump_dxr).\nRequires a game restart.": "跟踪并转储 LUT 着色器与 DXR 光线追踪库（renodx-dev\\dump_dxr）。\n需要重启游戏。",
+  "Desaturates highlights as they approach white (dechroma).\nRamped over ~2.75 decades above the adaptive neutral on a smooth C2 curve.\n0 = off.": "高光越接近白色，饱和度越低（去色）。\n在自适应中性点以上约 2.75 个数量级的范围内，沿平滑的 C2 曲线渐变。\n0 表示关闭。"
+}
