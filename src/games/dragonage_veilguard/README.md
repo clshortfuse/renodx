@@ -54,11 +54,11 @@ Output: `build/Debug/renodx-dragonage_veilguard.addon64`. Copy it next to ReShad
 
 ## Manual verification
 
-- [ ] `ReShade.log` loads `RenoDX` and shows `cbvIndex:13` in `OnInitPipelineLayout`.
-- [ ] Tone Mapper "Vanilla" matches a vanilla screenshot of the same scene.
-- [ ] None, ACES and RenoDRT change the image; Peak Brightness moves the highlight peak.
-- [ ] With Gamma Correction Off, RenoDRT keeps vanilla midtones and shadows.
+- [x] `ReShade.log` loads `RenoDX` and shows `cbvIndex:13` in `OnInitPipelineLayout` (12 layouts).
+- [x] Tone Mapper "Vanilla" matches a vanilla screenshot of the same scene (main menu, three ReShade HDR screenshots each: median 3.48 to 3.50 against 3.46 to 3.50 nits, black p1 0.543 to 0.549 against 0.548 to 0.555; the menu is animated, so peaks vary between frames, 4.0 to 4.8k against 4.4 to 4.9k nits; not bit for bit).
+- [x] None, ACES and RenoDRT change the image; Peak Brightness moves the highlight peak.
+- [x] With Gamma Correction Off, RenoDRT keeps vanilla midtones and shadows.
 - [ ] HUD, subtitles and the ability wheel follow UI Brightness independently of Game Brightness.
 - [ ] Pre-rendered video and in-engine cinematics: no clipping.
 - [ ] DLSS, FSR, XeSS and TAA each use the replaced pass.
-- [ ] The mod works without the DevKit addon loaded.
+- [x] The mod works without the DevKit addon loaded (only `RenoDX` registered in `ReShade.log`; ACES peak 904 to 968 nits against about 4000 to 5000 for Vanilla).
