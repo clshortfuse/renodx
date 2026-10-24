@@ -103,9 +103,10 @@ float3 ApplyWatermark(float3 color, float2 pixel_yx) {
 }
 
 // `scene` is the graded scene, already multiplied by g_planeWeights.x (1.0 = 100 nits).
-float4 FinalPass(float2 uv, float3 scene) {
+// `with_ui` false gives the same picture without the UI composite (the HUD-less output frame generation reads).
+float4 FinalPass(float2 uv, float3 scene, bool with_ui) {
   const float4 ui = g_overlayTexture.SampleLevel(g_overlaySampler, uv, 0);  // premultiplied, sRGB-decoded by the view
-  const uint flags = g_dynamicBranchFlags;
+  const uint flags = g_dynamicBranchFlags & (with_ui ? 0xFFFFFFFFu : ~FLAG_UI_OVERLAY);
   const float2 pixel_yx = uv.yx * g_outputTexSize.yx;
 
   float3 output_nits;

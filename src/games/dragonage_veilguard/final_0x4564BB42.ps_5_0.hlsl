@@ -3,5 +3,5 @@
 #include "./common.hlsli"
 
 float4 main(float4 vpos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
-  return FinalPass(uv, max(0.f, g_mainTexture.SampleLevel(g_pointSampler, uv, 0).rgb * g_planeWeights.x));
+  return FinalPass(uv, max(0.f, g_mainTexture.SampleLevel(g_pointSampler, uv, 0).rgb * g_planeWeights.x), true);
 }
