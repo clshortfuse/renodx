@@ -21,13 +21,14 @@ Keep **Gamma Correction** on Off: the scene is already linear HDR, so 2.2 darken
 
 ## Shader variants
 
-The game has several variants of the final output pass (`ps_5_0`). The mod replaces the three that write HDR10 PQ:
+The game has several variants of the final output pass (`ps_5_0`). The mod replaces the four that write HDR10 PQ. The Render Scale slider decides whether the scene is read directly (100%) or resampled (below 100%), and DLSS Frame Generation decides whether the pass has one render target or two:
 
 | Hash | When | Scene input |
 |---|---|---|
 | `0x4564BB42` | Render scale 100% (DLSS, FSR, XeSS and no upscaler, seen in the main menu) | `r11g11b10_float`, read directly |
 | `0x3998EA61` | Render scale below 100% (seen with DLSS Ultra Performance at 66%) | `r10g10b10a2` with packed half-float bits, resampled with a 4x4 Lanczos filter |
-| `0x22E9F0A5` | Render scale below 100% with DLSS Frame Generation on (seen at 66%) | Same as `0x3998EA61`, with two render targets: the final image with the UI, and the same image without the UI (the HUD-less buffer frame generation reads). Both go through the mod's tone mapping |
+| `0x23DC66B2` | Render scale 100% with DLSS Frame Generation on | `r11g11b10_float`, read directly; two render targets, final image with the UI and the same image without it |
+| `0x22E9F0A5` | Render scale below 100% with DLSS Frame Generation on (seen at 66% and 88%) | Same as `0x3998EA61`, with two render targets: the final image with the UI, and the same image without the UI (the HUD-less buffer frame generation reads). Both go through the mod's tone mapping |
 
 All share the same tail (`common.hlsli`): UI composite, accessibility, display-mapping LUT, BT.2020 PQ and dither. Left untouched: the SDR variants (HDR off; `0x4E55D462` seen in the main menu) and three scRGB variants (`0xA0D84CD4`, `0xAA75CF5D`, `0xD45D81E7`) that were not drawn in any case tested. Seen in a DevKit snapshot of the main menu only; gameplay, photo mode, cinematics and pre-rendered video were not traced. With HDR off or an scRGB swapchain the game stays vanilla.
 

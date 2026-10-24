@@ -154,3 +154,17 @@ float4 FinalPass(float2 uv, float3 scene, bool with_ui) {
 
   return float4(max(pq, 0.f), 1.f);
 }
+
+// The variants the game uses with DLSS Frame Generation write two targets: the final image with the UI, and the same
+// picture without it (the HUD-less colour buffer frame generation reads). Both go through the same tone mapping.
+struct FinalOutputs {
+  float4 with_ui : SV_Target0;
+  float4 hud_less : SV_Target1;
+};
+
+FinalOutputs FinalPassWithHudLess(float2 uv, float3 scene) {
+  FinalOutputs outputs;
+  outputs.with_ui = FinalPass(uv, scene, true);
+  outputs.hud_less = FinalPass(uv, scene, false);
+  return outputs;
+}
