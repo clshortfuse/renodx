@@ -21,6 +21,7 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "5G"
       SCCACHE_C_CUSTOM_CACHE_BUSTER: "${{ github.workflow }}"
+      PYTHONIOENCODING: "utf-8"
 
     steps:
       - name: Checkout repository
@@ -54,6 +55,8 @@ jobs:
 
       - name: Package Release as CN
         shell: pwsh
+        env:
+          PYTHONIOENCODING: "utf-8"
         run: |
           New-Item -ItemType Directory -Force -Path output
           if (Test-Path "renodx-wutheringwaves.addon64") {

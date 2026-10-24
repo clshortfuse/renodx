@@ -29,6 +29,10 @@ import json
 import re
 import struct
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 ERRMSG = b"Failed to parse embedded zh-Hans translations."
 NEW_SECTION_NAME = b".zhdict"
