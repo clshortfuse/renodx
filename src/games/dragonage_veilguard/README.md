@@ -13,7 +13,7 @@ The final pass composites the UI layer over the graded scene in linear light, ap
 | Vanilla | The original path, including the display-mapping LUT, accessibility and watermark blocks. |
 | None, ACES, RenoDRT | Tone maps the graded scene to Peak Brightness with Game Brightness as paper white, then composites the UI at UI Brightness. |
 
-The default Tone Mapper is RenoDRT (Peak Brightness 1000, Game Brightness 105), which tone maps to the display peak; **Preset Off restores Vanilla**. With Gamma Correction Off, measured midtones and shadows match the original (median 6.5 nits against 6.1 for Vanilla, same scene, HDR on) while highlights follow Peak Brightness.
+The default Tone Mapper is ACES (Peak Brightness 1000, Game Brightness 105), which tone maps to the display peak with more contrast; **Preset Off restores Vanilla**. On a gray ramp, ACES maps 0.18 to the same 18.9 nits as Vanilla, but 0.01 to 0.11 nits (Vanilla 1.12) and 1.0 to 162 nits (Vanilla 104): deeper shadows and brighter highlights, so dark scenes lose median brightness (Minrathous at night, screenshots with the defaults: median 3.3 nits against 6.3 for RenoDRT and 6.1 for Vanilla, black floor p1 0.004 against 0.18). **RenoDRT** keeps the original look instead: with Gamma Correction Off, measured midtones and shadows match the original (median 6.5 nits against 6.1 for Vanilla, same scene, HDR on) while highlights follow Peak Brightness.
 
 Settings are injected as `b13` in space 0 (`shared.h`). `addon.cpp` sets `expected_constant_buffer_index = 13` because the shader is SM5.0 DXBC; with the default index RenoDX would inject at the first free slot of each root signature and the shader would read zeros. The game's root signatures already have root constants, hence `allow_multiple_push_constants`.
 
@@ -21,14 +21,15 @@ Keep **Gamma Correction** on Off: the scene is already linear HDR, so 2.2 darken
 
 ## Shader variants
 
-The game has several variants of the final output pass (`ps_5_0`). The mod replaces the two that write HDR10 PQ:
+The game has several variants of the final output pass (`ps_5_0`). The mod replaces the three that write HDR10 PQ:
 
 | Hash | When | Scene input |
 |---|---|---|
 | `0x4564BB42` | Render scale 100% (DLSS, FSR, XeSS and no upscaler, seen in the main menu) | `r11g11b10_float`, read directly |
 | `0x3998EA61` | Render scale below 100% (seen with DLSS Ultra Performance at 66%) | `r10g10b10a2` with packed half-float bits, resampled with a 4x4 Lanczos filter |
+| `0x22E9F0A5` | Render scale below 100% with DLSS Frame Generation on (seen at 66%) | Same as `0x3998EA61`, with two render targets: the final image with the UI, and the same image without the UI (the HUD-less buffer frame generation reads). Both go through the mod's tone mapping |
 
-Both share the same tail (`common.hlsli`): UI composite, accessibility, display-mapping LUT, BT.2020 PQ and dither. Left untouched: the SDR variants (HDR off; `0x4E55D462` seen in the main menu) and three scRGB variants (`0xA0D84CD4`, `0xAA75CF5D`, `0xD45D81E7`) that were not drawn in any case tested. Seen in a DevKit snapshot of the main menu only; gameplay, photo mode, cinematics and pre-rendered video were not traced. With HDR off or an scRGB swapchain the game stays vanilla.
+All share the same tail (`common.hlsli`): UI composite, accessibility, display-mapping LUT, BT.2020 PQ and dither. Left untouched: the SDR variants (HDR off; `0x4E55D462` seen in the main menu) and three scRGB variants (`0xA0D84CD4`, `0xAA75CF5D`, `0xD45D81E7`) that were not drawn in any case tested. Seen in a DevKit snapshot of the main menu only; gameplay, photo mode, cinematics and pre-rendered video were not traced. With HDR off or an scRGB swapchain the game stays vanilla.
 
 ## Observed pipeline (main menu, HDR on)
 
