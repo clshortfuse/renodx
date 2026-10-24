@@ -60,5 +60,5 @@ Output: `build/Debug/renodx-dragonage_veilguard.addon64`. Copy it next to ReShad
 - [x] With Gamma Correction Off, RenoDRT keeps vanilla midtones and shadows.
 - [ ] HUD, subtitles and the ability wheel follow UI Brightness independently of Game Brightness.
 - [ ] Pre-rendered video and in-engine cinematics: no clipping.
-- [ ] DLSS, FSR, XeSS and TAA each use the replaced pass. Not verified: switching the Upsample Method in the game's settings with the mod loaded ends in a GPU device-removed error (reproduced with and without the DevKit, with frame generation on and off, not without the mod). Choose the method before the mod loads, or restart after changing it.
+- [x] DLSS, FSR, XeSS and no upscaler each use a replaced pass (DevKit snapshots of the main menu; TAA is not an option in the game), and switching the Upsample Method in the game's settings between DLSS, XeSS, None and FSR works with the mod loaded. The mod does not inject into the compute root signatures with descriptor tables of three or more ranges that the game creates at the switch; injecting there ended in a GPU device-removed error.
 - [x] The mod works without the DevKit addon loaded (only `RenoDX` registered in `ReShade.log`; ACES peak 904 to 968 nits against about 4000 to 5000 for Vanilla).

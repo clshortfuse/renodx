@@ -322,6 +322,19 @@ BOOL WINAPI DllMain(HINSTANCE h_module, DWORD fdw_reason, LPVOID /*lp_reserved*/
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::expected_constant_buffer_space = 0;
       renodx::mods::shader::force_pipeline_cloning = true;
+      // Switching the Upsample Method makes the game create compute root signatures with descriptor tables of three
+      // or more ranges (upscaler passes). Injecting the settings buffer into those hangs the GPU (device removed), and
+      // they never draw the final pass, whose root signatures only have tables of up to two ranges.
+      renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device*, std::span<reshade::api::pipeline_layout_param> params) {
+        for (const auto& param : params) {
+          if ((param.type == reshade::api::pipeline_layout_param_type::descriptor_table
+               || param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers)
+              && param.descriptor_table.count > 2u) {
+            return false;
+          }
+        }
+        return true;
+      };
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
