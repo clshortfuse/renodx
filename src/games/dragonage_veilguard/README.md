@@ -19,6 +19,17 @@ Settings are injected as `b13` in space 0 (`shared.h`). `addon.cpp` sets `expect
 
 Keep **Gamma Correction** on Off: the scene is already linear HDR, so 2.2 darkens midtones and shadows.
 
+## Shader variants
+
+The game has several variants of the final output pass (`ps_5_0`). The mod replaces the two that write HDR10 PQ:
+
+| Hash | When | Scene input |
+|---|---|---|
+| `0x4564BB42` | Render scale 100% (DLSS, FSR, XeSS and no upscaler, seen in the main menu) | `r11g11b10_float`, read directly |
+| `0x3998EA61` | Render scale below 100% (seen with DLSS Ultra Performance at 66%) | `r10g10b10a2` with packed half-float bits, resampled with a 4x4 Lanczos filter |
+
+Both share the same tail (`common.hlsli`): UI composite, accessibility, display-mapping LUT, BT.2020 PQ and dither. Left untouched: the SDR variants (HDR off; `0x4E55D462` seen in the main menu) and three scRGB variants (`0xA0D84CD4`, `0xAA75CF5D`, `0xD45D81E7`) that were not drawn in any case tested. Seen in a DevKit snapshot of the main menu only; gameplay, photo mode, cinematics and pre-rendered video were not traced. With HDR off or an scRGB swapchain the game stays vanilla.
+
 ## Observed pipeline (main menu, HDR on)
 
 | Draw | PS | RTV | Role |
