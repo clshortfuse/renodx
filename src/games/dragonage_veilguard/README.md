@@ -58,7 +58,7 @@ Output: `build/Debug/renodx-dragonage_veilguard.addon64`. Copy it next to ReShad
 - [x] Tone Mapper "Vanilla" matches a vanilla screenshot of the same scene (main menu, three ReShade HDR screenshots each: median 3.48 to 3.50 against 3.46 to 3.50 nits, black p1 0.543 to 0.549 against 0.548 to 0.555; the menu is animated, so peaks vary between frames, 4.0 to 4.8k against 4.4 to 4.9k nits; not bit for bit).
 - [x] None, ACES and RenoDRT change the image; Peak Brightness moves the highlight peak.
 - [x] With Gamma Correction Off, RenoDRT keeps vanilla midtones and shadows.
-- [ ] HUD, subtitles and the ability wheel follow UI Brightness independently of Game Brightness.
+- [x] The HUD follows UI Brightness (Minrathous, quest text: p99 171 nits at UI Brightness 203 and 339 at 404, a 1.99 ratio for a 1.99 setting ratio). Subtitles and the ability wheel were not checked.
 - [ ] Pre-rendered video and in-engine cinematics: no clipping.
 - [x] DLSS, FSR, XeSS and no upscaler each use a replaced pass (DevKit snapshots of the main menu; TAA is not an option in the game), and switching the Upsample Method in the game's settings between DLSS, XeSS, None and FSR works with the mod loaded. The mod does not inject into the compute root signatures with descriptor tables of three or more ranges that the game creates at the switch; injecting there ended in a GPU device-removed error.
 - [x] The mod works without the DevKit addon loaded (only `RenoDX` registered in `ReShade.log`; ACES peak 904 to 968 nits against about 4000 to 5000 for Vanilla).
