@@ -2526,6 +2526,14 @@ inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resourc
 }
 
 inline void OnAfterDestroy() {
+  // Runs after every in-place view rewrite. MSVC std::set allocates its sentinel
+  // node on construction, so skip the swaps when nothing is queued.
+  if (pending_resource_view_clone_states.empty()
+      && pending_resource_destroys.empty()
+      && pending_resource_view_destroys.empty()) {
+    return;
+  }
+
   std::vector<uint64_t> resource_view_clone_states;
   std::set<PendingResourceDestroyKey> resource_destroys;
   std::set<PendingResourceViewDestroyKey> resource_view_destroys;
