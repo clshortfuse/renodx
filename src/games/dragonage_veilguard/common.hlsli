@@ -155,6 +155,12 @@ float4 FinalPass(float2 uv, float3 scene, bool with_ui) {
   return float4(max(pq, 0.f), 1.f);
 }
 
+// Unpack a scene texel from the r10g10b10a2 texture the game uses below 100% render scale: it holds the bits of half-float
+// values scaled to 0..1 (g_unpackFactors.y converts back to the bit pattern). Returns the scene, already multiplied by g_planeWeights.x.
+float3 UnpackScene(float3 packed) {
+  return max(0.f, f16tof32(uint3(saturate(packed) * g_unpackFactors.y)) * g_planeWeights.x);
+}
+
 // The variants the game uses with DLSS Frame Generation write two targets: the final image with the UI, and the same
 // picture without it (the HUD-less colour buffer frame generation reads). Both go through the same tone mapping.
 struct FinalOutputs {

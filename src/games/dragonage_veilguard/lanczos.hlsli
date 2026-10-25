@@ -32,7 +32,5 @@ float3 ResampleScene(float2 uv) {
     filtered += weights_y[row] * line_sum;
   }
 
-  // Unpack: the texture holds the bits of half-float values scaled to 0..1 (g_unpackFactors.y converts back to the bit pattern).
-  const float3 unpacked = f16tof32(uint3(saturate(filtered) * g_unpackFactors.y));
-  return max(0.f, unpacked * g_planeWeights.x);
+  return UnpackScene(filtered);
 }
