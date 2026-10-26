@@ -1,0 +1,19 @@
+{
+  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "id": "saintsrow2022",
+  "title": "Saints Row (2022)",
+  "summary": "RenoDX mod for Saints Row (2022).",
+  "notes": [
+    "Requires the DirectX 12 executable."
+  ],
+  "deploy": {
+    "game_exe": "SaintsRow_DX12.exe",
+    "process_name": "SaintsRow_DX12",
+    "api": "d3d12",
+    "steam_appid": 742420,
+    "architecture": [
+      "x64"
+    ],
+    "platform": "steam"
+  }
+}
