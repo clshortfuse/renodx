@@ -1,6 +1,6 @@
 # Red Dead Redemption 2
 
-Use Vulkan and **disable HDR in the game's settings**. When upgrading from the previous `rdr2vk`, **reset existing RenoDX presets**: tone mapper numbering and grading behavior have changed.
+Use Vulkan with **Windows HDR enabled** and **HDR disabled in the game's settings**. When upgrading from the previous `rdr2vk`, **reset existing RenoDX presets**: tone mapper numbering and grading behavior have changed.
 
 ## Tonemapping
 
@@ -15,7 +15,7 @@ The main scene variants use two hooks in `tonemap/tonemap.glsl`:
 |---|---|
 | **Vanilla / 0** | Keeps the original SDR curve and output clamp; bypasses custom final grading and grain. Output still uses the HDR10 proxy. |
 | **Vanilla+ / 1** | Extends the original curve above its inflection point with a matching tangent. After LUT processing, applies anchored tonal grading, finite-clip C-infinity rolloff, then anchored saturation grading. |
-| **PsychoV / 2** — default | Replaces the curve with an anchor-scaled scene signal, then decodes the game's sRGB-like encoding before applying a cuostomized version of PsychoV31. Input/output anchors and logarithmic contrast derive from the vanilla inflection value and slope. Baseline toe/contrast tuning approximates the vanilla gamma-2.2 display appearance with less shadow crush. |
+| **PsychoV / 2** — default | Replaces the curve with an anchor-scaled scene signal, then decodes the game's sRGB-like encoding before applying a customized version of PsychoV31. Input/output anchors and logarithmic contrast derive from the vanilla inflection value and slope. Baseline toe/contrast tuning approximates the vanilla gamma-2.2 display appearance with less shadow crush. |
 
 Vanilla+ grading and rolloff share the linear BT.709 anchor `0.07207985`. Its saturation controls operate in Stockman/CVRL LMS and preserve physiological Yf; highlight detection uses the color before tonal grading. PsychoV handles those controls internally. Both custom modes target `Peak Brightness / Game Brightness` with a finite shoulder clip of `100` in their respective working domains; this is not a final-output hard cap after saturation and effects.
 
@@ -44,3 +44,21 @@ The brightness helper and proxy use gamma 2.2 when SDR EOTF Emulation is enabled
 Map artwork and offscreen UI textures remain UI-relative. These captures establish steady-state paths, not every transition or photo-mode variant. There is no frame-wide "already scaled" latch.
 
 The scaling helper is in `output/brightness.glsl`; its callers are the scene blit and `tonemap/tm_pause_weapon_wheel_0x2B012EDD.frag.vk.glsl`. `shared.h` configures final output scaling. Its `RENODX_INTERMEDIATE_SCALING` macro does not run automatically in the thin proxy; the two scene hooks explicitly apply the ratio before `swap_chain_proxy_pixel_shader.frag.slang` calls `SwapChainPass()`.
+
+## Resource and proxy lifetime
+
+The NVIDIA-only R11G11B10-to-RGBA16F rule directly upgrades backbuffer-sized render textures. A separate RGBA16F backbuffer clone preserves the scene/UI composite until HDR10 encoding; this is not a clone of every scene texture. Automatic cloning and compatibility backbuffer copying remain disabled.
+
+`swapchain_proxy.hpp` owns one existing RenoDX proxy renderer per backbuffer and swapchain lifetime. It validates all backbuffers before pre-creating their clones during initialization, moving allocation and initial layout transitions out of first-use render-worker callbacks. The shared resource machinery still owns the clones. Presentation validates clone identity and ownership, with format and size checks on first acceptance; it adds no scene copy, queue wait, or clone-creation retry.
+
+Recreation replaces the pass state even when Vulkan reuses the swapchain object with `resize == false`. Retirement drains the recorded presentation queue outside local locks before destroying GPU pass objects. Clone initialization failure prevents publishing the new state; later clone or rendering failures are logged once per affected backbuffer and held until recreation. Errors go to `ReShade.log`; a failed output pass is not an SDR fallback.
+
+`resource_fixes.hpp` preserves deferred clone passes that end without a draw, including load-operation clears for black transition frames. This repair applies to builds targeting ReShade add-on API versions below 20, selected by the SDK headers at compile time rather than the installed runtime. It also converts supported mismatched Vulkan region copies involving direct upgrades when neither endpoint uses clone redirection; shared clone-copy handling remains unchanged. Conversion does not upgrade the destination or restore range lost to a lower-range format, and the fixes do not broaden resource-upgrade matching.
+
+### Verification
+
+- Close RDR2, build target `rdr2vk`, and inspect `build/Release/renodx-rdr2vk.addon64` for the Release configuration; do not rebuild a loaded addon.
+- Test repeated Alt-Tab out/back and minimize/restore in gameplay, pause, map, and menu/video, followed by resolution and fullscreen/borderless changes.
+- Toggle VSync in both directions, then change Reflex and buffering settings. Confirm rendering and unequal Game/UI Brightness remain correct after each recreation.
+- Verify sleeping/waking fades and loading-to-game transitions remain correct, without stale frames or flashes.
+- Check `ReShade.log` for `rdr2vk::swapchain_proxy` errors and watch memory across repeated identical transitions. Test first without DevKit/ReShade effects, then with the normal overlay stack; compilation alone does not verify runtime stability.
