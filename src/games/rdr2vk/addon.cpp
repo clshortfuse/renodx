@@ -20,11 +20,14 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/log.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
+#include "./resource_fixes.hpp"
 #include "./shared.h"
+#include "./swapchain_proxy.hpp"
 
 namespace {
 
@@ -340,9 +343,16 @@ void OnPresetOff() {
 }
 
 void OnInitDevice(reshade::api::device* device) {
+  if (device->get_api() != reshade::api::device_api::vulkan) return;
   std::uint32_t vendor_id = 0;
   // NVIDIA only: this format upgrade fails on AMD.
   if (!device->get_property(reshade::api::device_properties::vendor_id, &vendor_id) || vendor_id != 0x10de) return;
+
+  if (!device->check_format_support(reshade::api::format::r16g16b16a16_float,
+                                    reshade::api::resource_usage::render_target | reshade::api::resource_usage::shader_resource)) {
+    renodx::utils::log::w("rdr2vk: RGBA16F rendering/sampling is required for scene resource upgrades.");
+    return;
+  }
 
   std::array upgrade_infos = {
       renodx::utils::resource::ResourceUpgradeInfo{
@@ -351,7 +361,9 @@ void OnInitDevice(reshade::api::device* device) {
           .usage_include = reshade::api::resource_usage::render_target,
       },
   };
-  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
+  if (!renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos)) {
+    renodx::utils::log::e("rdr2vk: scene resource upgrades could not be installed.");
+  }
 }
 
 bool initialized = false;
@@ -364,6 +376,9 @@ extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     if (!reshade::register_addon(h_module)) return FALSE;
+
+    // End-pass repair must run before the shared callback discards pending clones.
+    rdr2vk::resource_fixes::Use(DLL_PROCESS_ATTACH);
 
     if (!initialized) {
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
@@ -385,6 +400,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       initialized = true;
     }
   } else if (fdw_reason == DLL_PROCESS_DETACH) {
+    // Stop our callbacks before shared swapchain/resource teardown.
+    rdr2vk::swapchain_proxy::Use(DLL_PROCESS_DETACH);
+    rdr2vk::resource_fixes::Use(DLL_PROCESS_DETACH);
     reshade::unregister_event<reshade::addon_event::init_device>(&OnInitDevice);
   }
 
@@ -395,6 +413,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   // Register after swapchain's callback so its defaults cannot overwrite the vendor-specific list.
   if (fdw_reason == DLL_PROCESS_ATTACH) {
+    // Replace only the stock proxy owner after the shared hooks are installed.
+    rdr2vk::swapchain_proxy::Use(DLL_PROCESS_ATTACH);
     reshade::register_event<reshade::addon_event::init_device>(&OnInitDevice);
   } else if (fdw_reason == DLL_PROCESS_DETACH) {
     reshade::unregister_addon(h_module);
