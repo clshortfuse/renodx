@@ -39,6 +39,42 @@ inline bool PinModule(const void* address) {
          && module != nullptr;
 }
 
+namespace internal {
+
+// HeapAlloc aligns to MEMORY_ALLOCATION_ALIGNMENT only: 8 bytes on x86, 16 on x64. Process-shared
+// objects can need more (gtl's parallel hash map submaps are 64-byte aligned), and the compiler
+// writes them with aligned SSE stores, so a block on an 8-byte boundary faults. On x86 such blocks
+// are over-allocated and aligned, with the HeapAlloc pointer stored just before them. x64 keeps the
+// plain HeapAlloc layout, which add-ons built before this rely on when they free shared objects.
+inline bool NeedsAlignedHeapBlock(size_t alignment) {
+#ifdef _WIN64
+  (void)alignment;
+  return false;
+#else
+  return alignment > MEMORY_ALLOCATION_ALIGNMENT;
+#endif
+}
+
+inline void* HeapAllocAligned(size_t size, size_t alignment, DWORD flags) {
+  if (!NeedsAlignedHeapBlock(alignment)) return ::HeapAlloc(::GetProcessHeap(), flags, size);
+  if (size > (std::numeric_limits<size_t>::max)() - alignment - sizeof(void*)) return nullptr;
+  void* block = ::HeapAlloc(::GetProcessHeap(), flags, size + alignment + sizeof(void*));
+  if (block == nullptr) return nullptr;
+  void* aligned = static_cast<std::byte*>(block) + sizeof(void*);
+  size_t space = size + alignment;
+  std::align(alignment, size, aligned, space);
+  static_cast<void**>(aligned)[-1] = block;
+  return aligned;
+}
+
+inline void HeapFreeAligned(void* storage, size_t alignment) {
+  if (storage == nullptr) return;
+  void* block = (NeedsAlignedHeapBlock(alignment) ? static_cast<void**>(storage)[-1] : storage);
+  ::HeapFree(::GetProcessHeap(), 0, block);
+}
+
+}  // namespace internal
+
 template <typename T>
 struct ProcessAllocator {
   using value_type = T;
@@ -55,7 +91,7 @@ struct ProcessAllocator {
       throw std::bad_array_new_length();
     }
 
-    auto* storage = static_cast<T*>(::HeapAlloc(::GetProcessHeap(), 0, count * sizeof(T)));
+    auto* storage = static_cast<T*>(internal::HeapAllocAligned(count * sizeof(T), alignof(T), 0));
     if (storage == nullptr) {
       throw std::bad_alloc();
     }
@@ -64,8 +100,7 @@ struct ProcessAllocator {
 
   void deallocate(T* storage, std::size_t count) noexcept {  // NOLINT(readability-identifier-naming)
     (void)count;
-    if (storage == nullptr) return;
-    ::HeapFree(::GetProcessHeap(), 0, storage);
+    internal::HeapFreeAligned(storage, alignof(T));
   }
 };
 
@@ -85,7 +120,7 @@ inline bool operator!=(const ProcessAllocator<T>& left, const ProcessAllocator<U
 
 template <typename T, typename... Args>
 inline T* CreateSharedObject(Args&&... args) {
-  auto* storage = static_cast<T*>(::HeapAlloc(::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(T)));
+  auto* storage = static_cast<T*>(internal::HeapAllocAligned(sizeof(T), alignof(T), HEAP_ZERO_MEMORY));
   assert(storage != nullptr);
   if (storage == nullptr) return nullptr;
 
@@ -97,7 +132,7 @@ inline void DeleteSharedObject(T* object) {
   if (object == nullptr) return;
 
   object->~T();
-  ::HeapFree(::GetProcessHeap(), 0, object);
+  internal::HeapFreeAligned(object, alignof(T));
 }
 
 template <typename T>
