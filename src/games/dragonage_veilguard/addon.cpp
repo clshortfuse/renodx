@@ -291,9 +291,13 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 105.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
+  renodx::utils::settings::UpdateSetting("ToneMapMethod", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
