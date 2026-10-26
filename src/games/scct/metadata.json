@@ -1,0 +1,16 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "scct",
+  "title": "Tom Clancy's Splinter Cell: Chaos Theory",
+  "maintainers": [
+    "boostedwarr"
+  ],
+  "status": "experimental",
+  "summary": "Adds HDR10 output with an SDR toggle, keeps highlights the game clipped, and adds Psycho-V and RenoDRT tone mapping with separate game and UI brightness.",
+  "deploy": {
+    "steam_appid": 13570,
+    "architecture": [
+      "x86"
+    ]
+  }
+}
