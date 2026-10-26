@@ -240,7 +240,7 @@ vec3 ApplyFinalToneMap(vec3 color, vec2 texcoord, float midgray_in, float midgra
                     : DivideSafe(encoded_midgray + 0.055 * (2.2 - 1.0) / (2.4 - 1.0), encoded_midgray, 1.0);
     vec3 grading_anchor_in = vec3(midgray_out);
     vec3 grading_anchor_out = vec3(pow(encoded_midgray, 2.2));
-    float flare = 0.1f * pow(0.64f, 10.f);
+    float flare = 0.1f * pow(0.73f, 10.f);
     float shadow_contrast = 60.f / 50.f;
     float highlight_contrast = 49.f / 50.f;
     linear_color = custom_psychotm_test31(
