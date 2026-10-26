@@ -142,9 +142,9 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Vanilla: the game's picture, clipped at white as in the original.\n"
                    "None: no highlight roll-off (clips at peak).\n"
                    "RenoDRT: highlights above white are kept and rolled off toward peak.\n"
-                   "Psycho-V: perceptual tone mapper (test30); keeps hue and purity as highlights compress.",
+                   "PsychoV-30: perceptual tone mapper; keeps hue and purity as highlights compress.",
         // Menu index -> type: framework type 2 (ACES) isn't offered.
-        .labels = {"Vanilla", "None", "RenoDRT", "Psycho-V"},
+        .labels = {"Vanilla", "None", "RenoDRT", "PsychoV-30"},
         .is_enabled = &IsHDR,
         .parse = [](float value) {
           if (value >= 3.f) return SCCT_TONE_MAP_TYPE_PSYCHO_V;
@@ -394,7 +394,8 @@ void UpdateOutput() {
   if (IsHDR()) {
     shader_injection.swap_chain_output_preset = (is_hdr10 ? SWAP_CHAIN_OUTPUT_PRESET_HDR10 : SWAP_CHAIN_OUTPUT_PRESET_NONE);
     shader_injection.tone_map_type = tone_map_type_setting->parse(tone_map_type_setting->GetValue());
-    shader_injection.peak_white_nits = peak_nits_setting->GetValue();
+    // Peak never below Game Brightness: the tone mappers can't map white to a lower peak.
+    shader_injection.peak_white_nits = (std::max)(peak_nits_setting->GetValue(), game_nits_setting->GetValue());
     shader_injection.diffuse_white_nits = game_nits_setting->GetValue();
     shader_injection.graphics_white_nits = ui_nits_setting->GetValue();
     shader_injection.gamma_correction = gamma_correction_setting->GetValue();

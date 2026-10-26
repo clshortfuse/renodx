@@ -93,6 +93,8 @@ cbuffer shader_injection : register(b13) {
 // Output: the HDR10 and SDR presets set their own encoding; scRGB uses no preset, so SwapChainPass
 // keeps its defaults (scRGB, BT.709, no clamp or gamut compression).
 
+#define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+
 #include "../../shaders/renodx.hlsl"
 
 #endif  // __cplusplus

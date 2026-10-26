@@ -49,6 +49,7 @@ float4 main(float4 texcoord : TEXCOORD0) : COLOR {
       }
       // Peak in Game Brightness units. With Gamma Correction 2.2, RenderIntermediatePass maps sRGB-decoded
       // values to 2.2-decoded ones, so the peak is pre-corrected the same way ToneMapPass does it.
+      // The add-on keeps it at 1 or more.
       float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
       if (RENODX_GAMMA_CORRECTION > 0.f) {
         peak = renodx::color::correct::Gamma(peak, true, 2.2f);
