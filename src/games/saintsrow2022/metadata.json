@@ -1,8 +1,11 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "saintsrow2022",
   "title": "Saints Row (2022)",
-  "summary": "RenoDX mod for Saints Row (2022).",
+  "maintainers": [
+    "DristoforColumb"
+  ],
+  "status": "stable",
   "notes": [
     "Requires the DirectX 12 executable."
   ],
