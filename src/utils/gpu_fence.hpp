@@ -14,7 +14,6 @@
 #include <windows.h>
 #include <winternl.h>
 
-
 // The KMT declarations require NTSTATUS from winternl.h first.
 #include <d3dkmthk.h>
 
@@ -36,6 +35,7 @@
 #include <shared_mutex>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <type_traits>
@@ -76,10 +76,11 @@ struct D3DKMTFence {
         reshade::log::message(reshade::log::level::error, "utils::gpu_fence KMT import requires open/destroy/GPU-wait exports");
         return;
       }
-      D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2 args{};
-      args.hNtHandle = handle;
-      args.hDevice = device;
-      args.Flags.NoGPUAccess = 1;
+      D3DKMT_OPENSYNCOBJECTFROMNTHANDLE2 args{
+          .hNtHandle = handle,
+          .hDevice = device,
+          .Flags = {.NoGPUAccess = 1},
+      };
       const auto import_status = open(&args);
       if (import_status >= 0) {
         object = args.hSyncObject;
@@ -105,11 +106,12 @@ struct D3DKMTFence {
     [[nodiscard]] bool EnqueueGPUWaitExternal(std::uint64_t target) const {
       if (binding_valid != nullptr && !binding_valid->load()) return false;
       if (object == 0) return false;
-      D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU args{};
-      args.hContext = context;
-      args.ObjectCount = 1;
-      args.ObjectHandleArray = &object;
-      args.MonitoredFenceValueArray = &target;
+      D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU args{
+          .hContext = context,
+          .ObjectCount = 1,
+          .ObjectHandleArray = &object,
+          .MonitoredFenceValueArray = &target,
+      };
       const auto primary_result = wait_gpu(&args);
       if (primary_result < 0) {
         reshade::log::message(reshade::log::level::error,
@@ -199,12 +201,17 @@ struct D3DKMTFence {
       reshade::log::message(reshade::log::level::error, "utils::gpu_fence KMT initialization requires create/destroy/GPU-signal exports");
       return false;
     }
-    D3DKMT_CREATESYNCHRONIZATIONOBJECT2 args{};
-    args.hDevice = producer_device;
-    args.Info.Type = D3DDDI_MONITORED_FENCE;
-    args.Info.Flags.NoGPUAccess = 1;
-    args.Info.Flags.Shared = 1;
-    args.Info.Flags.NtSecuritySharing = 1;
+    D3DKMT_CREATESYNCHRONIZATIONOBJECT2 args{
+        .hDevice = producer_device,
+        .Info = {
+            .Type = D3DDDI_MONITORED_FENCE,
+            .Flags = {
+                .Shared = 1,
+                .NtSecuritySharing = 1,
+                .NoGPUAccess = 1,
+            },
+        },
+    };
     const auto result = create(&args);
     if (result < 0) {
       reshade::log::message(reshade::log::level::error,
@@ -248,12 +255,13 @@ struct D3DKMTFence {
     const auto signal_context = [&monitored_value, target, &submitted](D3DKMTFence* producer) {
       assert(producer->fence != nullptr && producer->fence->object != 0 && target > producer->value);
       if (producer->fence == nullptr || producer->fence->object == 0 || target <= producer->value) return false;
-      D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal{};
-      signal.ObjectCount = 1;
-      signal.ObjectHandleArray = &producer->fence->object;
-      signal.BroadcastContextCount = 1;
-      signal.BroadcastContextArray = &producer->context;
-      signal.MonitoredFenceValueArray = &monitored_value;
+      D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal{
+          .ObjectCount = 1,
+          .ObjectHandleArray = &producer->fence->object,
+          .BroadcastContextCount = 1,
+          .BroadcastContextArray = &producer->context,
+          .MonitoredFenceValueArray = &monitored_value,
+      };
       const auto result = producer->signal_gpu(&signal);
       if (result < 0) {
         reshade::log::message(reshade::log::level::error,
@@ -270,11 +278,12 @@ struct D3DKMTFence {
     };
     for (const auto& joined : joined_contexts) {
       if (!signal_context(joined.get())) return false;
-      D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait{};
-      wait.hContext = context;
-      wait.ObjectCount = 1;
-      wait.ObjectHandleArray = &joined->fence->object;
-      wait.MonitoredFenceValueArray = &monitored_value;
+      D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait{
+          .hContext = context,
+          .ObjectCount = 1,
+          .ObjectHandleArray = &joined->fence->object,
+          .MonitoredFenceValueArray = &monitored_value,
+      };
       const auto result = wait_gpu(&wait);
       if (result < 0) {
         reshade::log::message(reshade::log::level::error,
@@ -333,11 +342,16 @@ struct D3D11Fence {
 
   [[nodiscard]] std::uint64_t QueueFence() {
     assert(context != nullptr);
-    if (context == nullptr || value >= std::numeric_limits<std::uint64_t>::max() - 2) return 0;
+    if (context == nullptr || value >= std::numeric_limits<std::uint64_t>::max() - 2) {
+      reshade::log::message(reshade::log::level::error, "utils::gpu_fence D3D11 missing context or exhausted timeline");
+      assert(false && "D3D11 signal requires a context and an available fence point");
+      return NO_SIGNAL;
+    }
     const auto result = context->Signal(fence.get(), value + 1);
     if (FAILED(result)) {
       reshade::log::message(reshade::log::level::error,
                             ("utils::gpu_fence D3D11 Signal HRESULT=" + std::to_string(result)).c_str());
+      assert(SUCCEEDED(result) && "D3D11 fence Signal failed");
       return 0;
     }
     return ++value;
@@ -363,7 +377,11 @@ struct D3D12Fence {
   }
 
   [[nodiscard]] std::uint64_t QueueFence(ID3D12CommandQueue* source) {
-    if (value >= std::numeric_limits<std::uint64_t>::max() - 2) return 0;
+    if (value >= std::numeric_limits<std::uint64_t>::max() - 2) {
+      reshade::log::message(reshade::log::level::error, "utils::gpu_fence D3D12 exhausted timeline");
+      assert(false && "D3D12 signal requires an available fence point");
+      return NO_SIGNAL;
+    }
     // Order signals without retaining a queue past its ReShade wrapper lifetime.
     // Waiting on the preceding signal is also valid on the same queue.
     if (value != 0) {
@@ -371,6 +389,7 @@ struct D3D12Fence {
       if (FAILED(result)) {
         reshade::log::message(reshade::log::level::error,
                               ("utils::gpu_fence D3D12 ordering Wait HRESULT=" + std::to_string(result)).c_str());
+        assert(SUCCEEDED(result) && "D3D12 fence ordering Wait failed");
         return 0;
       }
     }
@@ -378,44 +397,112 @@ struct D3D12Fence {
     if (FAILED(result)) {
       reshade::log::message(reshade::log::level::error,
                             ("utils::gpu_fence D3D12 Signal HRESULT=" + std::to_string(result)).c_str());
+      assert(SUCCEEDED(result) && "D3D12 fence Signal failed");
       return 0;
     }
     return ++value;
   }
 };
 
-struct OpenGLFence {
-  static const unsigned int SYNC_GPU_COMMANDS_COMPLETE = 0x9117;
-  static const unsigned int ALREADY_SIGNALED = 0x911A;
-  static const unsigned int TIMEOUT_EXPIRED = 0x911B;
-  static const unsigned int CONDITION_SATISFIED = 0x911C;
-
-  std::shared_mutex mutex;
-  // Construct/arm on the producer context. Retire outside ReShade WGL callbacks
-  // and DllMain, before the producer context/DC is released: hooked WGL calls
-  // acquire ReShade's global lock, so joining under that lock would deadlock.
-  struct Pending {
-    void* sync = nullptr;
-    std::uint64_t value = 0;
-  };
+struct OpenGLSemaphore {
+  // GL_EXT_semaphore_win32 names these tokens after D3D12, but compatible
+  // shared ID3D11Fence handles use the same import type and timeline parameter.
+  // Our D3D9Ex/D3D10 KMT path exports monitored fences as NT handles via
+  // D3DKMTShareObjects, not opaque KMT semaphore share handles.
+  static constexpr unsigned int HANDLE_TYPE_D3D12_FENCE = 0x9594;
+  static constexpr unsigned int D3D12_FENCE_VALUE = 0x9595;
+  unsigned int object = 0;
+  HGLRC context = nullptr;
   HDC dc = nullptr;
-  HGLRC producer = nullptr;
-  HGLRC worker_context = nullptr;
   decltype(&wglGetCurrentContext) get_current = nullptr;
   decltype(&wglGetCurrentDC) get_dc = nullptr;
   decltype(&wglMakeCurrent) make_current = nullptr;
-  decltype(&wglDeleteContext) delete_context = nullptr;
-  void*(APIENTRY* fence_sync)(unsigned int, unsigned int) = nullptr;
-  unsigned int(APIENTRY* client_wait)(void*, unsigned int, std::uint64_t) = nullptr;
-  void(APIENTRY* delete_sync)(void*) = nullptr;
-  std::condition_variable_any condition;
-  std::deque<Pending> pending;
-  bool ready = false;
-  bool failed = false;
-  std::atomic_bool stopping = false;
-  std::thread worker;
+  void(APIENTRY* delete_semaphores)(int, const unsigned int*) = nullptr;
+  void(APIENTRY* parameter)(unsigned int, unsigned int, const std::uint64_t*) = nullptr;
+  void(APIENTRY* signal)(unsigned int, unsigned int, const unsigned int*, unsigned int, const unsigned int*, const unsigned int*) = nullptr;
+  void(APIENTRY* wait)(unsigned int, unsigned int, const unsigned int*, unsigned int, const unsigned int*, const unsigned int*) = nullptr;
+
+  explicit OpenGLSemaphore(HANDLE handle) {
+    auto* module = GetModuleHandleW(L"opengl32.dll");
+    const auto get_proc = reinterpret_cast<decltype(&wglGetProcAddress)>(GetProcAddress(module, "wglGetProcAddress"));
+    get_current = reinterpret_cast<decltype(get_current)>(GetProcAddress(module, "wglGetCurrentContext"));
+    get_dc = reinterpret_cast<decltype(get_dc)>(GetProcAddress(module, "wglGetCurrentDC"));
+    make_current = reinterpret_cast<decltype(make_current)>(GetProcAddress(module, "wglMakeCurrent"));
+    if (get_proc == nullptr || get_current == nullptr || get_dc == nullptr || make_current == nullptr) {
+      throw std::runtime_error("OpenGL semaphore requires WGL and GL exports");
+    }
+    context = get_current();
+    dc = get_dc();
+    auto gen = reinterpret_cast<void(APIENTRY*)(int, unsigned int*)>(get_proc("glGenSemaphoresEXT"));
+    auto import = reinterpret_cast<void(APIENTRY*)(unsigned int, unsigned int, void*)>(get_proc("glImportSemaphoreWin32HandleEXT"));
+    delete_semaphores = reinterpret_cast<decltype(delete_semaphores)>(get_proc("glDeleteSemaphoresEXT"));
+    parameter = reinterpret_cast<decltype(parameter)>(get_proc("glSemaphoreParameterui64vEXT"));
+    signal = reinterpret_cast<decltype(signal)>(get_proc("glSignalSemaphoreEXT"));
+    wait = reinterpret_cast<decltype(wait)>(get_proc("glWaitSemaphoreEXT"));
+    const auto is_semaphore = reinterpret_cast<unsigned char(APIENTRY*)(unsigned int)>(get_proc("glIsSemaphoreEXT"));
+    const auto valid = [](auto proc) {
+      const auto address = reinterpret_cast<std::uintptr_t>(proc);
+      return address > 3 && address != std::numeric_limits<std::uintptr_t>::max();
+    };
+    if (context == nullptr || dc == nullptr || !valid(gen) || !valid(import) || !valid(delete_semaphores)
+        || !valid(parameter) || !valid(signal) || !valid(wait) || !valid(is_semaphore)) {
+      throw std::runtime_error("OpenGL shared fences require EXT_semaphore_win32");
+    }
+    gen(1, &object);
+    import(object, HANDLE_TYPE_D3D12_FENCE, handle);
+    if (object == 0 || is_semaphore(object) == 0) {
+      delete_semaphores(1, &object);
+      object = 0;
+      throw std::runtime_error("OpenGL D3D12 fence import did not create a semaphore");
+    }
+  }
+  ~OpenGLSemaphore() {
+    // Contexts/DCs are borrowed: retire GPU uses and destroy the fence before
+    // releasing them, with no other thread using these contexts. Rebinding
+    // must run outside ReShade WGL callbacks; destruction is never loader-safe.
+    auto* const previous_context = get_current();
+    if (previous_context == context) {
+      delete_semaphores(1, &object);
+      return;
+    }
+    auto* const previous_dc = get_dc();
+    if (make_current(dc, context) == FALSE) {
+      const auto error = GetLastError();
+      reshade::log::message(reshade::log::level::error,
+                            ("utils::gpu_fence GL import retirement bind failed, Win32 error=" + std::to_string(error)).c_str());
+      assert(false && "Could not bind GL import context for retirement");
+      return;
+    }
+    delete_semaphores(1, &object);
+    if (make_current(previous_dc, previous_context) == FALSE) {
+      const auto error = GetLastError();
+      reshade::log::message(reshade::log::level::error,
+                            ("utils::gpu_fence GL import retirement restore failed, Win32 error=" + std::to_string(error)).c_str());
+      assert(false && "Could not restore WGL binding after import retirement");
+    }
+  }
+
+  void Submit(bool signal_operation, std::uint64_t value) const {
+    assert(get_current() == context && "GL fence submission requires its owning context");
+    parameter(object, D3D12_FENCE_VALUE, &value);
+    if (signal_operation) {
+      signal(object, 0, nullptr, 0, nullptr, nullptr);
+    } else {
+      wait(object, 0, nullptr, 0, nullptr, nullptr);
+    }
+  }
+};
+
+struct OpenGLFence {
+  // The native fence owns its KMT device/adapter through binding_owner.
+  // Release the GL import first; CPU observation never requires a GL context.
+  std::shared_ptr<D3DKMTFence::Native> fence;
+  std::unique_ptr<OpenGLSemaphore> semaphore;
+  HDC dc = nullptr;
+  HGLRC producer = nullptr;
+  decltype(&wglGetCurrentContext) get_current = nullptr;
+  decltype(&wglGetCurrentDC) get_dc = nullptr;
   std::uint64_t value = 0;
-  std::atomic_uint64_t completed_value = 0;
 
   OpenGLFence() {
     auto* const module = GetModuleHandleW(L"opengl32.dll");
@@ -423,133 +510,106 @@ struct OpenGLFence {
     get_current = reinterpret_cast<decltype(get_current)>(GetProcAddress(module, "wglGetCurrentContext"));
     get_dc = reinterpret_cast<decltype(get_dc)>(GetProcAddress(module, "wglGetCurrentDC"));
     const auto get_proc = reinterpret_cast<decltype(&wglGetProcAddress)>(GetProcAddress(module, "wglGetProcAddress"));
-    make_current = reinterpret_cast<decltype(make_current)>(GetProcAddress(module, "wglMakeCurrent"));
-    delete_context = reinterpret_cast<decltype(delete_context)>(GetProcAddress(module, "wglDeleteContext"));
-    if (get_current == nullptr || get_dc == nullptr || get_proc == nullptr || make_current == nullptr || delete_context == nullptr) {
+    if (get_current == nullptr || get_dc == nullptr || get_proc == nullptr) {
       throw std::runtime_error("OpenGL fence requires WGL context exports");
     }
     producer = get_current();
     dc = get_dc();
     if (producer == nullptr || dc == nullptr) throw std::runtime_error("OpenGL fence requires a current producer context/DC");
-    fence_sync = reinterpret_cast<decltype(fence_sync)>(get_proc("glFenceSync"));
-    client_wait = reinterpret_cast<decltype(client_wait)>(get_proc("glClientWaitSync"));
-    delete_sync = reinterpret_cast<decltype(delete_sync)>(get_proc("glDeleteSync"));
-    const auto create = reinterpret_cast<HGLRC(WINAPI*)(HDC, HGLRC, const int*)>(get_proc("wglCreateContextAttribsARB"));
-    const auto valid_proc = [](auto proc) {
+    const auto get_integer = reinterpret_cast<void(APIENTRY*)(unsigned int, int*)>(GetProcAddress(module, "glGetIntegerv"));
+    const auto get_string = reinterpret_cast<const unsigned char*(APIENTRY*)(unsigned int, unsigned int)>(get_proc("glGetStringi"));
+    const auto get_bytes = reinterpret_cast<void(APIENTRY*)(unsigned int, unsigned char*)>(get_proc("glGetUnsignedBytevEXT"));
+    const auto valid = [](auto proc) {
       const auto address = reinterpret_cast<std::uintptr_t>(proc);
       return address > 3 && address != std::numeric_limits<std::uintptr_t>::max();
     };
-    if (!valid_proc(fence_sync) || !valid_proc(client_wait) || !valid_proc(delete_sync) || !valid_proc(create)) {
-      throw std::runtime_error("OpenGL fence requires GL sync and WGL context creation extensions");
+    if (!valid(get_bytes) || !valid(get_string) || get_integer == nullptr) {
+      throw std::runtime_error("OpenGL fence requires EXT external-object adapter identification");
     }
-    const int attributes[] = {0};
-    worker_context = create(dc, producer, attributes);
-    if (worker_context == nullptr) {
-      throw std::system_error(static_cast<int>(GetLastError()), std::system_category(), "Create OpenGL fence worker context");
+    int extension_count = 0;
+    get_integer(0x821D, &extension_count);  // GL_NUM_EXTENSIONS
+    bool supported = false;
+    for (int index = 0; index < extension_count; ++index) {
+      const auto* extension = get_string(0x1F03, static_cast<unsigned int>(index));  // GL_EXTENSIONS
+      if (extension != nullptr && std::string_view(reinterpret_cast<const char*>(extension)) == "GL_EXT_semaphore_win32") {
+        supported = true;
+        break;
+      }
     }
-    try {
-      worker = std::thread([this] {
-        const bool current = make_current(dc, worker_context) != FALSE;
-        if (!current) {
-          reshade::log::message(reshade::log::level::error, "utils::gpu_fence could not bind GL worker context");
-          assert(false && "Could not bind GL worker context");
-          std::unique_lock lock(mutex);
-          failed = true;
-          stopping.store(true);
-          return;
-        }
-        {
-          std::unique_lock lock(mutex);
-          ready = true;
-        }
-        for (;;) {
-          Pending registration;
-          {
-            std::unique_lock lock(mutex);
-            condition.wait(lock, [this] { return stopping.load() || !pending.empty(); });
-            if (pending.empty()) break;
-            registration = pending.front();
-            pending.pop_front();
+    if (!supported) throw std::runtime_error("OpenGL fence requires GL_EXT_semaphore_win32");
+    const auto load = [](const char* name) {
+      const auto proc = GetProcAddress(GetModuleHandleW(L"gdi32.dll"), name);
+      if (proc == nullptr) throw std::runtime_error(std::string("OpenGL fence requires ") + name);
+      return proc;
+    };
+    const auto require = [](NTSTATUS result, const char* operation) {
+      if (result < 0) {
+        reshade::log::message(reshade::log::level::error,
+                              (std::string("utils::gpu_fence ") + operation + " NTSTATUS=" + std::to_string(result)).c_str());
+        throw std::runtime_error(std::string(operation) + " NTSTATUS=" + std::to_string(result));
+      }
+    };
+    struct NativeDevice {
+      D3DKMT_HANDLE adapter = 0;
+      D3DKMT_HANDLE device = 0;
+      decltype(&D3DKMTDestroyDevice) destroy = nullptr;
+      decltype(&D3DKMTCloseAdapter) close = nullptr;
+      ~NativeDevice() {
+        if (device != 0) {
+          D3DKMT_DESTROYDEVICE args{.hDevice = device};
+          const auto result = destroy(&args);
+          if (result < 0) {
+            reshade::log::message(reshade::log::level::error,
+                                  ("utils::gpu_fence GL backing device destruction NTSTATUS=" + std::to_string(result)).c_str());
+            assert(false && "GL backing device destruction failed");
           }
-          while (!stopping.load()) {
-            // GPU wait returns immediately on completion; timeout only bounds
-            // shutdown observation. Never submit producer work from this worker.
-            const auto result = client_wait(registration.sync, 0, 100000000);
-            if (result == ALREADY_SIGNALED || result == CONDITION_SATISFIED) {
-              completed_value.store(registration.value);
-              break;
-            }
-            if (result != TIMEOUT_EXPIRED) {
-              reshade::log::message(reshade::log::level::error, "utils::gpu_fence glClientWaitSync failed");
-              assert(false && "glClientWaitSync failed");
-              std::unique_lock lock(mutex);
-              failed = true;
-              stopping.store(true);
-              break;
-            }
+        }
+        if (adapter != 0) {
+          D3DKMT_CLOSEADAPTER args{.hAdapter = adapter};
+          const auto result = close(&args);
+          if (result < 0) {
+            reshade::log::message(reshade::log::level::error,
+                                  ("utils::gpu_fence GL backing adapter close NTSTATUS=" + std::to_string(result)).c_str());
+            assert(false && "GL backing adapter close failed");
           }
-          // On stop/failure, drain sync objects without publishing completion.
-          delete_sync(registration.sync);
         }
-        if (make_current(nullptr, nullptr) == FALSE) {
-          reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL worker unbind failed");
-          assert(false && "GL worker unbind failed");
-        }
-      });
-    } catch (...) {
-      if (delete_context(worker_context) == FALSE) {
-        reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL context rollback failed");
-        assert(false && "GL context rollback failed");
       }
-      worker_context = nullptr;
-      throw;
+    };
+    auto owner = std::make_shared<NativeDevice>();
+    owner->destroy = reinterpret_cast<decltype(owner->destroy)>(load("D3DKMTDestroyDevice"));
+    owner->close = reinterpret_cast<decltype(owner->close)>(load("D3DKMTCloseAdapter"));
+    D3DKMT_OPENADAPTERFROMLUID adapter{};
+    get_bytes(0x9599, reinterpret_cast<unsigned char*>(&adapter.AdapterLuid));  // GL_DEVICE_LUID_EXT
+    require(reinterpret_cast<decltype(&D3DKMTOpenAdapterFromLuid)>(load("D3DKMTOpenAdapterFromLuid"))(&adapter), "GL backing open adapter");
+    owner->adapter = adapter.hAdapter;
+    D3DKMT_CREATEDEVICE device{.hAdapter = owner->adapter};
+    require(reinterpret_cast<decltype(&D3DKMTCreateDevice)>(load("D3DKMTCreateDevice"))(&device), "GL backing create device");
+    owner->device = device.hDevice;
+    fence = std::make_shared<D3DKMTFence::Native>();
+    fence->binding_owner = std::move(owner);
+    fence->destroy = reinterpret_cast<decltype(fence->destroy)>(load("D3DKMTDestroySynchronizationObject"));
+    D3DKMT_CREATESYNCHRONIZATIONOBJECT2 create{
+        .hDevice = device.hDevice,
+        .Info = {
+            .Type = D3DDDI_MONITORED_FENCE,
+            .Flags = {
+                .Shared = 1,
+                .NtSecuritySharing = 1,
+                .NoGPUAccess = 1,
+            },
+        },
+    };
+    require(reinterpret_cast<decltype(&D3DKMTCreateSynchronizationObject2)>(load("D3DKMTCreateSynchronizationObject2"))(&create), "GL backing create fence");
+    fence->object = create.hSyncObject;
+    fence->completed = static_cast<const volatile UINT64*>(create.Info.MonitoredFence.FenceValueCPUVirtualAddress);
+    if (fence->completed == nullptr || reinterpret_cast<std::uintptr_t>(fence->completed) % alignof(UINT64) != 0) {
+      throw std::runtime_error("GL backing returned an invalid CPU fence mapping");
     }
-  }
-  [[nodiscard]] std::uint64_t QueueFence() {
-    if (!worker.joinable() || stopping.load()
-        || value >= std::numeric_limits<std::uint64_t>::max() - 1) return {};
-    {
-      // Do not wait for WGL startup here: the caller may hold ReShade's WGL lock.
-      // No sync may be accepted until the worker has a context for its cleanup.
-      std::shared_lock lock(mutex);
-      if (!ready) return 0;
-    }
-    assert(get_current() == producer && get_dc() == dc);
-    if (get_current() != producer || get_dc() != dc) return {};
-    auto* sync = fence_sync(SYNC_GPU_COMMANDS_COMPLETE, 0);
-    if (sync == nullptr) return {};
-    try {
-      std::unique_lock lock(mutex);
-      if (stopping.load()) {
-        lock.unlock();
-        delete_sync(sync);
-        return 0;
-      }
-      pending.push_back(Pending{.sync = sync, .value = value + 1});
-    } catch (...) {
-      delete_sync(sync);
-      throw;
-    }
-    ++value;
-    condition.notify_one();
-    return value;
-  }
-
-  ~OpenGLFence() {
-    {
-      std::unique_lock lock(mutex);
-      stopping.store(true);
-    }
-    condition.notify_one();
-    if (worker.joinable()) {
-      worker.join();
-    }
-    if (worker_context != nullptr) {
-      if (delete_context(worker_context) == FALSE) {
-        reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL context destruction failed");
-        assert(false && "GL context destruction failed");
-      }
-    }
+    OBJECT_ATTRIBUTES attributes{.Length = sizeof(OBJECT_ATTRIBUTES)};
+    HANDLE handle = nullptr;
+    require(reinterpret_cast<decltype(&D3DKMTShareObjects)>(load("D3DKMTShareObjects"))(1, &fence->object, &attributes, GENERIC_ALL, &handle), "GL backing share fence");
+    const std::unique_ptr<void, decltype([](HANDLE owned) { CloseHandle(owned); })> owned_handle(handle);
+    semaphore = std::make_unique<OpenGLSemaphore>(owned_handle.get());
   }
 };
 
@@ -850,8 +910,7 @@ class Fence {
                     }
                   })>
       shared_handle;
-  std::variant<std::monostate,
-               std::unique_ptr<internal::D3DKMTFence>,
+  std::variant<std::unique_ptr<internal::D3DKMTFence>,
                std::unique_ptr<internal::D3D11Fence>,
                std::unique_ptr<internal::D3D12Fence>,
                std::unique_ptr<internal::OpenGLFence>,
@@ -865,6 +924,9 @@ class Fence {
                                    std::shared_ptr<ID3D12Fence>>>
       imports_by_device;
   reshade::api::device* api_device = nullptr;
+  // A ReShade GL device can own several queues/contexts. Each import belongs to
+  // the exact queue context, including when those contexts share GL objects.
+  std::map<HGLRC, std::unique_ptr<internal::OpenGLSemaphore>> imports_by_gl_context;
 
   struct CallbackDelivery {
     std::shared_mutex mutex;
@@ -976,6 +1038,10 @@ class Fence {
 
   // Retire outside DllMain, before addon unload. Cancellation does not retire GPU work.
   // A callback may not destroy its own fence or race other users of the fence.
+  // GL contexts/DCs must remain alive and available to this thread until destruction
+  // returns. Imports bind their owning contexts internally and restore the caller's
+  // ReShade-tracked wglMakeCurrent binding. Under a WGL callback, all imports must
+  // already belong to the current context: cross-context rebinding is not safe.
   ~Fence() {
     if (callback_delivery != nullptr) {
       // Cancel CPU delivery; the caller is responsible for retiring GPU work.
@@ -999,13 +1065,7 @@ class Fence {
   [[nodiscard]] std::uint64_t GetCompletedValue() const {
     return std::visit([&](const auto& implementation) -> std::uint64_t {
       std::uint64_t completed = 0;
-      if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::monostate>) {
-        throw std::runtime_error("Uninitialized fence");
-      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::OpenGLFence>>) {
-        std::shared_lock lock(implementation->mutex);
-        if (implementation->failed) throw std::runtime_error("OpenGL fence completion observation failed");
-        completed = implementation->completed_value.load();
-      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
+      if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
         if (implementation->native == nullptr) throw std::runtime_error("Invalid fence");
         completed = implementation->native->device->get_completed_fence_value(implementation->native->fence);
       } else {
@@ -1020,11 +1080,7 @@ class Fence {
   [[nodiscard]] bool IsBusy() const {
     const auto completed = GetCompletedValue();
     return std::visit([completed](const auto& implementation) {
-      if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::monostate>) {
-        return false;
-      } else {
-        return completed < implementation->value;
-      }
+      return completed < implementation->value;
     },
                       backend);
   }
@@ -1039,9 +1095,9 @@ class Fence {
 // Backend completion values are preserved, including UINT64_MAX. Callbacks are
 // threshold notifications, not a guarantee of successful GPU execution.
 // Callback exceptions are logged and asserted; NDEBUG builds continue later callbacks.
-// Query exceptions stop delivery; submission exceptions propagate. GL worker failure
-// throws on completion queries rather than reporting retirement. GL submissions are
-// rejected until asynchronous worker startup succeeds; no GPU point is accepted then.
+// Query exceptions stop delivery; submission exceptions propagate. GL signals its
+// imported monitored fence on the application context; completion queries and CPU
+// callback delivery use the native mapping without binding or creating GL contexts.
 template <QueueSubmitter Submitter>
 [[nodiscard]] std::uint64_t QueueSignal(Submitter* source, Fence* fence, std::function<void()> callback) {
   if (source == nullptr || fence == nullptr) throw std::invalid_argument("QueueSignal requires a source and fence");
@@ -1059,7 +1115,7 @@ template <QueueSubmitter Submitter>
         if (FAILED(reinterpret_cast<IUnknown*>(source->get_native())->QueryInterface(IID_PPV_ARGS(&device)))) {
           throw std::invalid_argument("D3D9 submission requires D3D9Ex");
         }
-        const std::shared_ptr<IDirect3DDevice9Ex> owned(device, [](auto* native) { native->Release(); });
+        const std::unique_ptr<IDirect3DDevice9Ex, decltype([](IDirect3DDevice9Ex* native) { native->Release(); })> owned(device);
         return QueueSignal(owned.get(), fence, std::move(callback));
       }
       case reshade::api::device_api::d3d10:
@@ -1072,7 +1128,11 @@ template <QueueSubmitter Submitter>
         if (fence->api_device != source->get_device()) throw std::invalid_argument("Fence belongs to another device");
         if (auto* implementation = std::get_if<std::unique_ptr<internal::ReShadeFence>>(&fence->backend)) {
           if ((*implementation)->queue != source && (*implementation)->value != NO_SIGNAL
-              && !source->wait((*implementation)->native->fence, (*implementation)->value)) return NO_SIGNAL;
+              && !source->wait((*implementation)->native->fence, (*implementation)->value)) {
+            reshade::log::message(reshade::log::level::error, "utils::gpu_fence Vulkan queue-switch ordering wait failed");
+            assert(false && "Vulkan queue-switch ordering wait failed");
+            return NO_SIGNAL;
+          }
           (*implementation)->queue = source;
         }
         break;
@@ -1086,13 +1146,40 @@ template <QueueSubmitter Submitter>
     const bool matches = std::visit([&](auto& implementation) {
       if constexpr (std::is_same_v<Submitter, ID3D12CommandQueue>) {
         if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
+#ifndef NDEBUG
+          // Explicit GetNext contracts, not private-data markers: Streamline's
+          // StreamlineRetrieveBaseInterface and ReShade's retrieval interface.
+          // See sl.interposer/d3d12/d3d12Device.cpp and ReShade d3d12_device.cpp.
+          const auto unwrap = [&](ID3D12Device* device) {
+            std::unique_ptr<ID3D12Device, decltype([](ID3D12Device* owned) { owned->Release(); })> owned(device);
+            constexpr GUID retrievals[]{
+                {0xADEC44E2, 0x61F0, 0x45C3, {0xAD, 0x9F, 0x1B, 0x37, 0x37, 0x92, 0x84, 0xFF}},
+                {0x7F2C9A11, 0x3B4E, 0x4D6A, {0x81, 0x2F, 0x5E, 0x9C, 0xD3, 0x7A, 0x1B, 0x42}},
+            };
+            for (;;) {
+              bool unwrapped = false;
+              for (const auto& retrieval : retrievals) {
+                ID3D12Device* next = nullptr;
+                const auto result = owned->QueryInterface(retrieval, reinterpret_cast<void**>(&next));
+                if (result == E_NOINTERFACE) continue;
+                require_query(result, "D3D12 device unwrap QueryInterface");
+                assert(next != nullptr && next != owned.get() && "Device retrieval must advance to its downstream interface");
+                owned.reset(next);
+                unwrapped = true;
+                break;
+              }
+              if (!unwrapped) return owned;
+            }
+          };
           ID3D12Device* device = nullptr;
           require_query(implementation->fence->GetDevice(IID_PPV_ARGS(&device)), "D3D12 source fence GetDevice");
-          const std::shared_ptr<ID3D12Device> owned(device, [](auto* native) { native->Release(); });
+          const auto owned = unwrap(device);
           ID3D12Device* queue_device = nullptr;
           require_query(source->GetDevice(IID_PPV_ARGS(&queue_device)), "D3D12 source queue GetDevice");
-          const std::shared_ptr<ID3D12Device> owned_queue_device(queue_device, [](auto* native) { native->Release(); });
-          return device == queue_device;
+          const auto owned_queue_device = unwrap(queue_device);
+          assert(owned.get() == owned_queue_device.get() && "D3D12 signal queue and fence must belong to the same device");
+#endif
+          return true;
         } else {
           return false;
         }
@@ -1113,131 +1200,138 @@ template <QueueSubmitter Submitter>
     if (!matches) throw std::invalid_argument("QueueSignal source does not own this fence timeline");
   }
   return std::visit([&](auto& implementation) -> std::uint64_t {
-    if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::monostate>) {
-      reshade::log::message(reshade::log::level::error, "utils::gpu_fence uninitialized signal backend");
-      assert(false && "Uninitialized fence backend");
-      return NO_SIGNAL;
-    } else {
-      std::unique_lock<std::shared_mutex> delivery_lock;
-      bool callback_reserved = false;
-      std::uint64_t completion = NO_SIGNAL;
+    std::unique_lock<std::shared_mutex> delivery_lock;
+    bool callback_reserved = false;
+    std::uint64_t completion = NO_SIGNAL;
 
-      // Prepare delivery before accepting GPU work. Allocation failures must
-      // not leave a submitted point without its requested callback.
-      try {
-        if (callback) {
-          if (fence->callback_delivery == nullptr) {
-            fence->callback_delivery = std::make_shared<Fence::CallbackDelivery>();
-          }
-          if (!fence->callback_delivery->worker.joinable()) {
-            fence->callback_delivery->worker = std::thread([fence, delivery = fence->callback_delivery]() {
-              try {
-                std::unique_lock lock(delivery->mutex);
-                while (true) {
-                  delivery->condition.wait(lock, [delivery]() {
-                    return delivery->stopping || !delivery->pending.empty();
+    // Prepare delivery before accepting GPU work. Allocation failures must
+    // not leave a submitted point without its requested callback.
+    try {
+      if (callback) {
+        if (fence->callback_delivery == nullptr) {
+          fence->callback_delivery = std::make_shared<Fence::CallbackDelivery>();
+        }
+        if (!fence->callback_delivery->worker.joinable()) {
+          fence->callback_delivery->worker = std::thread([fence, delivery = fence->callback_delivery]() {
+            try {
+              std::unique_lock lock(delivery->mutex);
+              while (true) {
+                delivery->condition.wait(lock, [delivery]() {
+                  return delivery->stopping || !delivery->pending.empty();
+                });
+                if (delivery->stopping) return;
+                if (fence->GetCompletedValue() < delivery->pending.front().value) {
+                  delivery->condition.wait_for(lock, std::chrono::milliseconds(1), [delivery]() {
+                    return delivery->stopping;
                   });
-                  if (delivery->stopping) return;
-                  if (fence->GetCompletedValue() < delivery->pending.front().value) {
-                    delivery->condition.wait_for(lock, std::chrono::milliseconds(1), [delivery]() {
-                      return delivery->stopping;
-                    });
-                    continue;
-                  }
-                  auto completed_callback = std::move(delivery->pending.front().callback);
-                  delivery->pending.pop_front();
-                  lock.unlock();
-
-                  // Both invocation and capture destruction run outside the lock.
-                  try {
-                    completed_callback();
-                  } catch (const std::exception& error) {
-                    reshade::log::message(reshade::log::level::error, error.what());
-                    assert(false && "Fence callback must not throw");
-                  } catch (...) {
-                    reshade::log::message(reshade::log::level::error, "utils::gpu_fence CPU callback threw");
-                    assert(false && "Fence callback must not throw");
-                  }
-                  completed_callback = {};
-                  lock.lock();
+                  continue;
                 }
-              } catch (...) {
-                reshade::log::message(reshade::log::level::error, "utils::gpu_fence completion delivery worker threw");
-                assert(false && "Fence callback delivery failed");
-                // Stop CPU delivery; this does not establish GPU retirement.
-                std::unique_lock lock(delivery->mutex);
-                delivery->stopping = true;
-              }
-            });
-          }
-        }
-        if (fence->callback_delivery != nullptr) {
-          delivery_lock = std::unique_lock(fence->callback_delivery->mutex);
-          if (fence->callback_delivery->stopping) {
-            reshade::log::message(reshade::log::level::error, "utils::gpu_fence callback delivery has stopped");
-            return NO_SIGNAL;
-          }
-          if (callback) {
-            // Allocate before submission; the worker cannot observe this entry
-            // until its actual fence point has been assigned below.
-            fence->callback_delivery->pending.push_back({.value = NO_SIGNAL});
-            fence->callback_delivery->pending.back().callback = std::move(callback);
-            callback_reserved = true;
-          }
-        }
+                auto completed_callback = std::move(delivery->pending.front().callback);
+                delivery->pending.pop_front();
+                lock.unlock();
 
-        // Submit with the reservation hidden from the delivery worker.
-        if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>
-                      && std::is_same_v<Submitter, ID3D12CommandQueue>) {
-          completion = implementation->QueueFence(source);
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
-          throw std::invalid_argument("D3D12 fence requires a D3D12 submission queue");
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
-          // ReShade owns Vulkan submission, including its immediate-list flush.
-          if (implementation->value < std::numeric_limits<std::uint64_t>::max() - 1
-              && implementation->queue->signal(implementation->native->fence, implementation->value + 1)) {
-            completion = ++implementation->value;
-          }
-        } else {
-          completion = implementation->QueueFence();
+                // Both invocation and capture destruction run outside the lock.
+                try {
+                  completed_callback();
+                } catch (const std::exception& error) {
+                  reshade::log::message(reshade::log::level::error, error.what());
+                  assert(false && "Fence callback must not throw");
+                } catch (...) {
+                  reshade::log::message(reshade::log::level::error, "utils::gpu_fence CPU callback threw");
+                  assert(false && "Fence callback must not throw");
+                }
+                completed_callback = {};
+                lock.lock();
+              }
+            } catch (...) {
+              reshade::log::message(reshade::log::level::error, "utils::gpu_fence completion delivery worker threw");
+              assert(false && "Fence callback delivery failed");
+              // Stop CPU delivery; this does not establish GPU retirement.
+              std::unique_lock lock(delivery->mutex);
+              delivery->stopping = true;
+            }
+          });
         }
-      } catch (...) {
-        reshade::log::message(reshade::log::level::error,
-                              "utils::gpu_fence signal or required retirement tracking threw");
-        assert(false && "Fence signal or required retirement tracking threw");
-        // Roll back only this reservation, preserving earlier callbacks.
-        // Move captures out so unwinding destroys them after unlocking.
-        if (callback_reserved) {
-          callback = std::move(fence->callback_delivery->pending.back().callback);
-          fence->callback_delivery->pending.pop_back();
+      }
+      if (fence->callback_delivery != nullptr) {
+        delivery_lock = std::unique_lock(fence->callback_delivery->mutex);
+        if (fence->callback_delivery->stopping) {
+          reshade::log::message(reshade::log::level::error, "utils::gpu_fence callback delivery has stopped");
+          return NO_SIGNAL;
         }
-        if (delivery_lock.owns_lock()) {
-          delivery_lock.unlock();
+        if (callback) {
+          // Allocate before submission; the worker cannot observe this entry
+          // until its actual fence point has been assigned below.
+          fence->callback_delivery->pending.push_back({.value = NO_SIGNAL});
+          fence->callback_delivery->pending.back().callback = std::move(callback);
+          callback_reserved = true;
         }
-        throw;
       }
 
-      // Commit the accepted point, or withdraw a rejected submission's callback.
-      if (callback_reserved) {
-        if (completion != NO_SIGNAL) {
-          fence->callback_delivery->pending.back().value = completion;
-        } else {
-          callback = std::move(fence->callback_delivery->pending.back().callback);
-          fence->callback_delivery->pending.pop_back();
+      // Submit with the reservation hidden from the delivery worker.
+      if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>
+                    && std::is_same_v<Submitter, ID3D12CommandQueue>) {
+        completion = implementation->QueueFence(source);
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
+        throw std::invalid_argument("D3D12 fence requires a D3D12 submission queue");
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::ReShadeFence>>) {
+        // ReShade owns Vulkan submission, including its immediate-list flush.
+        if (implementation->value < std::numeric_limits<std::uint64_t>::max() - 1
+            && implementation->queue->signal(implementation->native->fence, implementation->value + 1)) {
+          completion = ++implementation->value;
         }
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::OpenGLFence>>) {
+        auto* gl = implementation.get();
+        assert(gl->get_current() == gl->producer && gl->get_dc() == gl->dc);
+        if (gl->get_current() != gl->producer || gl->get_dc() != gl->dc) {
+          throw std::invalid_argument("GL signal requires its producer context/DC");
+        }
+        if (gl->value >= std::numeric_limits<std::uint64_t>::max() - 1) {
+          reshade::log::message(reshade::log::level::error, "utils::gpu_fence GL timeline exhausted");
+        } else {
+          // SignalSemaphoreEXT implicitly flushes the producer stream.
+          gl->semaphore->Submit(true, gl->value + 1);
+          completion = ++gl->value;
+        }
+      } else {
+        completion = implementation->QueueFence();
+      }
+    } catch (...) {
+      reshade::log::message(reshade::log::level::error,
+                            "utils::gpu_fence signal or required retirement tracking threw");
+      assert(false && "Fence signal or required retirement tracking threw");
+      // Roll back only this reservation, preserving earlier callbacks.
+      // Move captures out so unwinding destroys them after unlocking.
+      if (callback_reserved) {
+        callback = std::move(fence->callback_delivery->pending.back().callback);
+        fence->callback_delivery->pending.pop_back();
       }
       if (delivery_lock.owns_lock()) {
         delivery_lock.unlock();
       }
-      if (completion == NO_SIGNAL) {
-        reshade::log::message(reshade::log::level::error, "utils::gpu_fence backend signal failed");
-        return NO_SIGNAL;
-      }
-      if (fence->callback_delivery != nullptr) {
-        fence->callback_delivery->condition.notify_one();
-      }
-      return completion;
+      throw;
     }
+
+    // Commit the accepted point, or withdraw a rejected submission's callback.
+    if (callback_reserved) {
+      if (completion != NO_SIGNAL) {
+        fence->callback_delivery->pending.back().value = completion;
+      } else {
+        callback = std::move(fence->callback_delivery->pending.back().callback);
+        fence->callback_delivery->pending.pop_back();
+      }
+    }
+    if (delivery_lock.owns_lock()) {
+      delivery_lock.unlock();
+    }
+    if (completion == NO_SIGNAL) {
+      reshade::log::message(reshade::log::level::error, "utils::gpu_fence backend signal failed");
+      return NO_SIGNAL;
+    }
+    if (fence->callback_delivery != nullptr) {
+      fence->callback_delivery->condition.notify_one();
+    }
+    return completion;
   },
                     fence->backend);
 }
@@ -1249,6 +1343,14 @@ template <QueueSubmitter Submitter>
 
 // Enqueues a GPU dependency without blocking the CPU. False means setup or
 // submission failed; callers must not submit dependent work after rejection.
+// GL timelines are native monitored fences from construction. Export does not
+// require the producer context current; GL consumers import on their own context.
+// GL waits require the destination queue's context current. Retire GPU uses and
+// destroy the fence before its importing contexts/DCs; destruction binds those
+// contexts internally, so they must not be current on another thread. Serialize
+// setup with submission, retirement and completion observation.
+// Vulkan-local fences use ReShade for same-device GPU waits. Cross-device and
+// cross-API Vulkan interoperability is not implemented and returns false.
 template <QueueSubmitter Submitter>
 [[nodiscard]] bool QueueWait(Submitter* destination, Fence* fence, std::uint64_t value) {
   if (destination == nullptr || fence == nullptr) {
@@ -1258,15 +1360,50 @@ template <QueueSubmitter Submitter>
     if (FAILED(result)) {
       reshade::log::message(reshade::log::level::error,
                             (std::string("utils::gpu_fence ") + operation + " HRESULT=" + std::to_string(result)).c_str());
+      assert(false && "Required GPU fence wait operation failed");
     }
     return SUCCEEDED(result);
+  };
+  const auto export_handle = [&]() {
+    if (fence->shared_handle != nullptr) return true;
+    HANDLE handle = nullptr;
+    const bool exported = std::visit([&](const auto& implementation) -> bool {
+      if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
+        ID3D12Device* device = nullptr;
+        if (!succeeded(implementation->fence->GetDevice(IID_PPV_ARGS(&device)), "Fence export GetDevice")) return false;
+        const std::shared_ptr<ID3D12Device> owned(device, [](auto* native) { native->Release(); });
+        return succeeded(device->CreateSharedHandle(implementation->fence.get(), nullptr, GENERIC_ALL, nullptr, &handle),
+                         "Fence export CreateSharedHandle");
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D11Fence>>) {
+        return succeeded(implementation->fence->CreateSharedHandle(nullptr, GENERIC_ALL, nullptr, &handle), "D3D11 CreateSharedHandle");
+      } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3DKMTFence>>
+                           || std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::OpenGLFence>>) {
+        const auto share = reinterpret_cast<decltype(&D3DKMTShareObjects)>(
+            GetProcAddress(GetModuleHandleW(L"gdi32.dll"), "D3DKMTShareObjects"));
+        if (share == nullptr) return false;
+        OBJECT_ATTRIBUTES attributes{.Length = sizeof(OBJECT_ATTRIBUTES)};
+        const auto result = share(1, &implementation->fence->object, &attributes, GENERIC_ALL, &handle);
+        if (result < 0) {
+          reshade::log::message(reshade::log::level::error,
+                                ("utils::gpu_fence KMT share NTSTATUS=" + std::to_string(result)).c_str());
+          return false;
+        }
+        return true;
+      } else {
+        return false;
+      }
+    }, fence->backend);
+    if (exported) {
+      fence->shared_handle.reset(handle);
+    }
+    return exported;
   };
   if constexpr (std::is_same_v<Submitter, reshade::api::command_queue>) {
     switch (destination->get_device()->get_api()) {
       case reshade::api::device_api::d3d9: {
         IDirect3DDevice9Ex* device = nullptr;
         if (!succeeded(reinterpret_cast<IUnknown*>(destination->get_native())->QueryInterface(IID_PPV_ARGS(&device)), "QueryInterface D3D9Ex")) return false;
-        const std::shared_ptr<IDirect3DDevice9Ex> owned(device, [](auto* native) { native->Release(); });
+        const std::unique_ptr<IDirect3DDevice9Ex, decltype([](IDirect3DDevice9Ex* native) { native->Release(); })> owned(device);
         return QueueWait(owned.get(), fence, value);
       }
       case reshade::api::device_api::d3d10:
@@ -1275,7 +1412,36 @@ template <QueueSubmitter Submitter>
         return QueueWait(reinterpret_cast<ID3D11DeviceContext*>(destination->get_native()), fence, value);
       case reshade::api::device_api::d3d12:
         return QueueWait(reinterpret_cast<ID3D12CommandQueue*>(destination->get_native()), fence, value);
-      default: return false;
+      case reshade::api::device_api::opengl: {
+        // ReShade's GL command queue native object is its HGLRC, not the
+        // share-group device's original context.
+        auto* const context = reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(destination->get_native()));
+        auto found = fence->imports_by_gl_context.find(context);
+        if (found == fence->imports_by_gl_context.end()) {
+          if (!export_handle()) return false;
+          auto imported = std::make_unique<internal::OpenGLSemaphore>(fence->shared_handle.get());
+          assert(imported->context == context && "GL wait requires the destination queue context current");
+          auto [position, inserted] = fence->imports_by_gl_context.try_emplace(context, std::move(imported));
+          found = position;
+        }
+        const auto& [owning_context, imported] = *found;
+        imported->Submit(false, value);
+        return true;
+      }
+      case reshade::api::device_api::vulkan: {
+        if (fence->api_device == destination->get_device()) {
+          if (auto* local = std::get_if<std::unique_ptr<internal::ReShadeFence>>(&fence->backend)) {
+            if (destination->wait((*local)->native->fence, value)) return true;
+            reshade::log::message(reshade::log::level::error, "utils::gpu_fence Vulkan queue wait failed");
+            assert(false && "Required Vulkan GPU fence wait failed");
+          }
+        }
+        return false;
+      }
+      default:
+        reshade::log::message(reshade::log::level::error, "utils::gpu_fence unsupported queue wait backend");
+        assert(false && "Unsupported GPU wait backend");
+        return false;
     }
   } else {
     IUnknown* identity = nullptr;
@@ -1284,50 +1450,19 @@ template <QueueSubmitter Submitter>
     } else if constexpr (std::is_same_v<Submitter, ID3D11DeviceContext>) {
       ID3D11Device* device = nullptr;
       destination->GetDevice(&device);
-      const std::shared_ptr<ID3D11Device> owned_device(device, [](auto* native) { native->Release(); });
+      const std::unique_ptr<ID3D11Device, decltype([](ID3D11Device* native) { native->Release(); })> owned_device(device);
       if (!succeeded(device->QueryInterface(IID_PPV_ARGS(&identity)), "D3D11 destination device identity")) return false;
     } else {
       if (!succeeded(destination->QueryInterface(IID_PPV_ARGS(&identity)), "QueryInterface destination device identity")) return false;
     }
-    const std::shared_ptr<IUnknown> owned(identity, [](auto* native) { native->Release(); });
+    const std::unique_ptr<IUnknown, decltype([](IUnknown* native) { native->Release(); })> owned(identity);
     auto found = fence->imports_by_device.find(identity);
     if (found == fence->imports_by_device.end()) {
       std::variant<std::shared_ptr<internal::D3DKMTFence::External>,
                    std::shared_ptr<ID3D11Fence>,
                    std::shared_ptr<ID3D12Fence>>
           imported;
-      if (fence->shared_handle == nullptr) {
-        HANDLE handle = nullptr;
-        const auto exported = std::visit([&](const auto& implementation) -> bool {
-          if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D12Fence>>) {
-            ID3D12Device* device = nullptr;
-            if (!succeeded(implementation->fence->GetDevice(IID_PPV_ARGS(&device)), "D3D12 fence GetDevice")) return false;
-            const auto result = device->CreateSharedHandle(implementation->fence.get(), nullptr, GENERIC_ALL, nullptr, &handle);
-            device->Release();
-            return succeeded(result, "D3D12 CreateSharedHandle");
-          } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3D11Fence>>) {
-            return succeeded(implementation->fence->CreateSharedHandle(nullptr, GENERIC_ALL, nullptr, &handle), "D3D11 CreateSharedHandle");
-          } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::D3DKMTFence>>) {
-            const auto share = reinterpret_cast<decltype(&D3DKMTShareObjects)>(
-                GetProcAddress(GetModuleHandleW(L"gdi32.dll"), "D3DKMTShareObjects"));
-            if (share == nullptr) return false;
-            OBJECT_ATTRIBUTES attributes{};
-            attributes.Length = sizeof(attributes);
-            const auto result = share(1, &implementation->fence->object, &attributes, GENERIC_ALL, &handle);
-            if (result < 0) {
-              reshade::log::message(reshade::log::level::error,
-                                    ("utils::gpu_fence KMT share NTSTATUS=" + std::to_string(result)).c_str());
-              return false;
-            }
-            return true;
-          } else {
-            return false;
-          }
-        },
-                                         fence->backend);
-        if (!exported) return false;
-        fence->shared_handle.reset(handle);
-      }
+      if (!export_handle()) return false;
       auto* const handle = fence->shared_handle.get();
       if constexpr (std::is_same_v<Submitter, ID3D12CommandQueue>) {
         ID3D12Device* device = nullptr;
@@ -1355,7 +1490,9 @@ template <QueueSubmitter Submitter>
           valid = association.VALID;
         });
         if (valid == nullptr || !valid->load()) return false;
-        auto kmt = std::make_shared<internal::D3DKMTFence::External>(handle, context.device, context.context, owned);
+        identity->AddRef();
+        const std::shared_ptr<IUnknown> binding_owner(identity, [](IUnknown* native) { native->Release(); });
+        auto kmt = std::make_shared<internal::D3DKMTFence::External>(handle, context.device, context.context, binding_owner);
         if (kmt->object == 0) return false;
         kmt->binding_valid = std::move(valid);
         for (std::size_t index = 0; index < context.context_count; ++index) {
@@ -1375,7 +1512,7 @@ template <QueueSubmitter Submitter>
     } else if constexpr (std::is_same_v<Submitter, ID3D11DeviceContext>) {
       ID3D11DeviceContext4* context4 = nullptr;
       if (!succeeded(destination->QueryInterface(IID_PPV_ARGS(&context4)), "QueryInterface D3D11DeviceContext4")) return false;
-      const std::shared_ptr<ID3D11DeviceContext4> owned_context(context4, [](auto* native) { native->Release(); });
+      const std::unique_ptr<ID3D11DeviceContext4, decltype([](ID3D11DeviceContext4* native) { native->Release(); })> owned_context(context4);
       return succeeded(context4->Wait(std::get<std::shared_ptr<ID3D11Fence>>(imported).get(), value), "D3D11 Wait");
     } else {
       return std::get<std::shared_ptr<internal::D3DKMTFence::External>>(imported)->EnqueueGPUWaitExternal(value);
