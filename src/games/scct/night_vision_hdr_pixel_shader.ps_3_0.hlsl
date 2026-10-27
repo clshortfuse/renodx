@@ -17,26 +17,19 @@ float4 tint_brightness : register(c0);
 float4 tint_extra : register(c1);
 float4 tint_boost : register(c2);
 float4 glow_sizes : register(c8);  // in texels, xy: s1, zw: s2
+float4 peak_ratio : register(c9);  // x: Peak over Game Brightness
 
+// The image is gamma-encoded; the excess and its limit are worked out in linear light.
+static const float GAMMA = 2.2f;
 // The glow's weight past white: at 1 it is what the game sums, which rarely reaches white alone.
 static const float GLOW_STRENGTH = 2.f;
-// The most night vision adds past white, in multiples of white in linear light: x / (1 + x / limit).
-// At 3 it tops out at 4x white, under a 1000-nit peak at 203-nit Game Brightness; past the peak the
-// output clips flat with hard edges.
-static const float EXCESS_LIMIT = 3.f;
-// The excess eases in over this much either side of white (linear light), so the boost's onset has
-// no crease to show as a line around every boosted area.
+// The excess eases in over this much either side of white (linear), so its onset has no crease.
 static const float EXCESS_KNEE = 0.25f;
-// The excess is added as a layer of light in the game's own white, not multiplied into the image:
-// multiplying keeps every texture's contrast, so surface detail showed through the blow-out, while
-// an added layer washes it out more the brighter it gets. It fades in with the game's image from
-// LAYER_FROM of white (gamma), so darker objects in front of a light keep their shape.
+// The excess is added as a layer of light, fading in with the game's image from this much of white
+// (gamma), so darker objects in front of a light keep their shape.
 static const float LAYER_FROM = 0.33f;
-// The layer is a slow, smooth gradient over large areas, which shows HDR10's steps as bands, so it
-// is dithered: an R2 low-discrepancy pattern (Roberts) over the pixel position, peak to peak this
-// fraction of the colour in linear light (about one HDR10 step). It reaches full strength once the
-// layer adds 1 / DITHER_ONSET of white, so the onset is dithered too, and is zero where it adds
-// nothing. The game's grain can't do it: t3 carries the scene's sharp brightness too.
+// R2 low-discrepancy dither (Roberts) over the pixel position against HDR10 banding: peak to peak
+// DITHER_STRENGTH of the colour (linear), full once the layer adds 1 / DITHER_ONSET of white.
 static const float2 DITHER_PATTERN = float2(0.7548776662f, 0.5698402910f);
 static const float DITHER_STRENGTH = 0.018f;
 static const float DITHER_ONSET = 16.f;
@@ -77,19 +70,21 @@ float4 main(float2 texcoord_0 : TEXCOORD0, float2 texcoord_1 : TEXCOORD1,
   const float smooth_glow_brightness = CubicSample(brightness_1, texcoord_1, glow_sizes.xy)
                                        + CubicSample(brightness_2, texcoord_2, glow_sizes.zw);
   const float3 glow = GLOW_STRENGTH * smooth_glow_brightness * c0.rgb * 2.f * (1.f + c2.rgb);
-  // The image is gamma-encoded (2.2), so the excess and its limit are worked out in linear light.
   const float glow_peak = max(0.f, max(glow.r, max(glow.g, glow.b)));
-  const float past_white = pow(glow_peak, 2.2f) - 1.f;
+  const float past_white = pow(glow_peak, GAMMA) - 1.f;
   float excess = max(0.f, past_white);
   if (abs(past_white) < EXCESS_KNEE) {
     excess = (past_white + EXCESS_KNEE) * (past_white + EXCESS_KNEE) / (4.f * EXCESS_KNEE);
   }
+  // At most what Peak leaves above white (linear): x / (1 + x / limit) approaches it without
+  // reaching it, so the glow rolls off toward Peak instead of clipping flat there.
+  const float limit = max(1e-3f, peak_ratio.x - 1.f);
   const float image_peak = max(color.r, max(color.g, color.b));
-  const float added = excess / (1.f + excess / EXCESS_LIMIT) * smoothstep(LAYER_FROM, 1.f, image_peak);
-  const float3 image_white = pow(color.rgb / max(image_peak, 1e-4f), 2.2f);
+  const float added = excess / (1.f + excess / limit) * smoothstep(LAYER_FROM, 1.f, image_peak);
+  const float3 image_white = pow(color.rgb / max(image_peak, 1e-4f), GAMMA);
   const float dither = frac(dot(pixel_position, DITHER_PATTERN)) - 0.5f;
-  const float3 linear_color = (pow(color.rgb, 2.2f) + added * image_white)
+  const float3 linear_color = (pow(color.rgb, GAMMA) + added * image_white)
                               * (1.f + dither * DITHER_STRENGTH * saturate(added * DITHER_ONSET));
-  color.rgb = pow(max(0.f, linear_color), 1.f / 2.2f);
+  color.rgb = pow(max(0.f, linear_color), 1.f / GAMMA);
   return color;
 }

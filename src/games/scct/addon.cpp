@@ -288,7 +288,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Night Vision HDR",
         .section = "Effects",
         .tooltip = "Night vision's blown-out areas go past white, raised by the game's own glow,\n"
-                   "up to 4x Game Brightness. Off = the game's night vision.",
+                   "rolling off toward Peak Brightness. Off = the game's night vision.",
         .is_enabled = &IsHDR,
     },
     new renodx::utils::settings::Setting{
@@ -544,11 +544,12 @@ std::string DescribeView(reshade::api::device* device, reshade::api::resource_vi
 
 // Shader model of the bound pixel or vertex shader, read from its bytecode. The first time a hash is
 // seen, it is logged and its bytecode saved to scct-dumps for disassembly.
-std::string ShaderVersion(IDirect3DDevice9* native_device, bool is_vertex_shader, uint32_t shader_hash) {
+std::string ShaderVersion(IDirect3DDevice9* native_device, reshade::api::pipeline_stage stage, uint32_t shader_hash) {
   if (shader_hash == 0u) return "none";
   if (auto it = shader_versions.find(shader_hash); it != shader_versions.end()) {
     return it->second;
   }
+  const bool is_vertex_shader = (stage == reshade::api::pipeline_stage::vertex_shader);
   const char* prefix = (is_vertex_shader ? "vs" : "ps");
   std::vector<uint8_t> bytecode;
   const auto read_bytecode = [&](auto* shader) {
@@ -624,8 +625,8 @@ bool OnBeforeDraw(reshade::api::command_list* cmd_list, uint32_t count) {
 
   auto describe_draw = [&]() {
     std::stringstream s;
-    s << "ps=0x" << std::hex << pixel_shader_hash << std::dec << " " << ShaderVersion(native_device, false, pixel_shader_hash)
-      << " vs=0x" << std::hex << vertex_shader_hash << std::dec << " " << ShaderVersion(native_device, true, vertex_shader_hash)
+    s << "ps=0x" << std::hex << pixel_shader_hash << std::dec << " " << ShaderVersion(native_device, reshade::api::pipeline_stage::pixel_shader, pixel_shader_hash)
+      << " vs=0x" << std::hex << vertex_shader_hash << std::dec << " " << ShaderVersion(native_device, reshade::api::pipeline_stage::vertex_shader, vertex_shader_hash)
       << " count=" << count;
     // Fixed-function vertices (no vertex shader) are described by the FVF code; shader input by the
     // vertex declaration's usages (D3DDECLUSAGE: 0 position, 5 texcoord, 9 positiont, 10 color).
@@ -660,6 +661,12 @@ bool OnBeforeDraw(reshade::api::command_list* cmd_list, uint32_t count) {
         if (SUCCEEDED(static_cast<IDirect3DTexture9*>(base_texture)->GetLevelDesc(0, &desc))) {
           s << " tex" << stage << "=" << desc.Width << "x" << desc.Height << " d3dfmt" << stage << "="
             << static_cast<uint32_t>(desc.Format) << (((desc.Usage & D3DUSAGE_RENDERTARGET) != 0u) ? " rt" : "");
+          // D3DTEXTUREFILTERTYPE: 1 point, 2 linear.
+          DWORD mag_filter = 0;
+          DWORD min_filter = 0;
+          native_device->GetSamplerState(stage, D3DSAMP_MAGFILTER, &mag_filter);
+          native_device->GetSamplerState(stage, D3DSAMP_MINFILTER, &min_filter);
+          s << " filter" << stage << "=" << mag_filter << "/" << min_filter;
         }
       } else {
         s << " tex" << stage << "=type" << static_cast<uint32_t>(base_texture->GetType());
@@ -673,8 +680,8 @@ bool OnBeforeDraw(reshade::api::command_list* cmd_list, uint32_t count) {
     Log("[scct-trace] draw " + std::to_string(trace_draw_index++) + " " + describe_draw());
   } else {
     // Logs and dumps shaders seen for the first time.
-    ShaderVersion(native_device, false, pixel_shader_hash);
-    ShaderVersion(native_device, true, vertex_shader_hash);
+    ShaderVersion(native_device, reshade::api::pipeline_stage::pixel_shader, pixel_shader_hash);
+    ShaderVersion(native_device, reshade::api::pipeline_stage::vertex_shader, vertex_shader_hash);
   }
 
   const bool is_hud_draw = after_boundary;
@@ -831,12 +838,14 @@ void OnAbortSignal(int signal) {
 // every step, so it stays at or below white. With the toggle on, its image draw (0x4ADA0B05) runs
 // with night_vision_hdr_pixel_shader instead, which raises what it clipped (see the shader). That
 // is a ps_3_0, which only runs with a vs_3_0, so the draw also gets night_vision_vertex_shader, a
-// port of the game's. The game's shaders, c8 and the glows' filters are put back once it has
+// port of the game's. The game's shaders, c8-c9 and the glows' filters are put back once it has
 // drawn: D3D9 state stays set for later draws. With the toggle off, or if the shaders can't be
 // created, the game's own shaders draw it.
 // ---------------------------------------------------------------------------
 
-constexpr UINT NIGHT_VISION_GLOW_SIZES_REGISTER = 8;
+// c8: the glows' sizes, c9.x: Peak over Game Brightness, the most it may go past white.
+constexpr UINT NIGHT_VISION_FIRST_CONSTANT_REGISTER = 8;
+constexpr UINT NIGHT_VISION_CONSTANT_REGISTER_COUNT = 2;
 // The glows the shader upsamples; its cubic upsampling is built on bilinear taps.
 constexpr DWORD NIGHT_VISION_GLOW_STAGES[] = {1, 2};
 
@@ -847,12 +856,17 @@ struct NightVisionShaders {
 };
 NightVisionShaders night_vision_shaders;
 
+struct NightVisionGlowFilters {
+  DWORD mag_filter = 0;
+  DWORD min_filter = 0;
+};
+
 struct NightVisionSavedState {
-  bool saved = false;
+  bool has_saved_state = false;
   IDirect3DVertexShader9* vertex_shader = nullptr;
   IDirect3DPixelShader9* pixel_shader = nullptr;
-  float glow_sizes[4] = {};
-  DWORD glow_filters[std::size(NIGHT_VISION_GLOW_STAGES)][2] = {};
+  float constants[4 * NIGHT_VISION_CONSTANT_REGISTER_COUNT] = {};
+  NightVisionGlowFilters glow_filters[std::size(NIGHT_VISION_GLOW_STAGES)];
 };
 NightVisionSavedState night_vision_saved_state;
 
@@ -872,12 +886,10 @@ bool OnNightVisionImageDraw(reshade::api::command_list* cmd_list) {
   if (night_vision_shaders.device != native_device) {
     ReleaseNightVisionShaders();
     night_vision_shaders.device = native_device;
-    const bool created =
-        SUCCEEDED(native_device->CreateVertexShader(reinterpret_cast<const DWORD*>(__night_vision_vertex_shader.data()),
-                                                    &night_vision_shaders.vertex_shader))
-        && SUCCEEDED(native_device->CreatePixelShader(reinterpret_cast<const DWORD*>(__night_vision_hdr_pixel_shader.data()),
-                                                      &night_vision_shaders.pixel_shader));
-    if (!created) {
+    if (FAILED(native_device->CreateVertexShader(reinterpret_cast<const DWORD*>(__night_vision_vertex_shader.data()),
+                                                 &night_vision_shaders.vertex_shader))
+        || FAILED(native_device->CreatePixelShader(reinterpret_cast<const DWORD*>(__night_vision_hdr_pixel_shader.data()),
+                                                   &night_vision_shaders.pixel_shader))) {
       reshade::log::message(reshade::log::level::warning, "[scct] Night Vision HDR: could not create its shaders");
       ReleaseNightVisionShaders();
       // Kept, so creation isn't retried every frame on this device.
@@ -889,34 +901,37 @@ bool OnNightVisionImageDraw(reshade::api::command_list* cmd_list) {
   auto& saved = night_vision_saved_state;
   native_device->GetVertexShader(&saved.vertex_shader);
   native_device->GetPixelShader(&saved.pixel_shader);
-  native_device->GetPixelShaderConstantF(NIGHT_VISION_GLOW_SIZES_REGISTER, saved.glow_sizes, 1);
-  float glow_sizes[4] = {1.f, 1.f, 1.f, 1.f};
+  native_device->GetPixelShaderConstantF(NIGHT_VISION_FIRST_CONSTANT_REGISTER, saved.constants,
+                                         NIGHT_VISION_CONSTANT_REGISTER_COUNT);
+  const float peak_ratio = shader_injection.peak_white_nits / (std::max)(shader_injection.diffuse_white_nits, 1.f);
+  float constants[4 * NIGHT_VISION_CONSTANT_REGISTER_COUNT] = {1.f, 1.f, 1.f, 1.f, peak_ratio, 0.f, 0.f, 0.f};
   for (size_t index = 0; index < std::size(NIGHT_VISION_GLOW_STAGES); ++index) {
     const DWORD stage = NIGHT_VISION_GLOW_STAGES[index];
-    native_device->GetSamplerState(stage, D3DSAMP_MAGFILTER, &saved.glow_filters[index][0]);
-    native_device->GetSamplerState(stage, D3DSAMP_MINFILTER, &saved.glow_filters[index][1]);
+    native_device->GetSamplerState(stage, D3DSAMP_MAGFILTER, &saved.glow_filters[index].mag_filter);
+    native_device->GetSamplerState(stage, D3DSAMP_MINFILTER, &saved.glow_filters[index].min_filter);
     native_device->SetSamplerState(stage, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
     native_device->SetSamplerState(stage, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
     IDirect3DBaseTexture9* glow = nullptr;
     if (SUCCEEDED(native_device->GetTexture(stage, &glow)) && glow != nullptr) {
       D3DSURFACE_DESC glow_desc = {};
       if (glow->GetType() == D3DRTYPE_TEXTURE && SUCCEEDED(static_cast<IDirect3DTexture9*>(glow)->GetLevelDesc(0, &glow_desc))) {
-        glow_sizes[2 * index] = static_cast<float>(glow_desc.Width);
-        glow_sizes[(2 * index) + 1] = static_cast<float>(glow_desc.Height);
+        constants[2 * index] = static_cast<float>(glow_desc.Width);
+        constants[(2 * index) + 1] = static_cast<float>(glow_desc.Height);
       }
       glow->Release();
     }
   }
-  native_device->SetPixelShaderConstantF(NIGHT_VISION_GLOW_SIZES_REGISTER, glow_sizes, 1);
+  native_device->SetPixelShaderConstantF(NIGHT_VISION_FIRST_CONSTANT_REGISTER, constants,
+                                         NIGHT_VISION_CONSTANT_REGISTER_COUNT);
   native_device->SetVertexShader(night_vision_shaders.vertex_shader);
   native_device->SetPixelShader(night_vision_shaders.pixel_shader);
-  saved.saved = true;
+  saved.has_saved_state = true;
   return true;
 }
 
 void OnNightVisionImageDrawn(reshade::api::command_list* cmd_list) {
   auto& saved = night_vision_saved_state;
-  if (!saved.saved) return;
+  if (!saved.has_saved_state) return;
   auto* native_device = reinterpret_cast<IDirect3DDevice9*>(cmd_list->get_device()->get_native());
   native_device->SetVertexShader(saved.vertex_shader);
   native_device->SetPixelShader(saved.pixel_shader);
@@ -926,10 +941,12 @@ void OnNightVisionImageDrawn(reshade::api::command_list* cmd_list) {
   if (saved.pixel_shader != nullptr) {
     saved.pixel_shader->Release();
   }
-  native_device->SetPixelShaderConstantF(NIGHT_VISION_GLOW_SIZES_REGISTER, saved.glow_sizes, 1);
+  native_device->SetPixelShaderConstantF(NIGHT_VISION_FIRST_CONSTANT_REGISTER, saved.constants,
+                                         NIGHT_VISION_CONSTANT_REGISTER_COUNT);
   for (size_t index = 0; index < std::size(NIGHT_VISION_GLOW_STAGES); ++index) {
-    native_device->SetSamplerState(NIGHT_VISION_GLOW_STAGES[index], D3DSAMP_MAGFILTER, saved.glow_filters[index][0]);
-    native_device->SetSamplerState(NIGHT_VISION_GLOW_STAGES[index], D3DSAMP_MINFILTER, saved.glow_filters[index][1]);
+    const DWORD stage = NIGHT_VISION_GLOW_STAGES[index];
+    native_device->SetSamplerState(stage, D3DSAMP_MAGFILTER, saved.glow_filters[index].mag_filter);
+    native_device->SetSamplerState(stage, D3DSAMP_MINFILTER, saved.glow_filters[index].min_filter);
   }
   night_vision_saved_state = {};
 }
