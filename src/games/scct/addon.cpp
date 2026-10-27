@@ -63,6 +63,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -336,6 +337,11 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::platform::LaunchURL("https://ko-fi.com/", "shortfuse");
         },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Version: 1.2.0 (" + std::string(renodx::utils::date::ISO_DATE) + ")",
+        .section = "About",
     },
 };
 
