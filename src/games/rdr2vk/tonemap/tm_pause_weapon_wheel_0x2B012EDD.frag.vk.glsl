@@ -1,7 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "./tonemap.glsl"
-#include "../output/brightness.glsl"
 
 struct _22 {
   int _m0;
@@ -241,8 +240,5 @@ void main() {
   vec3 _409 = _406.xyz / vec3(_338);
 #endif
   _5 = vec4(_409.x, _409.y, _409.z, _406.w);
-#if 1
-  _5.rgb = ScaleSceneBrightness(_5.rgb);
-#endif
 }
 
