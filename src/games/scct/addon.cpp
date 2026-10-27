@@ -17,8 +17,8 @@
  *   F9 / F8    select the next / previous candidate draw and hide it (F8 below 0: probe off)
  *   F7         candidates: blended draws, every draw, or HUD draws only
  *
- * They also log every pixel shader once as [scct-shader] with its shader model, saved to
- * scct-dumps\0x<hash>.ps_<major>_<minor>.cso in the game folder, report what keeps an old D3D9
+ * They also log every pixel and vertex shader once as [scct-shader] with its shader model, saved to
+ * scct-dumps\0x<hash>.<ps|vs>_<major>_<minor>.cso in the game folder, report what keeps an old D3D9
  * device alive ([scct-leak]), and log the call stack if the add-on aborts ([scct-crash]).
  */
 
@@ -74,6 +74,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 };
 
 ShaderInjectData shader_injection;
+float night_vision_hdr = 0.f;
 
 constexpr float TONE_MAP_VANILLA = 0.f;
 constexpr float TONE_MAP_RENO_DRT = 3.f;
@@ -279,6 +280,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxNightVisionHdr",
+        .binding = &night_vision_hdr,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 0.f,
+        .label = "Night Vision HDR",
+        .section = "Effects",
+        .tooltip = "Night vision's blown-out areas go past white, raised by the game's own glow,\n"
+                   "up to 4x Game Brightness. Off = the game's night vision.",
+        .is_enabled = &IsHDR,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "- The game's own brightness and gamma options have no effect; use Game Brightness and Gamma Correction.",
         .section = "About",
@@ -340,6 +352,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
+  renodx::utils::settings::UpdateSetting("FxNightVisionHdr", 0.f);
 }
 
 // Psycho-V settings that put it on vanilla below white (vanilla is the identity there): per Peak /
@@ -462,7 +475,7 @@ bool trace_armed = false;
 uint64_t game_frame = 0;  // D3D9 presents
 uint32_t trace_draw_index = 0;
 
-// Pixel shader hash -> "ps_<major>_<minor>", filled the first time a shader is drawn.
+// Shader hash -> "ps_<major>_<minor>" or "vs_<major>_<minor>", filled the first time a shader is drawn.
 std::unordered_map<uint32_t, std::string> shader_versions;
 
 int probe_target = -1;  // candidate to hide, -1 = probe off
@@ -523,40 +536,54 @@ std::string DescribeView(reshade::api::device* device, reshade::api::resource_vi
   return description;
 }
 
-// Shader model of the bound pixel shader, read from its bytecode. The first time a hash is seen,
-// it is logged and its bytecode saved to scct-dumps for disassembly.
-std::string PixelShaderVersion(IDirect3DDevice9* native_device, uint32_t pixel_shader_hash) {
-  if (pixel_shader_hash == 0u) return "none";
-  if (auto it = shader_versions.find(pixel_shader_hash); it != shader_versions.end()) {
+// Shader model of the bound pixel or vertex shader, read from its bytecode. The first time a hash is
+// seen, it is logged and its bytecode saved to scct-dumps for disassembly.
+std::string ShaderVersion(IDirect3DDevice9* native_device, bool is_vertex_shader, uint32_t shader_hash) {
+  if (shader_hash == 0u) return "none";
+  if (auto it = shader_versions.find(shader_hash); it != shader_versions.end()) {
     return it->second;
   }
-  std::string version_name = "ps_?";
-  IDirect3DPixelShader9* pixel_shader = nullptr;
-  if (SUCCEEDED(native_device->GetPixelShader(&pixel_shader)) && pixel_shader != nullptr) {
+  const char* prefix = (is_vertex_shader ? "vs" : "ps");
+  std::vector<uint8_t> bytecode;
+  const auto read_bytecode = [&](auto* shader) {
+    if (shader == nullptr) return;
     UINT size = 0;
-    if (SUCCEEDED(pixel_shader->GetFunction(nullptr, &size)) && size >= sizeof(DWORD)) {
-      std::vector<uint8_t> bytecode(size);
-      if (SUCCEEDED(pixel_shader->GetFunction(bytecode.data(), &size))) {
-        DWORD version = 0;
-        std::memcpy(&version, bytecode.data(), sizeof(version));  // 0xFFFF0000 | major << 8 | minor
-        const auto major = static_cast<unsigned>((version >> 8) & 0xFFu);
-        const auto minor = static_cast<unsigned>(version & 0xFFu);
-        version_name = "ps_" + std::to_string(major) + "_" + std::to_string(minor);
-        char file_name[64];
-        std::snprintf(file_name, sizeof(file_name), "0x%08X.ps_%u_%u.cso", pixel_shader_hash, major, minor);
-        std::error_code error;
-        std::filesystem::create_directories("scct-dumps", error);
-        std::ofstream file(std::filesystem::path("scct-dumps") / file_name, std::ios::binary);
-        file.write(reinterpret_cast<const char*>(bytecode.data()), static_cast<std::streamsize>(size));
-        std::stringstream s;
-        s << "[scct-shader] ps=0x" << std::hex << pixel_shader_hash << std::dec << " " << version_name
-          << " dumped scct-dumps\\" << file_name;
-        Log(s.str());
+    if (SUCCEEDED(shader->GetFunction(nullptr, &size)) && size >= sizeof(DWORD)) {
+      bytecode.resize(size);
+      if (FAILED(shader->GetFunction(bytecode.data(), &size))) {
+        bytecode.clear();
       }
     }
-    pixel_shader->Release();
+    shader->Release();
+  };
+  if (is_vertex_shader) {
+    IDirect3DVertexShader9* vertex_shader = nullptr;
+    native_device->GetVertexShader(&vertex_shader);
+    read_bytecode(vertex_shader);
+  } else {
+    IDirect3DPixelShader9* pixel_shader = nullptr;
+    native_device->GetPixelShader(&pixel_shader);
+    read_bytecode(pixel_shader);
   }
-  shader_versions.emplace(pixel_shader_hash, version_name);
+  std::string version_name = std::string(prefix) + "_?";
+  if (!bytecode.empty()) {
+    DWORD version = 0;
+    std::memcpy(&version, bytecode.data(), sizeof(version));  // 0xFFFE0000 (vs) or 0xFFFF0000 (ps) | major << 8 | minor
+    const auto major = static_cast<unsigned>((version >> 8) & 0xFFu);
+    const auto minor = static_cast<unsigned>(version & 0xFFu);
+    version_name = std::string(prefix) + "_" + std::to_string(major) + "_" + std::to_string(minor);
+    char file_name[64];
+    std::snprintf(file_name, sizeof(file_name), "0x%08X.%s_%u_%u.cso", shader_hash, prefix, major, minor);
+    std::error_code error;
+    std::filesystem::create_directories("scct-dumps", error);
+    std::ofstream file(std::filesystem::path("scct-dumps") / file_name, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(bytecode.data()), static_cast<std::streamsize>(bytecode.size()));
+    std::stringstream s;
+    s << "[scct-shader] " << prefix << "=0x" << std::hex << shader_hash << std::dec << " " << version_name
+      << " dumped scct-dumps\\" << file_name;
+    Log(s.str());
+  }
+  shader_versions.emplace(shader_hash, version_name);
   return version_name;
 }
 
@@ -586,19 +613,40 @@ bool OnBeforeDraw(reshade::api::command_list* cmd_list, uint32_t count) {
   auto* native_device = reinterpret_cast<IDirect3DDevice9*>(device->get_native());
   const uint32_t pixel_shader_hash = renodx::utils::state::GetCurrentShaderHash(
       cmd_list, reshade::api::pipeline_stage::pixel_shader);
+  const uint32_t vertex_shader_hash = renodx::utils::state::GetCurrentShaderHash(
+      cmd_list, reshade::api::pipeline_stage::vertex_shader);
 
   auto describe_draw = [&]() {
     std::stringstream s;
-    s << "ps=0x" << std::hex << pixel_shader_hash << std::dec << " " << PixelShaderVersion(native_device, pixel_shader_hash)
+    s << "ps=0x" << std::hex << pixel_shader_hash << std::dec << " " << ShaderVersion(native_device, false, pixel_shader_hash)
+      << " vs=0x" << std::hex << vertex_shader_hash << std::dec << " " << ShaderVersion(native_device, true, vertex_shader_hash)
       << " count=" << count;
+    // Fixed-function vertices (no vertex shader) are described by the FVF code; shader input by the
+    // vertex declaration's usages (D3DDECLUSAGE: 0 position, 5 texcoord, 9 positiont, 10 color).
+    DWORD fvf = 0;
+    native_device->GetFVF(&fvf);
+    s << " fvf=0x" << std::hex << fvf << std::dec;
+    IDirect3DVertexDeclaration9* declaration = nullptr;
+    if (SUCCEEDED(native_device->GetVertexDeclaration(&declaration)) && declaration != nullptr) {
+      D3DVERTEXELEMENT9 elements[MAXD3DDECLLENGTH + 1] = {};
+      UINT element_count = 0;
+      if (SUCCEEDED(declaration->GetDeclaration(elements, &element_count))) {
+        s << " decl=";
+        for (UINT element = 0; element + 1 < element_count; ++element) {
+          s << static_cast<unsigned>(elements[element].Usage) << "." << static_cast<unsigned>(elements[element].UsageIndex)
+            << ":t" << static_cast<unsigned>(elements[element].Type) << "@" << elements[element].Offset << " ";
+        }
+      }
+      declaration->Release();
+    }
     if (blend_state.enable) {
       s << " blend=on src=" << blend_state.source_factor << " dst=" << blend_state.dest_factor;
     } else {
       s << " blend=off";
     }
-    // The textures on stages 0 and 1: size and D3DFORMAT. A float format here (113 = A16B16G16R16F,
+    // The textures on stages 0-3: size and D3DFORMAT. A float format here (113 = A16B16G16R16F,
     // 116 = A32B32G32R32F) is the game's HDR buffer being read, usually by the tonemapper.
-    for (DWORD stage = 0; stage < 2; ++stage) {
+    for (DWORD stage = 0; stage < 4; ++stage) {
       IDirect3DBaseTexture9* base_texture = nullptr;
       if (FAILED(native_device->GetTexture(stage, &base_texture)) || base_texture == nullptr) continue;
       if (base_texture->GetType() == D3DRTYPE_TEXTURE) {
@@ -618,7 +666,9 @@ bool OnBeforeDraw(reshade::api::command_list* cmd_list, uint32_t count) {
   if (trace_active) {
     Log("[scct-trace] draw " + std::to_string(trace_draw_index++) + " " + describe_draw());
   } else {
-    PixelShaderVersion(native_device, pixel_shader_hash);  // logs and dumps shaders seen for the first time
+    // Logs and dumps shaders seen for the first time.
+    ShaderVersion(native_device, false, pixel_shader_hash);
+    ShaderVersion(native_device, true, vertex_shader_hash);
   }
 
   const bool is_hud_draw = after_boundary;
@@ -771,6 +821,114 @@ void OnAbortSignal(int signal) {
 #endif  // SCCT_DEV_TOOLS
 
 // ---------------------------------------------------------------------------
+// Night Vision HDR. Night vision is built from the composite's 8-bit copy and clamped at
+// every step, so it stays at or below white. With the toggle on, its image draw (0x4ADA0B05) runs
+// with night_vision_hdr_pixel_shader instead, which raises what it clipped (see the shader). That
+// is a ps_3_0, which only runs with a vs_3_0, so the draw also gets night_vision_vertex_shader, a
+// port of the game's. The game's shaders, c8 and the glows' filters are put back once it has
+// drawn: D3D9 state stays set for later draws. With the toggle off, or if the shaders can't be
+// created, the game's own shaders draw it.
+// ---------------------------------------------------------------------------
+
+constexpr UINT NIGHT_VISION_GLOW_SIZES_REGISTER = 8;
+// The glows the shader upsamples; its cubic upsampling is built on bilinear taps.
+constexpr DWORD NIGHT_VISION_GLOW_STAGES[] = {1, 2};
+
+struct NightVisionShaders {
+  IDirect3DDevice9* device = nullptr;
+  IDirect3DVertexShader9* vertex_shader = nullptr;
+  IDirect3DPixelShader9* pixel_shader = nullptr;
+};
+NightVisionShaders night_vision_shaders;
+
+struct NightVisionSavedState {
+  bool saved = false;
+  IDirect3DVertexShader9* vertex_shader = nullptr;
+  IDirect3DPixelShader9* pixel_shader = nullptr;
+  float glow_sizes[4] = {};
+  DWORD glow_filters[std::size(NIGHT_VISION_GLOW_STAGES)][2] = {};
+};
+NightVisionSavedState night_vision_saved_state;
+
+void ReleaseNightVisionShaders() {
+  if (night_vision_shaders.vertex_shader != nullptr) {
+    night_vision_shaders.vertex_shader->Release();
+  }
+  if (night_vision_shaders.pixel_shader != nullptr) {
+    night_vision_shaders.pixel_shader->Release();
+  }
+  night_vision_shaders = {};
+}
+
+bool OnNightVisionImageDraw(reshade::api::command_list* cmd_list) {
+  if (night_vision_hdr == 0.f || !IsHDR()) return true;
+  auto* native_device = reinterpret_cast<IDirect3DDevice9*>(cmd_list->get_device()->get_native());
+  if (night_vision_shaders.device != native_device) {
+    ReleaseNightVisionShaders();
+    night_vision_shaders.device = native_device;
+    const bool created =
+        SUCCEEDED(native_device->CreateVertexShader(reinterpret_cast<const DWORD*>(__night_vision_vertex_shader.data()),
+                                                    &night_vision_shaders.vertex_shader))
+        && SUCCEEDED(native_device->CreatePixelShader(reinterpret_cast<const DWORD*>(__night_vision_hdr_pixel_shader.data()),
+                                                      &night_vision_shaders.pixel_shader));
+    if (!created) {
+      reshade::log::message(reshade::log::level::warning, "[scct] Night Vision HDR: could not create its shaders");
+      ReleaseNightVisionShaders();
+      // Kept, so creation isn't retried every frame on this device.
+      night_vision_shaders.device = native_device;
+    }
+  }
+  if (night_vision_shaders.pixel_shader == nullptr) return true;
+
+  auto& saved = night_vision_saved_state;
+  native_device->GetVertexShader(&saved.vertex_shader);
+  native_device->GetPixelShader(&saved.pixel_shader);
+  native_device->GetPixelShaderConstantF(NIGHT_VISION_GLOW_SIZES_REGISTER, saved.glow_sizes, 1);
+  float glow_sizes[4] = {1.f, 1.f, 1.f, 1.f};
+  for (size_t index = 0; index < std::size(NIGHT_VISION_GLOW_STAGES); ++index) {
+    const DWORD stage = NIGHT_VISION_GLOW_STAGES[index];
+    native_device->GetSamplerState(stage, D3DSAMP_MAGFILTER, &saved.glow_filters[index][0]);
+    native_device->GetSamplerState(stage, D3DSAMP_MINFILTER, &saved.glow_filters[index][1]);
+    native_device->SetSamplerState(stage, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+    native_device->SetSamplerState(stage, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+    IDirect3DBaseTexture9* glow = nullptr;
+    if (SUCCEEDED(native_device->GetTexture(stage, &glow)) && glow != nullptr) {
+      D3DSURFACE_DESC glow_desc = {};
+      if (glow->GetType() == D3DRTYPE_TEXTURE && SUCCEEDED(static_cast<IDirect3DTexture9*>(glow)->GetLevelDesc(0, &glow_desc))) {
+        glow_sizes[2 * index] = static_cast<float>(glow_desc.Width);
+        glow_sizes[(2 * index) + 1] = static_cast<float>(glow_desc.Height);
+      }
+      glow->Release();
+    }
+  }
+  native_device->SetPixelShaderConstantF(NIGHT_VISION_GLOW_SIZES_REGISTER, glow_sizes, 1);
+  native_device->SetVertexShader(night_vision_shaders.vertex_shader);
+  native_device->SetPixelShader(night_vision_shaders.pixel_shader);
+  saved.saved = true;
+  return true;
+}
+
+void OnNightVisionImageDrawn(reshade::api::command_list* cmd_list) {
+  auto& saved = night_vision_saved_state;
+  if (!saved.saved) return;
+  auto* native_device = reinterpret_cast<IDirect3DDevice9*>(cmd_list->get_device()->get_native());
+  native_device->SetVertexShader(saved.vertex_shader);
+  native_device->SetPixelShader(saved.pixel_shader);
+  if (saved.vertex_shader != nullptr) {
+    saved.vertex_shader->Release();
+  }
+  if (saved.pixel_shader != nullptr) {
+    saved.pixel_shader->Release();
+  }
+  native_device->SetPixelShaderConstantF(NIGHT_VISION_GLOW_SIZES_REGISTER, saved.glow_sizes, 1);
+  for (size_t index = 0; index < std::size(NIGHT_VISION_GLOW_STAGES); ++index) {
+    native_device->SetSamplerState(NIGHT_VISION_GLOW_STAGES[index], D3DSAMP_MAGFILTER, saved.glow_filters[index][0]);
+    native_device->SetSamplerState(NIGHT_VISION_GLOW_STAGES[index], D3DSAMP_MINFILTER, saved.glow_filters[index][1]);
+  }
+  night_vision_saved_state = {};
+}
+
+// ---------------------------------------------------------------------------
 // Old D3D9 devices. Exiting from gameplay to the main menu, or loading a save, sometimes leaks the
 // game's D3D9 device: it is never destroyed, so the proxy stays bound to it and the new device's
 // frames never reach the screen (frozen picture). When a D3D9 device starts while an older one is
@@ -840,6 +998,9 @@ void OnInitDevice(reshade::api::device* device) {
 void OnDestroyDevice(reshade::api::device* device) {
   if (device->get_api() != reshade::api::device_api::d3d9) return;
   last_render_target = {0u};
+  if (night_vision_shaders.device == reinterpret_cast<IDirect3DDevice9*>(device->get_native())) {
+    ReleaseNightVisionShaders();
+  }
   std::erase_if(live_d3d9_devices, [device](const TrackedDevice& tracked) { return tracked.device == device; });
 }
 
@@ -1102,6 +1263,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       // No render target upgrades: the proxy clones the back buffer, the scene buffer is
       // already RGBA16F, and the bloom chain and the scene and vision copies stay 8-bit as in vanilla.
+
+      // Not replaced: hooked only, for Night Vision HDR to swap in its own shaders.
+      custom_shaders[0x4ADA0B05u] = {
+          .crc32 = 0x4ADA0B05u,
+          .on_draw = &OnNightVisionImageDraw,
+          .on_drawn = &OnNightVisionImageDrawn,
+      };
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
