@@ -1,5 +1,7 @@
-#ifndef SRC_GAMES_RDR2_SHARED_H_
-#define SRC_GAMES_RDR2_SHARED_H_
+#ifndef SRC_GAMES_RDR2VK_SHARED_H_
+#define SRC_GAMES_RDR2VK_SHARED_H_
+
+#define RENODX_TONE_MAP_TYPE shader_injection.tone_map_type
 
 struct ShaderInjectData {
   float tone_map_type;
@@ -22,11 +24,16 @@ struct ShaderInjectData {
   float custom_unclamp_highlights;
   float tone_map_contrast_highlights;
   float tone_map_contrast_shadows;
-  float custom_is_swapchain_write;
+  // Internal pass selection, never a user setting or a CPU-frame latch.
+  float scene_brightness_enabled;
 };
 
-#ifndef __cplusplus
-#define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
+#ifdef __cplusplus
+#include <cstddef>
+
+static_assert(sizeof(ShaderInjectData) == 84u);
+static_assert(offsetof(ShaderInjectData, scene_brightness_enabled) == 80u);
+#else
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
@@ -46,13 +53,17 @@ struct ShaderInjectData {
 #define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 #define UNCLAMP_HIGHLIGHTS                   shader_injection.custom_unclamp_highlights
-#define CUSTOM_IS_SWAPCHAIN_WRITE            shader_injection.custom_is_swapchain_write
+#define RENODX_SCENE_BRIGHTNESS_ENABLED      shader_injection.scene_brightness_enabled
 
 #ifdef __SLANG__
+#ifdef RENODX_SHADER_INJECTION_UNIFORM
+[[vk::binding(1, 0)]]
+#else
 [[vk::push_constant]]
+#endif
 ConstantBuffer<ShaderInjectData> shader_injection;
 
-#define RENODX_SWAP_CHAIN_OUTPUT_PRESET renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_HDR10
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET        renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_HDR10
 // The unedited SDR shaders and subsequent UI composition write encoded BT.709.
 #define RENODX_GAMMA_CORRECTION                RENODX_SDR_EOTF_EMULATION
 #define RENODX_INTERMEDIATE_ENCODING           renodx::draw::ENCODING_SRGB
@@ -60,7 +71,6 @@ ConstantBuffer<ShaderInjectData> shader_injection;
 #define RENODX_SWAP_CHAIN_DECODING             (RENODX_GAMMA_CORRECTION + 1.f)
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     GAMMA_CORRECTION_NONE
 #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE RENODX_INTERMEDIATE_COLOR_SPACE
-#define RENODX_INTERMEDIATE_SCALING            (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
 #define RENODX_SWAP_CHAIN_SCALING_NITS         RENODX_GRAPHICS_WHITE_NITS
 #define RENODX_SWAP_CHAIN_CLAMP_NITS           9999.f
 #define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
@@ -74,4 +84,4 @@ layout(push_constant) uniform PushData {
 #endif
 #endif
 
-#endif  // SRC_GAMES_RDR2_SHARED_H_
+#endif  // SRC_GAMES_RDR2VK_SHARED_H_

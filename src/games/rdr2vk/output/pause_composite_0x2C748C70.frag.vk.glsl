@@ -1,6 +1,4 @@
 #version 450
-#extension GL_GOOGLE_include_directive : require
-#include "./ui.glsl"
 
 layout(set = 1, binding = 23, std140) uniform _13_14 {
   mat4 _m0;
@@ -76,7 +74,4 @@ void main() {
   }
   vec3 _136 = vec4(texture(sampler2D(_17, _11), _69.xy * _14._m16).xyz, 1.0).xyz;
   _9 = vec4(mix(_136, mix(vec3(1.0) - (((vec3(1.0) - _117.xyz) * 2.0) * (vec3(1.0) - _136)), (_117.xyz * 2.0) * _136, lessThan(_136, vec3(0.5))), vec3(_121)), 1.0);
-#if 1
-  _9 = FinalizeUI(_9);
-#endif
 }
