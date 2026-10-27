@@ -5,13 +5,19 @@
 
 #pragma once
 
+#include <cassert>
+#include <type_traits>
+
 #include <windows.h>
 
+#include <d3d10_1.h>
 #include <d3d11_4.h>
 #include <d3d12.h>
 #include <d3d9.h>
 #include <dxgi1_6.h>
 #include <unknwnbase.h>
+#include <include/reshade_api.hpp>
+
 
 namespace renodx::utils::directx {
 
@@ -29,18 +35,74 @@ inline decltype(&D3D12SerializeRootSignature) pD3D12SerializeRootSignature = nul
 using PFN_D3D_COMPILE = HRESULT(WINAPI*)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 inline PFN_D3D_COMPILE pD3DCompile = nullptr;
 
+/**
+ * @return Borrowed ReShade COM device proxy of the requested ID3D10Device,
+ * ID3D11Device or ID3D12Device type, or nullptr for null input, backend mismatch,
+ * or no valid published association/interface.
+ * The caller must keep the ReShade device alive.
+ * Forwarded private data establishes association, not wrapper order. Does not unwrap.
+ */
+template <typename T>
+[[nodiscard]] inline T* FindReShadeDeviceProxy(reshade::api::device* device) {
+  static_assert(std::is_same_v<T, ID3D10Device> || std::is_same_v<T, ID3D11Device>
+                || std::is_same_v<T, ID3D12Device>);
+  if (device == nullptr) return nullptr;
+  GUID proxy_guid{};
+  if constexpr (std::is_same_v<T, ID3D10Device>) {
+    if (device->get_api() != reshade::api::device_api::d3d10) return nullptr;
+    proxy_guid = {0x88399375, 0x734F, 0x4892, {0xA9, 0x5F, 0x70, 0xDD, 0x42, 0xCE, 0x7C, 0xDD}};
+  } else if constexpr (std::is_same_v<T, ID3D11Device>) {
+    if (device->get_api() != reshade::api::device_api::d3d11) return nullptr;
+    proxy_guid = {0x72299288, 0x2C68, 0x4AD8, {0x94, 0x5D, 0x2B, 0xFB, 0x5A, 0xA9, 0xC6, 0x09}};
+  } else {
+    if (device->get_api() != reshade::api::device_api::d3d12) return nullptr;
+    proxy_guid = {0x2523AFF4, 0x978B, 0x4939, {0xBA, 0x16, 0x8E, 0xE8, 0x76, 0xA4, 0xCB, 0x2A}};
+  }
+  auto* downstream = reinterpret_cast<T*>(device->get_native());
+  if (downstream == nullptr) return nullptr;
+  IUnknown* proxy = nullptr;
+  UINT size = sizeof(proxy);
+  if (FAILED(downstream->GetPrivateData(proxy_guid, &size, &proxy))
+      || size != sizeof(proxy) || proxy == nullptr) return nullptr;
+  // D3D10/11 publish the concrete wrapper's first (DXGI) base, not its D3D base.
+  T* device_proxy = nullptr;
+  if (FAILED(proxy->QueryInterface(IID_PPV_ARGS(&device_proxy)))) return nullptr;
+  if (device_proxy != nullptr) {
+    device_proxy->Release();
+  }
+  return device_proxy;
+}
+
 struct DECLSPEC_UUID("7F2C9A11-3B4E-4D6A-812F-5E9CD37A1B42") ReShadeRetrieveBaseInterface : IUnknown {};
+/**
+ * @pre The input is a known ReShade proxy, not an arbitrary interface to probe.
+ * @post On success, replaces the input with a borrowed downstream interface.
+ * Query forwarding means success does not validate the input's wrapper identity.
+ * Returns false on contract failure in Release, leaving the input unchanged.
+ */
 template <typename T>
 inline bool NativeFromReShadeProxy(T** reshade_proxy) {
-  if (reshade_proxy == nullptr) return false;
+  if (reshade_proxy == nullptr) {
+    OutputDebugStringA("NativeFromReShadeProxy: null pointer-to-pointer argument.\n");
+    assert(reshade_proxy != nullptr && "NativeFromReShadeProxy requires a valid pointer-to-pointer");
+    return false;
+  }
   auto* unknown = static_cast<IUnknown*>(*reshade_proxy);
-  if (unknown == nullptr) return false;
+  if (unknown == nullptr) {
+    OutputDebugStringA("NativeFromReShadeProxy: null COM object.\n");
+    assert(unknown != nullptr && "NativeFromReShadeProxy requires a non-null ReShade proxy");
+    return false;
+  }
   ReShadeRetrieveBaseInterface* native_base = nullptr;
-  if (SUCCEEDED(unknown->QueryInterface(&native_base))) {
+  const HRESULT result = unknown->QueryInterface(&native_base);
+  if (SUCCEEDED(result) && native_base != nullptr) {
     native_base->Release();
     *reshade_proxy = reinterpret_cast<T*>(native_base);
     return true;
   }
+  OutputDebugStringA("NativeFromReShadeProxy: expected ReShade proxy did not return a downstream interface.\n");
+  assert(SUCCEEDED(result) && native_base != nullptr
+         && "NativeFromReShadeProxy requires a ReShade proxy supporting downstream retrieval");
   return false;
 }
 
