@@ -340,7 +340,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Version: 1.2.0 (" + std::string(renodx::utils::date::ISO_DATE) + ")",
+        .label = "Version: 1.3.0 (" + std::string(renodx::utils::date::ISO_DATE) + ")",
         .section = "About",
     },
 };
