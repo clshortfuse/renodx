@@ -25,6 +25,7 @@
 #include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/state.hpp"
+#include "./pipeline_layouts.hpp"
 #include "./resource_fixes.hpp"
 #include "./shared.h"
 #include "./swapchain_proxy.hpp"
@@ -36,13 +37,13 @@ ShaderInjectData shader_injection;
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Apply UI replacements only when writing to the backbuffer.
     CustomSwapchainShader(0x071AB204),
-    CustomSwapchainShader(0x096D7C1F),  // sometimes not UI
+    CustomSwapchainShader(0x096D7C1F),  // Also used outside the UI.
     CustomSwapchainShader(0x14BF23D4),
     CustomSwapchainShader(0x1994C234),
     CustomSwapchainShader(0x1B0D650C),
     CustomSwapchainShader(0x250D4A71),
     CustomSwapchainShader(0x26B3FAA9),
-    CustomSwapchainShader(0x712840D6),  // Progress bar, also reused for scene/stencil work.
+    CustomSwapchainShader(0x712840D6),  // Progress bar; also draws scene color and stencil masks.
     CustomSwapchainShader(0x76A78879),
     CustomSwapchainShader(0x7BE28339),
     CustomSwapchainShader(0x82DD0BD4),
@@ -342,7 +343,7 @@ void OnInitDevice(reshade::api::device* device) {
 
   if (!device->check_format_support(reshade::api::format::r16g16b16a16_float,
                                     reshade::api::resource_usage::render_target | reshade::api::resource_usage::shader_resource)) {
-    renodx::utils::log::w("rdr2vk: RGBA16F rendering/sampling is required for scene resource upgrades.");
+    renodx::utils::log::w("rdr2vk: scene texture upgrades require support for drawing to and reading RGBA16F textures.");
     return;
   }
 
@@ -354,7 +355,7 @@ void OnInitDevice(reshade::api::device* device) {
       },
   };
   if (!renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos)) {
-    renodx::utils::log::e("rdr2vk: scene resource upgrades could not be installed.");
+    renodx::utils::log::e("rdr2vk: could not enable the scene texture upgrades.");
   }
 }
 
@@ -371,7 +372,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
     renodx::utils::log::i("rdr2vk: Build: ", renodx::utils::date::ISO_DATE_TIME);
 
-    // End-pass repair must run before the shared callback discards pending clones.
+    // Apply queued texture clears before the shared end-of-pass callback drops them.
     rdr2vk::resource_fixes::Use(DLL_PROCESS_ATTACH);
 
     if (!initialized) {
@@ -381,13 +382,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         } else if (hash != rdr2vk::swapchain_proxy::internal::SCENE_BLIT_SHADER
                    && hash != rdr2vk::swapchain_proxy::internal::SCENE_BLIT_MSAA_SHADER
                    && hash != rdr2vk::swapchain_proxy::internal::SCENE_TAA_SHARPEN_SHADER) {
-          // Blits and sharpening are observed separately, with scene evidence.
+          // Copies and sharpening also serve menus. Check their input separately
+          // before counting them as scene output.
           shader.on_drawn = rdr2vk::swapchain_proxy::OnSceneDrawn;
         }
       }
       renodx::utils::state::use_snapshot = true;
-      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
-        return device->get_api() == reshade::api::device_api::vulkan;
+      renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
+      // Check before creation as well as initialization. Otherwise the shared
+      // code can add shader settings to a layout that our shaders never use.
+      renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
+        return device->get_api() == reshade::api::device_api::vulkan
+               && rdr2vk::pipeline_layouts::ShouldInject(params);
+      };
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto params) {
+        return device->get_api() == reshade::api::device_api::vulkan
+               && rdr2vk::pipeline_layouts::ShouldInject(params);
       };
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::force_pipeline_cloning = true;
@@ -405,7 +415,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       initialized = true;
     }
   } else if (fdw_reason == DLL_PROCESS_DETACH) {
-    // Stop our callbacks before shared swapchain/resource teardown.
+    // Stop our callbacks before the shared code frees the textures and output buffers.
+    rdr2vk::resource_fixes::UseDescriptorFilters(DLL_PROCESS_DETACH);
     rdr2vk::swapchain_proxy::Use(DLL_PROCESS_DETACH);
     rdr2vk::resource_fixes::Use(DLL_PROCESS_DETACH);
     reshade::unregister_event<reshade::addon_event::init_device>(&OnInitDevice);
@@ -416,10 +427,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
-  // Register after swapchain's callback so its defaults cannot overwrite the vendor-specific list.
   if (fdw_reason == DLL_PROCESS_ATTACH) {
-    // Replace only the stock proxy owner after the shared hooks are installed.
+    // Keep the shared setup, but use our final output pass.
     rdr2vk::swapchain_proxy::Use(DLL_PROCESS_ATTACH);
+    rdr2vk::resource_fixes::UseDescriptorFilters(DLL_PROCESS_ATTACH);
+    // Apply our GPU-specific upgrade rules after the shared defaults are set.
     reshade::register_event<reshade::addon_event::init_device>(&OnInitDevice);
   } else if (fdw_reason == DLL_PROCESS_DETACH) {
     reshade::unregister_addon(h_module);
