@@ -378,8 +378,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       for (auto& [hash, shader] : custom_shaders) {
         if (shader.on_replace != nullptr) {
           shader.on_draw = rdr2vk::swapchain_proxy::OnBeforeUIDraw;
-        } else if (hash != 0x1FC46AC9u) {
-          // The generic menu/scene blit is observed separately, with scene evidence.
+        } else if (hash != rdr2vk::swapchain_proxy::internal::SCENE_BLIT_SHADER
+                   && hash != rdr2vk::swapchain_proxy::internal::SCENE_BLIT_MSAA_SHADER
+                   && hash != rdr2vk::swapchain_proxy::internal::SCENE_TAA_SHARPEN_SHADER) {
+          // Blits and sharpening are observed separately, with scene evidence.
           shader.on_drawn = rdr2vk::swapchain_proxy::OnSceneDrawn;
         }
       }

@@ -1,9 +1,10 @@
 #define RENODX_SHADER_INJECTION_UNIFORM
 #include "../shared.h"
 
-[[vk::binding(0, 0)]] Texture2D<float4> source_texture;
+[[vk::binding(0, 0)]]
+Texture2D<float4> source_texture;
 
-float4 main(float4 position : SV_Position) : SV_Target {
+float4 main(float4 position: SV_Position) : SV_Target {
   // Submission order selects one pass; disabled menu/later-UI passes
   // must not rewrite even unchanged color or alpha.
   if (RENODX_SCENE_BRIGHTNESS_ENABLED == 0.f) discard;
