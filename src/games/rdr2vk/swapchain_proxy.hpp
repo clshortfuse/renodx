@@ -45,8 +45,15 @@
 namespace rdr2vk::swapchain_proxy {
 namespace internal {
 
-// Only the ABI used by these forwarding hooks is needed. This avoids adding a
-// Vulkan SDK/include-path requirement to every addon in the global build.
+// Both blits copy their input unchanged. They also serve menus, so we only
+// count them as scene output when their input came from a known scene shader.
+static constexpr std::uint32_t SCENE_BLIT_SHADER = 0x1FC46AC9u;
+static constexpr std::uint32_t SCENE_BLIT_MSAA_SHADER = 0xF60E4A26u;
+static constexpr std::uint32_t SCENE_FXAA_SHADER = 0x599298B6u;
+static constexpr std::uint32_t SCENE_TAA_SHARPEN_SHADER = 0xEF9E7CFCu;
+
+// Declare only the Vulkan types needed to watch acquisition and submission.
+// This keeps the addon from requiring Vulkan SDK headers in the build setup.
 using VkDevice = struct VkDevice_T*;
 using VkQueue = struct VkQueue_T*;
 using VkCommandBuffer = struct VkCommandBuffer_T*;
@@ -88,6 +95,8 @@ static_assert(offsetof(VkCommandBufferBeginInfo, flags) == 16
               && offsetof(VkAcquireNextImageInfoKHR, swapchain) == 16);
 
 struct BackBufferSubmission {
+  // Accumulate what has been submitted for this acquired image. CPU recording
+  // order is not reliable: a worker can record the HUD before the scene.
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
   bool scene = false;
   bool ui = false;
@@ -95,6 +104,8 @@ struct BackBufferSubmission {
   bool failed = false;
 
   constexpr bool ApplyRecording(bool scene_write, bool ui_write, bool has_brightness_pass, bool invalid_recording) {
+    // Select only the first UI boundary after scene output. A later scene write
+    // would invalidate that boundary, so reject it rather than scale the HUD.
     failed |= invalid_recording || (scene_write && ui);
     const bool first_scene_ui = ui_write && (scene || scene_write) && !ui;
     if (first_scene_ui) {
@@ -190,6 +201,7 @@ struct BackBufferReference {
 };
 
 struct RecordedBackBuffer {
+  // This list's evidence is kept separate until its position in the queue is known.
   BackBufferReference owner;
   reshade::api::resource scene_source = {0};
   bool scene_source_after_ui = false;
@@ -206,8 +218,8 @@ struct RecordedBackBuffer {
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
 };
 
-// Vulkan requires command-buffer recording and reset to be externally synchronized.
-// These records belong to one recording, not to a CPU frame or recording thread.
+// Keep evidence with the command list, not the worker thread or a CPU frame.
+// Vulkan requires the game to finish using a list before resetting it.
 struct __declspec(uuid("3d714413-6741-470a-b0a8-6d443d0c7dbe")) CommandListData {
   std::optional<reshade::api::render_pass_render_target_desc> target;
   std::optional<reshade::api::render_pass_depth_stencil_desc> depth;
@@ -240,8 +252,8 @@ struct PendingBackBuffer {
   std::vector<reshade::api::resource> scene_resources;
 };
 
-// ReShade emits execute_command_list before vkQueueSubmit returns. Keep the
-// provisional queue order local to that call and commit only on VK_SUCCESS.
+// ReShade reports lists before Vulkan says whether submission succeeded.
+// Collect their changes during that call and keep them only if it succeeds.
 static thread_local std::vector<PendingBackBuffer>* pending_submissions = nullptr;
 static thread_local std::optional<std::uint32_t> command_buffer_flags;
 static PFN_vkAcquireNextImageKHR acquire_next_image = nullptr;
@@ -323,8 +335,11 @@ static bool RenderSceneBrightness(
   cmd_list->copy_resource(buffer->clone, buffer->scene_copy);
   cmd_list->barrier(buffer->scene_copy, reshade::api::resource_usage::copy_dest, reshade::api::resource_usage::shader_resource);
   cmd_list->barrier(buffer->clone, reshade::api::resource_usage::copy_source, reshade::api::resource_usage::render_target);
-  // One shared.h cbuffer holds both settings and submit-time enable state.
-  // Push bindings avoid retaining sets in ReShade's limited descriptor pool.
+  // Scale the decoded scene by Game Brightness / UI Brightness. The final
+  // proxy multiplies everything by UI Brightness, leaving the scene at Game
+  // Brightness and the HUD at UI Brightness. The shader leaves alpha unchanged.
+  // Settings and the enable switch share the existing shared.h buffer.
+  // Push bindings avoid using up ReShade's limited descriptor-set pool.
   auto& pass = buffer->scene_scale_pass;
   const reshade::api::buffer_range injection_range = {
       .buffer = (fallback ? buffer->shader_injection : injection->buffer), .offset = 0, .size = sizeof(ShaderInjectData)};
@@ -648,19 +663,24 @@ static void OnSceneDrawn(reshade::api::command_list* cmd_list) {
   buffer->usage = reshade::api::resource_usage::render_target;
 }
 
-// Observe completed scene writes without changing either shader's vanilla math.
+// Observe scene output without changing the game's shader math.
 static constexpr auto ON_SCENE_OUTPUT = []<typename Context>(Context& context)
     -> renodx::utils::command_action::CallbackResult<Context> {
-  const auto* recording = renodx::utils::data::Get<CommandListData>(context.cmd_list);
+  auto* recording = renodx::utils::data::Get<CommandListData>(context.cmd_list);
   if (recording == nullptr || !recording->target.has_value()) return {};
-  if (context.matched_shader_hash == 0x1FC46AC9u) {
+  if (context.matched_shader_hash == SCENE_BLIT_SHADER || context.matched_shader_hash == SCENE_BLIT_MSAA_SHADER
+      || context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER) {
+    // Blits and TAA sharpening read the finished scene from different bindings.
+    // Check the actual input instead of assuming every use contains scene color.
+    const std::uint32_t source_binding = (context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER ? 156u : 186u);
     auto* device = context.cmd_list->get_device();
     const auto tables = renodx::utils::state::CopyBoundDescriptorTables(
         context.cmd_list, renodx::utils::state::PipelineBindPoint::GRAPHICS);
     if (!tables.has_value() || !tables->known || !tables->tables.has(1)) return {};
     reshade::api::descriptor_heap heap = {};
     std::uint32_t offset = 0;
-    if (!renodx::utils::descriptor::TryGetDescriptorHeapOffset(device, tables->tables.get(1), 186, 0, &heap, &offset)) return {};
+    if (!renodx::utils::descriptor::TryGetDescriptorHeapOffset(
+            device, tables->tables.get(1), source_binding, 0, &heap, &offset)) return {};
     auto* descriptors = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
     if (descriptors == nullptr) return {};
     reshade::api::resource_view source_view = {};
@@ -672,19 +692,25 @@ static constexpr auto ON_SCENE_OUTPUT = []<typename Context>(Context& context)
       }
     }
     if (source_view.handle == 0) return {};
+
+    // Offscreen copies do not establish scene output on the backbuffer.
     const auto source = device->get_resource_from_view(source_view);
     const auto target = device->get_resource_from_view(recording->target->view);
     const auto owner = FindBackBuffer(device, *recording, target);
     if (owner.state == nullptr) return {};
-    auto* buffer = GetRecordedBackBuffer(renodx::utils::data::Get<CommandListData>(context.cmd_list), owner);
+    auto* buffer = GetRecordedBackBuffer(recording, owner);
     if (buffer == nullptr) return {};
-    // Resolve against completed producers at submission, not CPU recording time.
+    // Remember which texture this blit reads. Submission order tells us whether
+    // an earlier list produced scene color in it; recording timestamps cannot.
     buffer->scene_source = source;
     buffer->scene_source_after_ui = buffer->ui;
-    buffer->scene_source_local = std::find(recording->scene_resources.begin(), recording->scene_resources.end(), source) != recording->scene_resources.end();
+    buffer->scene_source_local =
+        std::find(recording->scene_resources.begin(), recording->scene_resources.end(), source)
+        != recording->scene_resources.end();
     buffer->usage = reshade::api::resource_usage::render_target;
     return {};
   }
+  // FXAA is already a known scene output. Observe it after the game's draw.
   return {.post_callback = [](Context& completed, const void*) { OnSceneDrawn(completed.cmd_list); }};
 };
 
@@ -693,8 +719,8 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
   if (recording == nullptr || !recording->target.has_value()) return true;
   auto* device = cmd_list->get_device();
   auto target = *recording->target;
-  // Scene processing and offscreen background copies precede this boundary.
-  // Only actual backbuffer UI starts scene brightness normalization.
+  // UI atlases and pause-background copies are not the end of the scene.
+  // Only UI drawn onto the actual backbuffer can start brightness scaling.
   const auto resource = device->get_resource_from_view(target.view);
   if (resource.handle == 0) return true;
   const auto owner = FindBackBuffer(device, *recording, resource);
@@ -739,8 +765,8 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
     recorded->brightness_not_required = true;
     return true;
   }
-  // Scene eligibility is resolved in GPU submission order, not by whichever
-  // recording worker happens to reach this draw first.
+  // Record a disabled pass now, even if another worker has not recorded the
+  // scene yet. Enable it later only if submission order proves it follows scene.
   if (buffer.scene_failed || buffer.acquisition_id == 0 || recorded->acquisition_id != buffer.acquisition_id
       || !recording->can_suspend || !color_write_mask.has_value()) return true;
 
@@ -804,13 +830,14 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
     }
     injection.data = static_cast<ShaderInjectData*>(mapped);
   }
-  // Vulkan forbids resetting this non-simultaneous command list while pending;
-  // this recording's shared data can be written now and selected at submission.
+  // Each recording needs its own settings upload: several workers can record
+  // competing UI boundaries. Only the selected upload will enable its pass.
   auto* injection = &recording->shader_injections[recording->used_injections++];
   *injection->data = *settings;
   injection->data->scene_brightness_enabled = 0.f;
 
-  // Materialize pending clone clears once, then restart with LOAD after our pass.
+  // Finish any deferred clear before copying the scene. Resume the game's pass
+  // without clearing it again, then restore the graphics state for the UI draw.
   renodx::utils::resource::upgrade::HandlePendingRenderPassRenderTargets(cmd_list);
   cmd_list->end_render_pass();
   if (depth_resource.handle != 0) {
@@ -878,6 +905,8 @@ static void OnExecuteSecondaryCommandList(
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
+  // Vulkan can reuse a destroyed texture's handle. Do not let a new texture
+  // inherit the old texture's scene classification.
   swapchains.for_each([&](const auto& entry) {
     const auto& [chain, state] = entry;
     if (chain->get_device() != device) return;
@@ -892,6 +921,8 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
   auto* recording = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (recording == nullptr) return;
   const auto publish_scene_resources = [&]() {
+    // Publish outputs after checking this list's blits. Otherwise a scene write
+    // later in the list could incorrectly validate an earlier blit.
     if (pending_submissions == nullptr || recording->scene_resources.empty()) return;
     swapchains.for_each([&](const auto& entry) {
       const auto& [chain, state] = entry;
@@ -947,22 +978,34 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
       pending_submissions->push_back({.owner = recorded.owner, .acquisition_id = buffer.acquisition_id, .submitted = buffer.submitted, .scene_resources = buffer.submitted_scene_resources});
       pending_buffer = &pending_submissions->back();
     }
+    // Decide whether this list writes scene color before selecting its UI pass.
     auto* submitted = &pending_buffer->submitted;
-    const bool scene = recorded.scene || recorded.scene_source_local || (recorded.scene_source.handle != 0 && std::find(pending_buffer->scene_resources.begin(), pending_buffer->scene_resources.end(), recorded.scene_source) != pending_buffer->scene_resources.end());
+    const bool scene = recorded.scene || recorded.scene_source_local
+                       || (recorded.scene_source.handle != 0
+                           && std::find(pending_buffer->scene_resources.begin(), pending_buffer->scene_resources.end(), recorded.scene_source)
+                                  != pending_buffer->scene_resources.end());
+
+    // Reject stale or unsafe recordings instead of applying a partial correction.
     const bool stale_recording = recorded.acquisition_id == 0 || recorded.acquisition_id != buffer.acquisition_id;
     const bool scene_after_ui = scene && submitted->ui;
     const bool queue_changed = state->queue != nullptr && state->queue != queue;
     const bool repeated_recording = recorded.brightness != nullptr && recorded.brightness->data->scene_brightness_enabled != 0.f;
     const bool first_scene_ui = recorded.ui && (submitted->scene || scene) && !submitted->ui;
     const bool has_brightness_pass = recorded.brightness_not_required || recorded.brightness != nullptr;
-    const bool enable = submitted->ApplyRecording(scene, recorded.ui, has_brightness_pass && !buffer.scene_failed,
-                                                  stale_recording || recorded.late_scene || (scene && recorded.scene_source_after_ui) || queue_changed || repeated_recording);
+    const bool invalid_recording = stale_recording || recorded.late_scene
+                                   || (scene && recorded.scene_source_after_ui)
+                                   || queue_changed || repeated_recording;
+
+    // Only the first valid UI boundary after scene output enables its upload.
+    const bool enable = submitted->ApplyRecording(
+        scene, recorded.ui, has_brightness_pass && !buffer.scene_failed, invalid_recording);
     if (recorded.brightness != nullptr) {
       recorded.brightness->data->scene_brightness_enabled = (enable ? 1.f : 0.f);
       if (enable) {
         pending_buffer->selected = recorded.brightness;
       }
     }
+    // A later failure also disables any pass selected earlier in this submission.
     if (submitted->failed) {
       if (pending_buffer->selected != nullptr) {
         pending_buffer->selected->data->scene_brightness_enabled = 0.f;
@@ -1300,7 +1343,7 @@ static void Use(DWORD reason) {
     reshade::register_event<reshade::addon_event::barrier>(internal::OnBarrier);
     reshade::register_event<reshade::addon_event::execute_command_list>(internal::OnExecuteCommandList);
     reshade::register_event<reshade::addon_event::execute_secondary_command_list>(internal::OnExecuteSecondaryCommandList);
-    for (const auto hash : {0x1FC46AC9u, 0x599298B6u}) {
+    for (const auto hash : {internal::SCENE_BLIT_SHADER, internal::SCENE_BLIT_MSAA_SHADER, internal::SCENE_FXAA_SHADER, internal::SCENE_TAA_SHARPEN_SHADER}) {
       renodx::utils::command_action::Filter filter = {};
       filter.shader_hash = hash;
       filter.command_types = renodx::utils::command_action::COMMAND_TYPE_DIRECT_DRAW;
