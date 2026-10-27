@@ -41,19 +41,20 @@
 #include "../../utils/state.hpp"
 #include "../../utils/windowing.hpp"
 #include "./shared.h"
+#include "./view_lifetime_trace.hpp"
 
 namespace rdr2vk::swapchain_proxy {
 namespace internal {
 
-// Both blits copy their input unchanged. They also serve menus, so we only
+// Both copy shaders leave their input unchanged. They also serve menus, so we only
 // count them as scene output when their input came from a known scene shader.
 static constexpr std::uint32_t SCENE_BLIT_SHADER = 0x1FC46AC9u;
 static constexpr std::uint32_t SCENE_BLIT_MSAA_SHADER = 0xF60E4A26u;
 static constexpr std::uint32_t SCENE_FXAA_SHADER = 0x599298B6u;
 static constexpr std::uint32_t SCENE_TAA_SHARPEN_SHADER = 0xEF9E7CFCu;
 
-// Declare only the Vulkan types needed to watch acquisition and submission.
-// This keeps the addon from requiring Vulkan SDK headers in the build setup.
+// Declare the Vulkan types used by our hooks here, so building this addon does
+// not require the Vulkan SDK headers.
 using VkDevice = struct VkDevice_T*;
 using VkQueue = struct VkQueue_T*;
 using VkCommandBuffer = struct VkCommandBuffer_T*;
@@ -61,7 +62,7 @@ using VkSwapchainKHR = struct VkSwapchainKHR_T*;
 using VkSemaphore = struct VkSemaphore_T*;
 using VkFence = struct VkFence_T*;
 using VkResult = std::int32_t;
-// Submit structures are opaque here: the hooks forward the original arrays.
+// We only pass these pointers to the original function; we never read their fields.
 struct VkSubmitInfo;
 struct VkSubmitInfo2;
 struct VkCommandBufferBeginInfo {
@@ -86,6 +87,45 @@ using PFN_vkAcquireNextImage2KHR = VkResult(WINAPI*)(VkDevice, const VkAcquireNe
 using PFN_vkBeginCommandBuffer = VkResult(WINAPI*)(VkCommandBuffer, const VkCommandBufferBeginInfo*);
 using PFN_vkQueueSubmit = VkResult(WINAPI*)(VkQueue, std::uint32_t, const VkSubmitInfo*, VkFence);
 using PFN_vkQueueSubmit2 = VkResult(WINAPI*)(VkQueue, std::uint32_t, const VkSubmitInfo2*, VkFence);
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+using PFN_vkDestroyImageView = void(WINAPI*)(VkDevice, std::uint64_t, const void*);
+static PFN_vkDestroyImageView destroy_image_view = nullptr;
+struct VkBufferViewCreateInfo {
+  std::uint32_t type;
+  const void* next;
+  std::uint32_t flags;
+  std::uint64_t buffer;
+  std::uint32_t format;
+  std::uint64_t offset;
+  std::uint64_t range;
+};
+static_assert(sizeof(VkBufferViewCreateInfo) == 56 && offsetof(VkBufferViewCreateInfo, buffer) == 24
+              && offsetof(VkBufferViewCreateInfo, offset) == 40);
+using PFN_vkCreateBufferView = VkResult(WINAPI*)(VkDevice, const VkBufferViewCreateInfo*, const void*, std::uint64_t*);
+static PFN_vkCreateBufferView create_buffer_view = nullptr;
+static PFN_vkDestroyImageView destroy_buffer_view = nullptr;
+struct VkWriteDescriptorSet {
+  std::uint32_t type;
+  const void* next;
+  std::uint64_t set;
+  std::uint32_t binding;
+  std::uint32_t element;
+  std::uint32_t count;
+  std::uint32_t descriptor_type;
+  const void* images;
+  const void* buffers;
+  const std::uint64_t* views;
+};
+static_assert(sizeof(VkWriteDescriptorSet) == 64 && offsetof(VkWriteDescriptorSet, views) == 56);
+using PFN_vkUpdateDescriptorSets = void(WINAPI*)(VkDevice, std::uint32_t, const VkWriteDescriptorSet*, std::uint32_t, const void*);
+static PFN_vkUpdateDescriptorSets update_descriptor_sets = nullptr;
+using PFN_vkGetFenceStatus = VkResult(WINAPI*)(VkDevice, VkFence);
+using PFN_vkWaitForFences = VkResult(WINAPI*)(VkDevice, std::uint32_t, const std::uint64_t*, std::uint32_t, std::uint64_t);
+using PFN_vkResetFences = VkResult(WINAPI*)(VkDevice, std::uint32_t, const std::uint64_t*);
+static PFN_vkGetFenceStatus get_fence_status = nullptr;
+static PFN_vkWaitForFences wait_for_fences = nullptr;
+static PFN_vkResetFences reset_fences = nullptr;
+#endif
 static constexpr VkResult VK_SUCCESS = 0;
 static constexpr VkResult VK_SUBOPTIMAL_KHR = 1000001003;
 static constexpr std::uint32_t VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT = 2;
@@ -95,7 +135,7 @@ static_assert(offsetof(VkCommandBufferBeginInfo, flags) == 16
               && offsetof(VkAcquireNextImageInfoKHR, swapchain) == 16);
 
 struct BackBufferSubmission {
-  // Accumulate what has been submitted for this acquired image. CPU recording
+  // Track what has been sent to the GPU for this use of the image. CPU recording
   // order is not reliable: a worker can record the HUD before the scene.
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
   bool scene = false;
@@ -104,8 +144,8 @@ struct BackBufferSubmission {
   bool failed = false;
 
   constexpr bool ApplyRecording(bool scene_write, bool ui_write, bool has_brightness_pass, bool invalid_recording) {
-    // Select only the first UI boundary after scene output. A later scene write
-    // would invalidate that boundary, so reject it rather than scale the HUD.
+    // Adjust brightness only before the first UI draw after the scene. Reject
+    // later scene writes rather than accidentally changing the HUD's brightness.
     failed |= invalid_recording || (scene_write && ui);
     const bool first_scene_ui = ui_write && (scene || scene_write) && !ui;
     if (first_scene_ui) {
@@ -138,7 +178,7 @@ static_assert([] {
   BackBufferSubmission late;
   late.ApplyRecording(false, true, true, false);
   if (late.ApplyRecording(true, false, false, false) || !late.failed) return false;
-  // A new acquisition must not inherit an earlier image generation's UI.
+  // Reusing an acquired image must not carry over the previous use's UI flags.
   parallel = {};
   return parallel.ApplyRecording(true, true, true, false) && !parallel.failed;
 }());
@@ -158,8 +198,8 @@ static void DestroyShaderInjectionBuffer(reshade::api::device* device, ShaderInj
 }
 
 struct BackBufferState {
-  // The fixed-size vector owns these GPU-bearing entries; copying or replacing
-  // an entry would duplicate handles or bypass retirement.
+  // This fixed-size vector owns the GPU objects. Copying or replacing an entry
+  // would duplicate its handles or skip the cleanup that waits for the GPU.
   BackBufferState() = default;
   BackBufferState(const BackBufferState&) = delete;
   BackBufferState& operator=(const BackBufferState&) = delete;
@@ -201,7 +241,7 @@ struct BackBufferReference {
 };
 
 struct RecordedBackBuffer {
-  // This list's evidence is kept separate until its position in the queue is known.
+  // Keep this list's records separate until we know its GPU submission order.
   BackBufferReference owner;
   reshade::api::resource scene_source = {0};
   bool scene_source_after_ui = false;
@@ -218,7 +258,7 @@ struct RecordedBackBuffer {
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
 };
 
-// Keep evidence with the command list, not the worker thread or a CPU frame.
+// Keep drawing records with the command list, not the worker thread or CPU frame.
 // Vulkan requires the game to finish using a list before resetting it.
 struct __declspec(uuid("3d714413-6741-470a-b0a8-6d443d0c7dbe")) CommandListData {
   std::optional<reshade::api::render_pass_render_target_desc> target;
@@ -315,7 +355,7 @@ static bool RenderSceneBrightness(
   if (!(values->diffuse_white_nits > 0.f) || !std::isfinite(values->diffuse_white_nits)
       || !(values->graphics_white_nits > 0.f) || !std::isfinite(values->graphics_white_nits)) {
     buffer->scene_failed = true;
-    renodx::utils::log::e("rdr2vk: invalid scene/UI brightness values; waiting for swapchain recreation.");
+    renodx::utils::log::e("rdr2vk: invalid Game/UI Brightness values; waiting for the game to recreate its output buffers.");
     return false;
   }
   if (fallback && values->diffuse_white_nits == values->graphics_white_nits) return true;
@@ -328,8 +368,8 @@ static bool RenderSceneBrightness(
     cmd_list->barrier(buffer->shader_injection, reshade::api::resource_usage::copy_dest, reshade::api::resource_usage::constant_buffer);
   }
 
-  // Every use ends in copy_dest, after synchronizing its shader reads. Preserve
-  // that layout/dependency across lists even though this copy overwrites it all.
+  // The last use left this image in copy_dest after its shader reads. Keep the
+  // barrier so those reads finish before this list overwrites the image.
   cmd_list->barrier(buffer->scene_copy, reshade::api::resource_usage::copy_dest, reshade::api::resource_usage::copy_dest);
   cmd_list->barrier(buffer->clone, usage, reshade::api::resource_usage::copy_source);
   cmd_list->copy_resource(buffer->clone, buffer->scene_copy);
@@ -338,8 +378,8 @@ static bool RenderSceneBrightness(
   // Scale the decoded scene by Game Brightness / UI Brightness. The final
   // proxy multiplies everything by UI Brightness, leaving the scene at Game
   // Brightness and the HUD at UI Brightness. The shader leaves alpha unchanged.
-  // Settings and the enable switch share the existing shared.h buffer.
-  // Push bindings avoid using up ReShade's limited descriptor-set pool.
+  // Settings and the enable switch use the same buffer layout from shared.h.
+  // Bind them directly instead of taking sets from ReShade's limited pool.
   auto& pass = buffer->scene_scale_pass;
   const reshade::api::buffer_range injection_range = {
       .buffer = (fallback ? buffer->shader_injection : injection->buffer), .offset = 0, .size = sizeof(ShaderInjectData)};
@@ -352,7 +392,7 @@ static bool RenderSceneBrightness(
   cmd_list->barrier(buffer->scene_copy, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::copy_dest);
   if (!rendered) {
     buffer->scene_failed = true;
-    renodx::utils::log::e("rdr2vk: scene brightness pass failed; waiting for swapchain recreation.");
+    renodx::utils::log::e("rdr2vk: could not draw the scene brightness pass; waiting for the game to recreate its output buffers.");
   }
   return rendered;
 }
@@ -368,8 +408,8 @@ static void RetireSwapchain(const std::shared_ptr<SwapchainState>& state) {
     queue = std::exchange(state->queue, nullptr);
   }
 
-  // Present submits with application semaphores. Only drain at a lifetime boundary,
-  // never from the normal present/failure path, and never while holding registry locks.
+  // Presentation uses the game's semaphores. Wait for the queue only during
+  // cleanup, not during normal frames or error handling. Release registry locks first.
   if (queue != nullptr) {
     queue->wait_idle();
   }
@@ -406,8 +446,8 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
   const auto* swapchain_data = renodx::utils::data::Get<renodx::mods::swapchain::v2::DeviceData>(device);
   if (swapchain_data == nullptr) return;
 
-  // Shader/configuration fields are set once by the earlier device-init callback.
-  // Do not hold the core swapchain mutex while querying the resource registry.
+  // The earlier device-init callback already set the shaders and configuration.
+  // Do not hold the shared swapchain lock while looking up texture information.
   if (swapchain_data->swap_chain_proxy_vertex_shader.empty()
       || swapchain_data->swap_chain_proxy_pixel_shader.empty()) return;
 
@@ -453,18 +493,18 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
     };
   }
 
-  // Create all clones before rendering workers can request them from a render-pass
-  // callback. The shared registry still owns them and retires them with each backbuffer.
-  // Do this after validating every backbuffer and without holding registry/state locks.
+  // Create the clones before rendering workers can request them while recording
+  // a pass. The shared code still owns them and frees them with their backbuffers.
+  // Check every backbuffer first, and do not hold registry or state locks here.
   for (std::uint32_t index = 0; index < back_buffer_count; ++index) {
     auto& buffer = state->back_buffers[index];
     const auto clone = renodx::utils::resource::upgrade::GetResourceClone(buffer.back_buffer);
     if (clone.handle == 0) {
-      renodx::utils::log::e("rdr2vk::swapchain_proxy: backbuffer clone initialization failed; index=", index);
+      renodx::utils::log::e("rdr2vk::swapchain_proxy: could not create the HDR backbuffer clone; index=", index);
       RetireSwapchain(state);
       return;
     }
-    // Shape is immutable for this image. Validate it before any pass can use it.
+    // This image's size and format will not change. Check them before drawing.
     bool valid_clone = false;
     renodx::utils::resource::GetLiveResourceInfo(clone, [&](const auto& info) {
       valid_clone = info.device == device && info.is_clone && info.fallback == buffer.back_buffer
@@ -474,7 +514,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
                     && info.desc.texture.depth_or_layers == 1 && info.desc.texture.samples == 1;
     });
     if (!valid_clone) {
-      renodx::utils::log::e("rdr2vk::swapchain_proxy: incompatible float clone; index=", index);
+      renodx::utils::log::e("rdr2vk::swapchain_proxy: HDR backbuffer clone has the wrong size, format, or owner; index=", index);
       RetireSwapchain(state);
       return;
     }
@@ -485,7 +525,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
         reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource);
     const reshade::api::resource_view_desc scene_view_desc(reshade::api::format::r16g16b16a16_float);
     auto& pass = buffer.scene_scale_pass;
-    // RenderPass owns these views, including cleanup after partial initialization.
+    // RenderPass owns and frees these views, even if a later setup step fails.
     auto& source_views = pass.shader_resource_slots.generated_views;
     auto& target_views = pass.render_target_slots.generated_views;
     source_views.resize(1);
@@ -517,8 +557,8 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
     pass.auto_generate_scissors = false;
     pass.scissors = {{.right = static_cast<std::int32_t>(width), .bottom = static_cast<std::int32_t>(height)}};
     pass.revert_state_after_render = false;
-    // A disabled pass discards every fragment, leaving menu/UI color and
-    // alpha untouched. The attachment therefore has to LOAD, not discard.
+    // A disabled pass writes no pixels. Use LOAD to keep the existing menu/UI
+    // color and alpha instead of discarding them when the pass starts.
     pass.render_target_load_op = reshade::api::render_pass_load_op::load;
     if (!device->check_capability(reshade::api::device_caps::partial_push_descriptor_updates)) {
       renodx::utils::log::e("rdr2vk: Vulkan push descriptors are required for scene brightness.");
@@ -526,7 +566,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
       return;
     }
     if (!device->create_resource({sizeof(ShaderInjectData), reshade::api::memory_heap::gpu_only, reshade::api::resource_usage::constant_buffer | reshade::api::resource_usage::copy_dest}, nullptr, reshade::api::resource_usage::constant_buffer, &buffer.shader_injection)) {
-      renodx::utils::log::e("rdr2vk: could not create shared shader injection buffer.");
+      renodx::utils::log::e("rdr2vk: could not create the shared shader settings buffer.");
       RetireSwapchain(state);
       return;
     }
@@ -567,8 +607,8 @@ static void OnResetCommandList(reshade::api::command_list* cmd_list) {
     recording->back_buffers.clear();
     recording->used_injections = 0;
     recording->scene_resources.clear();
-    // A secondary list can draw inside a pass only through inheritance. Without
-    // CONTINUE, a later begin_render_pass belongs to this primary list.
+    // A secondary list can draw inside another list's pass only with CONTINUE.
+    // Without that flag, a later begin_render_pass starts this list's own pass.
     recording->can_suspend = command_buffer_flags.has_value() && (*command_buffer_flags & (VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT)) == 0;
     recording->active_queries = 0;
   }
@@ -589,7 +629,7 @@ static void OnBeginRenderPass(
     const reshade::api::render_pass_depth_stencil_desc* depth) {
   auto* recording = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (recording == nullptr) return;
-  // Only a single-color pass can be interrupted by the pre-UI path.
+  // We can pause a pass for scene brightness only if it has one color target.
   recording->target = (count == 1 ? std::optional{targets[0]} : std::nullopt);
   recording->depth = (depth != nullptr ? std::optional{*depth} : std::nullopt);
 }
@@ -670,7 +710,7 @@ static constexpr auto ON_SCENE_OUTPUT = []<typename Context>(Context& context)
   if (recording == nullptr || !recording->target.has_value()) return {};
   if (context.matched_shader_hash == SCENE_BLIT_SHADER || context.matched_shader_hash == SCENE_BLIT_MSAA_SHADER
       || context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER) {
-    // Blits and TAA sharpening read the finished scene from different bindings.
+    // Copy shaders and TAA sharpening read the finished scene from different bindings.
     // Check the actual input instead of assuming every use contains scene color.
     const std::uint32_t source_binding = (context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER ? 156u : 186u);
     auto* device = context.cmd_list->get_device();
@@ -693,14 +733,27 @@ static constexpr auto ON_SCENE_OUTPUT = []<typename Context>(Context& context)
     }
     if (source_view.handle == 0) return {};
 
-    // Offscreen copies do not establish scene output on the backbuffer.
-    const auto source = device->get_resource_from_view(source_view);
+    // The saved binding may refer to a view that was already freed. Read our
+    // live records, not the driver. Missing records cannot prove this is the scene.
+    reshade::api::resource source = {};
+    renodx::utils::resource::GetLiveResourceViewInfo(source_view, [&](const auto& info) {
+      if (info.device != device || info.desc.type == reshade::api::resource_view_type::buffer) return;
+      source = (info.is_clone ? info.clone_resource : info.original_resource);
+    });
+    if (source.handle == 0) return {};
+    bool live_source = false;
+    renodx::utils::resource::GetLiveResourceInfo(source, [&](const auto& info) {
+      live_source = info.device == device && info.desc.type == reshade::api::resource_type::texture_2d;
+    });
+    if (!live_source) return {};
+    // Count scene output only when drawing to the backbuffer. Unlike the saved
+    // source_view above, this target is bound to the current render pass.
     const auto target = device->get_resource_from_view(recording->target->view);
     const auto owner = FindBackBuffer(device, *recording, target);
     if (owner.state == nullptr) return {};
     auto* buffer = GetRecordedBackBuffer(recording, owner);
     if (buffer == nullptr) return {};
-    // Remember which texture this blit reads. Submission order tells us whether
+    // Remember which texture this copy reads. Submission order tells us whether
     // an earlier list produced scene color in it; recording timestamps cannot.
     buffer->scene_source = source;
     buffer->scene_source_after_ui = buffer->ui;
@@ -776,13 +829,13 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
                                || (depth->depth_store_op == reshade::api::render_pass_store_op::store
                                    && depth->stencil_store_op == reshade::api::render_pass_store_op::store);
   if (!preserved_color || !preserved_depth || recording->active_queries != 0) {
-    // A menu/mask pass can legitimately be non-suspendable. Its missing
-    // brightness pass is checked at submission only if it follows scene output.
+    // Some menu and mask passes cannot be paused safely. A missing brightness
+    // pass is an error only if submission order puts it after scene drawing.
     return true;
   }
 
-  // Generic snapshot replay also rebinds render targets, which Vulkan does not support.
-  // Copy the tracked Vulkan graphics state and restore the attachments ourselves.
+  // The generic restore code also rebinds render targets, which Vulkan cannot do
+  // this way. Save the graphics state, but resume the render pass ourselves.
   const auto* handle = renodx::utils::state::internal::GetCommandListStateHandle(cmd_list);
   if (handle == nullptr || handle->api != reshade::api::device_api::vulkan) {
     buffer.scene_failed = true;
@@ -799,10 +852,14 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
   });
   if (device->get_resource_from_view(target.view) != owner.clone) {
     buffer.scene_failed = true;
-    renodx::utils::log::e("rdr2vk: UI attachment does not resolve to the tracked float backbuffer clone.");
+    renodx::utils::log::e("rdr2vk: the UI is not drawing to the expected HDR backbuffer clone.");
     return true;
   }
   target.load_op = reshade::api::render_pass_load_op::load;
+  // LOAD keeps the existing pixels, so clear values are unused. ReShade's
+  // legacy Vulkan cache still hashes them; keep them fixed instead of creating
+  // a new render pass and framebuffer whenever the game's clear color changes.
+  std::ranges::fill(target.clear_color, 0.f);
   reshade::api::resource depth_resource = {};
   if (depth.has_value()) {
     renodx::utils::resource::GetResourceViewInfo(depth->view, [&](const auto& info) {
@@ -813,6 +870,8 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
     depth_resource = device->get_resource_from_view(depth->view);
     depth->depth_load_op = reshade::api::render_pass_load_op::load;
     depth->stencil_load_op = reshade::api::render_pass_load_op::load;
+    depth->clear_depth = 0.f;
+    depth->clear_stencil = 0;
   }
 
   if (recording->used_injections == recording->shader_injections.size()) {
@@ -825,18 +884,18 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
       DestroyShaderInjectionBuffer(device, &injection);
       recording->shader_injections.pop_back();
       buffer.scene_failed = true;
-      renodx::utils::log::e("rdr2vk: could not create command-list shader injection buffer.");
+      renodx::utils::log::e("rdr2vk: could not create the shader settings buffer for this command list.");
       return true;
     }
     injection.data = static_cast<ShaderInjectData*>(mapped);
   }
-  // Each recording needs its own settings upload: several workers can record
-  // competing UI boundaries. Only the selected upload will enable its pass.
+  // Each recording needs its own settings copy. Several workers may record UI
+  // starts; submission order chooses which copy enables its brightness pass.
   auto* injection = &recording->shader_injections[recording->used_injections++];
   *injection->data = *settings;
   injection->data->scene_brightness_enabled = 0.f;
 
-  // Finish any deferred clear before copying the scene. Resume the game's pass
+  // Apply any queued clear before copying the scene. Resume the game's pass
   // without clearing it again, then restore the graphics state for the UI draw.
   renodx::utils::resource::upgrade::HandlePendingRenderPassRenderTargets(cmd_list);
   cmd_list->end_render_pass();
@@ -905,8 +964,8 @@ static void OnExecuteSecondaryCommandList(
 }
 
 static void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
-  // Vulkan can reuse a destroyed texture's handle. Do not let a new texture
-  // inherit the old texture's scene classification.
+  // Vulkan can reuse a freed texture's handle. Do not mistake the new texture
+  // for scene color just because the old texture held it.
   swapchains.for_each([&](const auto& entry) {
     const auto& [chain, state] = entry;
     if (chain->get_device() != device) return;
@@ -921,8 +980,8 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
   auto* recording = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (recording == nullptr) return;
   const auto publish_scene_resources = [&]() {
-    // Publish outputs after checking this list's blits. Otherwise a scene write
-    // later in the list could incorrectly validate an earlier blit.
+    // Check this list's copies before saving its scene outputs. A later scene
+    // write must not make an earlier menu copy look like scene output.
     if (pending_submissions == nullptr || recording->scene_resources.empty()) return;
     swapchains.for_each([&](const auto& entry) {
       const auto& [chain, state] = entry;
@@ -963,7 +1022,7 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
       buffer.submitted.failed = true;
       if (!buffer.ordering_reported) {
         buffer.ordering_reported = true;
-        renodx::utils::log::e("rdr2vk: Vulkan submission was not observed by the lifecycle hook.");
+        renodx::utils::log::e("rdr2vk: the queue-submit hook did not record this Vulkan submission.");
       }
       continue;
     }
@@ -985,7 +1044,7 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
                            && std::find(pending_buffer->scene_resources.begin(), pending_buffer->scene_resources.end(), recorded.scene_source)
                                   != pending_buffer->scene_resources.end());
 
-    // Reject stale or unsafe recordings instead of applying a partial correction.
+    // Do not adjust brightness for an old or unsafe recording.
     const bool stale_recording = recorded.acquisition_id == 0 || recorded.acquisition_id != buffer.acquisition_id;
     const bool scene_after_ui = scene && submitted->ui;
     const bool queue_changed = state->queue != nullptr && state->queue != queue;
@@ -996,7 +1055,7 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
                                    || (scene && recorded.scene_source_after_ui)
                                    || queue_changed || repeated_recording;
 
-    // Only the first valid UI boundary after scene output enables its upload.
+    // Enable only the brightness pass before the first UI draw after the scene.
     const bool enable = submitted->ApplyRecording(
         scene, recorded.ui, has_brightness_pass && !buffer.scene_failed, invalid_recording);
     if (recorded.brightness != nullptr) {
@@ -1012,7 +1071,7 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
       }
       if (!buffer.ordering_reported) {
         renodx::utils::log::e(
-            "rdr2vk: unsupported scene/UI submission; backbuffer=", renodx::utils::log::AsPtr(buffer.back_buffer.handle),
+            "rdr2vk: cannot safely separate scene and UI brightness for this submission; backbuffer=", renodx::utils::log::AsPtr(buffer.back_buffer.handle),
             "; acquisition=", buffer.acquisition_id,
             "; list=", renodx::utils::log::AsPtr(cmd_list),
             "; stale_recording=", stale_recording,
@@ -1025,7 +1084,7 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
             "; queue_changed=", queue_changed,
             "; repeated_recording=", repeated_recording,
             "; list_ui_shader=", renodx::utils::log::AsHex(recorded.ui_shader),
-            ". Skipping scene brightness for this acquired image.");
+            ". Skipping scene brightness for this use of the image.");
         buffer.ordering_reported = true;
       }
     }
@@ -1046,31 +1105,50 @@ static void CommitBackBuffers(const std::vector<PendingBackBuffer>& pending_buff
       buffer.submitted = pending.submitted;
       buffer.submitted_scene_resources = pending.scene_resources;
     } else {
-      // No accepted submission is inferred from ReShade's pre-submit event.
+      // ReShade's earlier callback does not mean Vulkan accepted the submission.
       buffer.submitted.failed = true;
     }
   }
 }
 
 static VkResult WINAPI QueueSubmit(VkQueue queue, std::uint32_t count, const VkSubmitInfo* submits, VkFence fence) {
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  const auto request = ++view_lifetime_trace::next_request;
+  const auto fence_handle = reinterpret_cast<std::uint64_t>(fence);
+  view_lifetime_trace::RecordSync("submit_enter", 0, reinterpret_cast<std::uint64_t>(queue), request, 0, 1, &fence_handle);
+#endif
   std::vector<PendingBackBuffer> pending;
   auto* outer = std::exchange(pending_submissions, &pending);
   const auto result = queue_submit(queue, count, submits, fence);
   pending_submissions = outer;
   CommitBackBuffers(pending, result);
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  view_lifetime_trace::RecordSync("submit_return", 0, reinterpret_cast<std::uint64_t>(queue), request, result, 1, &fence_handle);
+#endif
   return result;
 }
 
 static VkResult WINAPI QueueSubmit2(VkQueue queue, std::uint32_t count, const VkSubmitInfo2* submits, VkFence fence) {
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  const auto request = ++view_lifetime_trace::next_request;
+  const auto fence_handle = reinterpret_cast<std::uint64_t>(fence);
+  view_lifetime_trace::RecordSync("submit2_enter", 0, reinterpret_cast<std::uint64_t>(queue), request, 0, 1, &fence_handle);
+#endif
   std::vector<PendingBackBuffer> pending;
   auto* outer = std::exchange(pending_submissions, &pending);
   const auto result = queue_submit2(queue, count, submits, fence);
   pending_submissions = outer;
   CommitBackBuffers(pending, result);
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  view_lifetime_trace::RecordSync("submit2_return", 0, reinterpret_cast<std::uint64_t>(queue), request, result, 1, &fence_handle);
+#endif
   return result;
 }
 
 static void OnAcquireBackBuffer(VkSwapchainKHR swapchain, std::uint32_t index) {
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  view_lifetime_trace::RecordSync("acquire", 0, reinterpret_cast<std::uint64_t>(swapchain), 0, 0, index);
+#endif
   std::shared_ptr<SwapchainState> state;
   swapchains.for_each([&](const auto& entry) {
     const auto& [chain, registered] = entry;
@@ -1085,8 +1163,8 @@ static void OnAcquireBackBuffer(VkSwapchainKHR swapchain, std::uint32_t index) {
   ++buffer.acquisition_id;
   buffer.submitted = {};
   buffer.submitted_scene_resources.clear();
-  // Acquisition can precede the GPU semaphore signal. Mapped shader data stays
-  // with its command-list lifetime, not the CPU acquisition call.
+  // This call can return before the GPU semaphore signals. Leave mapped shader
+  // data with its command list; acquiring an image does not make that data safe to reuse.
 }
 
 static VkResult WINAPI AcquireNextImage(
@@ -1115,12 +1193,226 @@ static VkResult WINAPI BeginCommandBuffer(VkCommandBuffer buffer, const VkComman
   return result;
 }
 
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+static void WINAPI DestroyImageView(VkDevice device, std::uint64_t view, const void* allocator) {
+  // Record both sides so a missing return can locate a crash inside the call.
+  // Always call the real function, even if our records say the view was freed.
+  const auto outer = view_lifetime_trace::BeginDestroy("vulkan_destroy_enter", reinterpret_cast<std::uint64_t>(device), view);
+  destroy_image_view(device, view, allocator);
+  view_lifetime_trace::EndDestroy("vulkan_destroy_return", reinterpret_cast<std::uint64_t>(device), view, outer);
+}
+
+static VkResult WINAPI CreateBufferView(VkDevice device, const VkBufferViewCreateInfo* info,
+                                        const void* allocator, std::uint64_t* view) {
+  // Save the old output bytes without treating them as a valid view. A failed
+  // replacement may leave an older handle in the game's saved output location.
+  std::uint64_t previous_output = 0;
+  SIZE_T previous_bytes = 0;
+  if (view != nullptr) {
+    ReadProcessMemory(GetCurrentProcess(), view, &previous_output, sizeof(previous_output), &previous_bytes);
+  }
+  const auto outer = std::exchange(view_lifetime_trace::native_call,
+                                   view_lifetime_trace::NativeCall{.request = ++view_lifetime_trace::next_request, .creating = true});
+  view_lifetime_trace::Record("buffer_create_enter", reinterpret_cast<std::uint64_t>(device), 0);
+  const auto result = create_buffer_view(device, info, allocator, view);
+  if (result == VK_SUCCESS && info != nullptr && view != nullptr) {
+    view_lifetime_trace::Record("buffer_create_return", reinterpret_cast<std::uint64_t>(device), *view,
+                                info->buffer, 0, 0, false, false, info->format, info->offset, info->range);
+  } else if (result != VK_SUCCESS) {
+    // A failed call does not return a valid view. Save its output bytes only
+    // for the report; never pass them to Vulkan as a view.
+    std::uint64_t returned_output = 0;
+    SIZE_T returned_bytes = 0;
+    if (view != nullptr) {
+      ReadProcessMemory(GetCurrentProcess(), view, &returned_output, sizeof(returned_output), &returned_bytes);
+    }
+    {
+      std::unique_lock lock(view_lifetime_trace::trace.mutex);
+      // Save up to 16 creation failures, independently of the other report limits.
+      if (view_lifetime_trace::trace.failure_reports < 16) {
+        ++view_lifetime_trace::trace.failure_reports;
+        if (view_lifetime_trace::trace.failure_reports == 1) {
+          // Resource callbacks can take the trace lock. Release it before
+          // scanning their registries, then reacquire it only for file output.
+          lock.unlock();
+          // Read existing records only after an allocation fails. Do not add a
+          // second per-frame history just to measure the mod's resource use.
+          std::uint64_t live_resources = 0;
+          std::uint64_t live_buffers = 0;
+          std::uint64_t buffer_bytes = 0;
+          std::uint64_t upload_buffers = 0;
+          std::uint64_t upload_bytes = 0;
+          std::uint64_t live_textures = 0;
+          std::uint64_t texture_bytes = 0;
+          std::uint64_t upgraded_textures = 0;
+          std::uint64_t cloned_textures = 0;
+          std::uint64_t live_views = 0;
+          std::uint64_t buffer_views = 0;
+          std::uint64_t cloned_views = 0;
+          if (renodx::utils::resource::shared.data != nullptr) {
+            renodx::utils::resource::shared.data->resource_infos.for_each([&](const auto& entry) {
+              const auto& [handle, info] = entry;
+              if (info.destroyed || info.device == nullptr
+                  || info.device->get_native() != reinterpret_cast<std::uint64_t>(device)) return;
+              ++live_resources;
+              if (info.desc.type == reshade::api::resource_type::buffer) {
+                ++live_buffers;
+                buffer_bytes += info.desc.buffer.size;
+                if (info.desc.heap == reshade::api::memory_heap::cpu_to_gpu) {
+                  ++upload_buffers;
+                  upload_bytes += info.desc.buffer.size;
+                }
+              } else if (info.desc.type == reshade::api::resource_type::texture_2d
+                         || info.desc.type == reshade::api::resource_type::texture_3d
+                         || info.desc.type == reshade::api::resource_type::surface) {
+                ++live_textures;
+                texture_bytes += renodx::utils::resource::ComputeTextureSize(info.desc);
+                upgraded_textures += info.upgraded;
+                cloned_textures += info.is_clone;
+              }
+            });
+            renodx::utils::resource::shared.data->resource_view_infos.for_each([&](const auto& entry) {
+              const auto& [handle, info] = entry;
+              if (info.destroyed || info.device == nullptr
+                  || info.device->get_native() != reinterpret_cast<std::uint64_t>(device)) return;
+              ++live_views;
+              buffer_views += info.desc.type == reshade::api::resource_view_type::buffer;
+              cloned_views += info.is_clone;
+            });
+          }
+          std::array<char, 768> totals = {};
+          snprintf(totals.data(), totals.size(),
+                   "allocation_snapshot resources=%llu buffers=%llu buffer_bytes=%llu upload_buffers=%llu upload_bytes=%llu textures=%llu estimated_texture_bytes=%llu upgraded_textures=%llu cloned_textures=%llu views=%llu buffer_views=%llu cloned_views=%llu\n",
+                   live_resources, live_buffers, buffer_bytes, upload_buffers, upload_bytes, live_textures,
+                   texture_bytes, upgraded_textures, cloned_textures, live_views, buffer_views, cloned_views);
+          lock.lock();
+          view_lifetime_trace::WriteText(totals.data());
+        }
+        std::array<char, 768> line = {};
+        snprintf(line.data(), line.size(),
+                 "\nBUFFER_CREATE_FAILURE request=%llu thread=%lu result=%d device=%llx output_slot=%p before=%llx before_bytes=%llu after=%llx after_bytes=%llu buffer=%llx format=%u offset=%llx range=%llx\n",
+                 view_lifetime_trace::native_call.request, GetCurrentThreadId(), result,
+                 reinterpret_cast<std::uint64_t>(device), view, previous_output,
+                 static_cast<unsigned long long>(previous_bytes), returned_output,
+                 static_cast<unsigned long long>(returned_bytes), (info != nullptr ? info->buffer : 0),
+                 (info != nullptr ? info->format : 0), (info != nullptr ? info->offset : 0),
+                 (info != nullptr ? info->range : 0));
+        view_lifetime_trace::WriteText(line.data());
+        view_lifetime_trace::Evidence caller = {.sequence = view_lifetime_trace::trace.sequence + 1};
+        caller.frames = CaptureStackBackTrace(0, static_cast<DWORD>(caller.stack.size()), caller.stack.data(), nullptr);
+        view_lifetime_trace::WriteEvidence("failed_create_caller", caller);
+        view_lifetime_trace::WriteCallerCode(caller);
+        view_lifetime_trace::WriteSyncHistory();
+        if (view_lifetime_trace::trace.file != INVALID_HANDLE_VALUE) {
+          FlushFileBuffers(view_lifetime_trace::trace.file);
+        }
+      }
+    }
+  }
+  view_lifetime_trace::native_call = outer;
+  return result;
+}
+
+static void WINAPI DestroyBufferView(VkDevice device, std::uint64_t view, const void* allocator) {
+  // The captured crash tried to free the same buffer view twice. Block a repeat
+  // only when we recorded its creation and the completed first destroy call.
+  if (view_lifetime_trace::SuppressCompletedBufferDestroy(reinterpret_cast<std::uint64_t>(device), view)) return;
+  const auto outer = view_lifetime_trace::BeginDestroy("buffer_destroy_enter", reinterpret_cast<std::uint64_t>(device), view);
+  destroy_buffer_view(device, view, allocator);
+  view_lifetime_trace::EndDestroy("buffer_destroy_return", reinterpret_cast<std::uint64_t>(device), view, outer);
+}
+
+static void WINAPI UpdateDescriptorSets(VkDevice device, std::uint32_t count, const VkWriteDescriptorSet* writes,
+                                        std::uint32_t copy_count, const void* copies) {
+  LARGE_INTEGER counter = {};
+  QueryPerformanceCounter(&counter);
+  view_lifetime_trace::DescriptorBatch batch = {
+      .request = ++view_lifetime_trace::next_request,
+      .device = reinterpret_cast<std::uint64_t>(device),
+      .counter = counter.QuadPart,
+      .writes_address = reinterpret_cast<std::uint64_t>(writes),
+      .writes = count,
+      .copies = copy_count,
+  };
+  auto* outer_batch = std::exchange(view_lifetime_trace::active_descriptor_batch, &batch);
+  const auto outer_call = std::exchange(view_lifetime_trace::native_call,
+                                        view_lifetime_trace::NativeCall{.request = batch.request});
+  {
+    const std::unique_lock lock(view_lifetime_trace::trace.mutex);
+    if (++view_lifetime_trace::trace.descriptor_updates == 1) {
+      view_lifetime_trace::WriteText("coverage: native descriptor batch observed\n");
+    }
+  }
+  // Save the input handles before checking histories or calling ReShade. Keep
+  // this local copy available to the exception observer until the call returns.
+  for (std::uint32_t index = 0; index < count && writes != nullptr; ++index) {
+    const auto& write = writes[index];
+    // Vulkan descriptor types 4/5 are uniform/storage texel-buffer views.
+    if ((write.descriptor_type != 4 && write.descriptor_type != 5) || write.views == nullptr) continue;
+    for (std::uint32_t element = 0; element < write.count; ++element) {
+      ++batch.references;
+      if (batch.captured == batch.inputs.size()) continue;
+      batch.inputs[batch.captured++] = {
+          .view = write.views[element],
+          .descriptor_set = write.set,
+          .input_address = reinterpret_cast<std::uint64_t>(write.views + element),
+          .binding = write.binding,
+          .element = write.element + element,
+          .type = write.descriptor_type,
+      };
+    }
+  }
+  batch.phase = 1;
+  for (std::uint32_t index = 0; index < count && writes != nullptr; ++index) {
+    const auto& write = writes[index];
+    if ((write.descriptor_type != 4 && write.descriptor_type != 5) || write.views == nullptr) continue;
+    for (std::uint32_t element = 0; element < write.count; ++element) {
+      view_lifetime_trace::Record("descriptor_reference", batch.device, write.views[element], write.set,
+                                  0, 0, false, false, write.descriptor_type, write.binding, write.element + element);
+    }
+  }
+  batch.phase = 2;
+  update_descriptor_sets(device, count, writes, copy_count, copies);
+  for (std::uint32_t index = 0; index < batch.captured; ++index) {
+    const auto& reference = batch.inputs[index];
+    view_lifetime_trace::Record("descriptor_return", batch.device, reference.view, reference.descriptor_set,
+                                0, 0, false, false, reference.type, reference.binding, reference.element);
+  }
+  view_lifetime_trace::native_call = outer_call;
+  view_lifetime_trace::active_descriptor_batch = outer_batch;
+}
+
+static VkResult WINAPI GetFenceStatus(VkDevice device, VkFence fence) {
+  const auto result = get_fence_status(device, fence);
+  view_lifetime_trace::RecordSync("fence_status", reinterpret_cast<std::uint64_t>(device),
+                                  reinterpret_cast<std::uint64_t>(fence), 0, result);
+  return result;
+}
+
+static VkResult WINAPI WaitForFences(VkDevice device, std::uint32_t count, const std::uint64_t* fences,
+                                     std::uint32_t wait_all, std::uint64_t timeout) {
+  const auto request = ++view_lifetime_trace::next_request;
+  view_lifetime_trace::RecordSync("wait_enter", reinterpret_cast<std::uint64_t>(device), wait_all, request, 0, count, fences);
+  const auto result = wait_for_fences(device, count, fences, wait_all, timeout);
+  view_lifetime_trace::RecordSync("wait_return", reinterpret_cast<std::uint64_t>(device), wait_all, request, result, count, fences);
+  return result;
+}
+
+static VkResult WINAPI ResetFences(VkDevice device, std::uint32_t count, const std::uint64_t* fences) {
+  const auto request = ++view_lifetime_trace::next_request;
+  view_lifetime_trace::RecordSync("reset_enter", reinterpret_cast<std::uint64_t>(device), 0, request, 0, count, fences);
+  const auto result = reset_fences(device, count, fences);
+  view_lifetime_trace::RecordSync("reset_return", reinterpret_cast<std::uint64_t>(device), 0, request, result, count, fences);
+  return result;
+}
+#endif
+
 static void OnInitDevice(reshade::api::device* device) {
   if (device->get_api() != reshade::api::device_api::vulkan || !lifecycle_hooks.empty()) return;
   const auto get = reinterpret_cast<PFN_vkGetDeviceProcAddr>(
       GetProcAddress(reshade::internal::get_reshade_module_handle(), "vkGetDeviceProcAddr"));
   if (get == nullptr) {
-    renodx::utils::log::e("rdr2vk: ReShade Vulkan lifecycle entry points are unavailable.");
+    renodx::utils::log::e("rdr2vk: could not find ReShade's Vulkan function lookup.");
     return;
   }
   auto* const native = std::bit_cast<VkDevice>(device->get_native());
@@ -1128,12 +1420,21 @@ static void OnInitDevice(reshade::api::device* device) {
   acquire_next_image2 = reinterpret_cast<PFN_vkAcquireNextImage2KHR>(get(native, "vkAcquireNextImage2KHR"));
   begin_command_buffer = reinterpret_cast<PFN_vkBeginCommandBuffer>(get(native, "vkBeginCommandBuffer"));
   queue_submit = reinterpret_cast<PFN_vkQueueSubmit>(get(native, "vkQueueSubmit"));
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  destroy_image_view = reinterpret_cast<PFN_vkDestroyImageView>(get(native, "vkDestroyImageView"));
+  create_buffer_view = reinterpret_cast<PFN_vkCreateBufferView>(get(native, "vkCreateBufferView"));
+  destroy_buffer_view = reinterpret_cast<PFN_vkDestroyImageView>(get(native, "vkDestroyBufferView"));
+  update_descriptor_sets = reinterpret_cast<PFN_vkUpdateDescriptorSets>(get(native, "vkUpdateDescriptorSets"));
+  get_fence_status = reinterpret_cast<PFN_vkGetFenceStatus>(get(native, "vkGetFenceStatus"));
+  wait_for_fences = reinterpret_cast<PFN_vkWaitForFences>(get(native, "vkWaitForFences"));
+  reset_fences = reinterpret_cast<PFN_vkResetFences>(get(native, "vkResetFences"));
+#endif
   queue_submit2 = reinterpret_cast<PFN_vkQueueSubmit2>(get(native, "vkQueueSubmit2"));
   if (queue_submit2 == nullptr) {
     queue_submit2 = reinterpret_cast<PFN_vkQueueSubmit2>(get(native, "vkQueueSubmit2KHR"));
   }
   if (acquire_next_image == nullptr || begin_command_buffer == nullptr || queue_submit == nullptr) {
-    renodx::utils::log::e("rdr2vk: required Vulkan lifecycle entry points are unavailable.");
+    renodx::utils::log::e("rdr2vk: required Vulkan acquire, command-buffer begin, or queue-submit functions are missing.");
     return;
   }
   lifecycle_hooks = {
@@ -1147,11 +1448,32 @@ static void OnInitDevice(reshade::api::device* device) {
   if (queue_submit2 != nullptr) {
     lifecycle_hooks.emplace_back(&queue_submit2, QueueSubmit2);
   }
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  if (destroy_image_view != nullptr) {
+    lifecycle_hooks.emplace_back(&destroy_image_view, DestroyImageView);
+  }
+  if (update_descriptor_sets != nullptr) {
+    lifecycle_hooks.emplace_back(&update_descriptor_sets, UpdateDescriptorSets);
+  }
+  if (get_fence_status != nullptr && wait_for_fences != nullptr && reset_fences != nullptr) {
+    lifecycle_hooks.emplace_back(&get_fence_status, GetFenceStatus);
+    lifecycle_hooks.emplace_back(&wait_for_fences, WaitForFences);
+    lifecycle_hooks.emplace_back(&reset_fences, ResetFences);
+  } else {
+    renodx::utils::log::w("rdr2vk: could not record native fence calls; the synchronization history will be incomplete.");
+  }
+  if (create_buffer_view != nullptr && destroy_buffer_view != nullptr) {
+    lifecycle_hooks.emplace_back(&create_buffer_view, CreateBufferView);
+    lifecycle_hooks.emplace_back(&destroy_buffer_view, DestroyBufferView);
+  } else {
+    renodx::utils::log::e("rdr2vk: could not find the buffer-view functions; some crash details cannot be recorded.");
+  }
+#endif
   try {
     renodx::utils::detour::Install(lifecycle_hooks);
   } catch (const std::system_error& error) {
     lifecycle_hooks.clear();
-    renodx::utils::log::e("rdr2vk: Vulkan lifecycle hooks failed; error=", error.code().value());
+    renodx::utils::log::e("rdr2vk: could not install the Vulkan tracking hooks; error=", error.code().value());
   }
 }
 
@@ -1166,8 +1488,11 @@ static void OnPresent(
   auto* device = swapchain->get_device();
   if (device->get_api() != reshade::api::device_api::vulkan
       || queue->get_device() != device || queue->get_immediate_command_list() == nullptr) return;
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  view_lifetime_trace::RecordSync("present", device->get_native(), queue->get_native(), 0);
+#endif
 
-  // Preserve the stock deferred fullscreen handling, outside our lifetime locks.
+  // Keep the shared fullscreen handling. Do not hold our state locks while it runs.
   auto* swapchain_data = renodx::utils::data::Get<renodx::mods::swapchain::v2::DeviceData>(device);
   if (swapchain_data == nullptr) return;
   if (swapchain_data->fake_fullscreen_pending) {
@@ -1202,15 +1527,15 @@ static void OnPresent(
     buffer.failed = true;
     renodx::utils::log::e("rdr2vk::swapchain_proxy: ", reason,
                           "; backbuffer=", renodx::utils::log::AsPtr(buffer.back_buffer.handle),
-                          ". Waiting for swapchain recreation.");
+                          ". Waiting for the game to recreate its output buffers.");
   };
 
   if (buffer.back_buffer.handle != swapchain->get_back_buffer(index).handle) {
-    fail("backbuffer changed without a new swapchain lifetime");
+    fail("backbuffer changed without the swapchain being recreated");
     return;
   }
   if (state->queue != nullptr && state->queue != queue) {
-    fail("presentation queue changed within a swapchain lifetime");
+    fail("presentation queue changed without the swapchain being recreated");
     return;
   }
 
@@ -1219,13 +1544,13 @@ static void OnPresent(
     if (info.device != device || !info.is_swap_chain || !info.clone_enabled) return;
     clone = info.clone;
   });
-  // Initialization pre-creates the clone. Never allocate or retry it from present.
+  // Setup already created the clone. Do not create or retry it during presentation.
   if (clone.handle == 0) {
-    fail("pre-created float clone is unavailable");
+    fail("the HDR backbuffer clone created during setup is missing");
     return;
   }
   if (buffer.clone != clone) {
-    fail("float clone changed after descriptor initialization");
+    fail("the HDR backbuffer clone changed after its bindings were set up");
     return;
   }
 
@@ -1234,7 +1559,7 @@ static void OnPresent(
     valid_clone = info.device == device && info.is_clone && info.fallback.handle == buffer.back_buffer.handle;
   });
   if (!valid_clone) {
-    fail("float clone is unavailable or incompatible");
+    fail("the HDR backbuffer clone is missing or belongs to a different backbuffer");
     return;
   }
 
@@ -1247,7 +1572,7 @@ static void OnPresent(
       buffer.submitted.brightness = true;
     } else {
       if (!buffer.scene_failed) {
-        renodx::utils::log::e("rdr2vk: scene brightness fallback has no known image state.");
+        renodx::utils::log::e("rdr2vk: cannot adjust scene brightness before output because the image state is unknown.");
       }
       buffer.scene_failed = true;
     }
@@ -1263,15 +1588,15 @@ static void OnPresent(
     cmd_list->barrier(clone, reshade::api::resource_usage::shader_resource, buffer.submitted.usage);
   }
   if (!rendered) {
-    // Even partial initialization may have recorded commands. Keep everything alive
-    // until the owning queue is drained during retirement, rather than retry per frame.
-    fail("proxy rendering failed");
+    // Failed setup may still have recorded GPU commands. Keep its objects alive
+    // until cleanup waits for the queue, instead of retrying each frame.
+    fail("could not draw the final HDR output");
   }
-  // Acquisition, not presentation or CPU frame timing, starts the next image use.
+  // The next image use starts when Vulkan gives it to the game, not at presentation.
 }
 
 static void OnDestroyCommandQueue(reshade::api::command_queue* queue) {
-  // Snapshot ownership only. Never wait on a state mutex under a registry lock.
+  // Copy the shared pointers first. Do not wait for a state lock while holding a registry lock.
   for (const auto& [swapchain, state] : GetDeviceSwapchains(queue->get_device())) {
     {
       const std::shared_lock lock(state->mutex);
@@ -1286,6 +1611,18 @@ static void OnDestroyCommandQueue(reshade::api::command_queue* queue) {
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  {
+    const std::unique_lock lock(view_lifetime_trace::trace.mutex);
+    if (view_lifetime_trace::trace.views != nullptr) {
+      for (auto& entry : *view_lifetime_trace::trace.views) {
+        if (entry.device == device->get_native()) {
+          entry = {};
+        }
+      }
+    }
+  }
+#endif
   std::vector<std::uint64_t> retired_pipelines;
   pipeline_color_writes.for_each([&](const auto& entry) {
     const auto& [pipeline, writes] = entry;
@@ -1303,10 +1640,10 @@ static void OnDestroyDevice(reshade::api::device* device) {
     });
     const std::unique_lock lock(state->mutex);
     if (state->queue != nullptr) {
-      renodx::utils::log::e("rdr2vk::swapchain_proxy: device destroyed before proxy queue retirement.");
+      renodx::utils::log::e("rdr2vk::swapchain_proxy: the device was destroyed before the output queue was cleaned up.");
     }
-    // Vulkan queue wrappers are already gone. Normal GPU cleanup happened in
-    // destroy_swapchain/destroy_command_queue; do not issue late driver work here.
+    // The queue wrappers are already gone. GPU cleanup belongs in
+    // destroy_swapchain/destroy_command_queue; do not call the driver here.
     state->closing = true;
     state->queue = nullptr;
     state->back_buffers.clear();
@@ -1319,10 +1656,13 @@ using internal::OnBeforeUIDraw;
 using internal::OnSceneDrawn;
 
 static void Use(DWORD reason) {
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+  view_lifetime_trace::Use(reason);
+#endif
   if (reason == DLL_PROCESS_ATTACH) {
     renodx::utils::descriptor::trace_descriptor_tables = true;
     renodx::utils::descriptor::Use(reason);
-    // Keep core swapchain/clone setup, replacing only this addon's proxy owner.
+    // Keep the shared swapchain and clone setup. Replace only our final output callback.
     reshade::unregister_event<reshade::addon_event::present>(renodx::mods::swapchain::v2::OnPresent);
     reshade::register_event<reshade::addon_event::init_device>(internal::OnInitDevice);
     reshade::register_event<reshade::addon_event::init_swapchain>(internal::OnInitSwapchain);
@@ -1356,7 +1696,7 @@ static void Use(DWORD reason) {
         renodx::utils::detour::Uninstall(internal::lifecycle_hooks);
         internal::lifecycle_hooks.clear();
       } catch (const std::system_error& error) {
-        renodx::utils::log::e("rdr2vk: Vulkan lifecycle hook removal failed; error=", error.code().value());
+        renodx::utils::log::e("rdr2vk: could not remove the Vulkan tracking hooks; error=", error.code().value());
       }
     }
     renodx::utils::command_action::Unregister(internal::ON_SCENE_OUTPUT);
