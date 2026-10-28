@@ -100,6 +100,8 @@ The intermediate is encoded BT.709 in an RGBA16F backbuffer clone. Its float sto
 
 Scene source resolution reads saved **live** view/resource metadata. It does not ask the driver to inspect an old cached view that may have been freed. Destroyed source resources are removed from accepted source history so handle reuse cannot establish scene ancestry by itself.
 
+Resource destruction also advances a counter owned by the game addon. If that counter changes before a native submission returns, the addon keeps the source history that destruction has already cleaned instead of restoring potentially freed handles from the pending submission. This may discard new source links from that interval, but it does not undo accepted draws or add a GPU wait.
+
 ### Why record a disabled candidate?
 
 A worker can record UI before another worker records the scene. `OnBeforeUIDraw` therefore cannot choose the winning pass by CPU time. Each suitable list records its candidate with a private settings upload and `scene_brightness_enabled = 0`. During submission callbacks, the selector enables only the first suitable candidate following scene work in submission order. Other candidates remain disabled; with unequal brightness they can still contain a full-resolution copy and draw. This is not a claim of one recorded operation per frame.
@@ -116,7 +118,7 @@ Old acquisition IDs, scene after UI, repeated selected recordings, queue changes
 
 1. Identify the actual original/clone target and check RGB writes, acquired-image identity, recording flags, and whether interruption is safe.
 2. Require a single color target, preserved color/depth/stencil contents, no active queries, and push-descriptor support. Do not interrupt inherited or simultaneous-use recordings, or assume missing begin flags are safe.
-3. Save graphics configuration and attachment descriptions. Resolve the expected clone and prepare this recording's settings upload using `shared.h`.
+3. Capture the complete Vulkan graphics configuration, including pipeline bindings stored separately from the snapshot's other fields, and save attachment descriptions. Resolve the expected clone and prepare this recording's settings upload using `shared.h`.
 4. Materialize pending clears, then end the game pass. Record required depth/stencil ordering and the scene-copy/brightness commands.
 5. Resume the original attachments with `LOAD`, using fixed zero values for unused color/depth/stencil clears. Restore graphics configuration, then let the original UI draw continue.
 
@@ -146,7 +148,7 @@ Output setup creates clones before workers need them, but the shared resource co
 |---|---|---|
 | Original backbuffer | Game/ReShade; output borrows | Swapchain lifetime. |
 | RGBA16F backbuffer clone | Shared RenoDX resource code; output borrows | Shared clone cleanup. Output never destroys it as an owned scene copy. |
-| Output/brightness renderers, temporary scene copy, generated views/layout/pipeline, no-UI settings buffer | `output::BackBufferState` in a fixed-size per-swapchain vector | Retire the immutable entry at a valid swapchain/queue lifecycle boundary. Generated views belong to their render pass even after partial setup. |
+| Output/brightness renderers, temporary scene copy, generated views/layout/pipeline/sampler, no-UI settings buffer | `output::BackBufferState` in a fixed-size per-swapchain vector | Retire the immutable entry at a valid swapchain/queue lifecycle boundary. Generated objects belong to their render pass even after partial setup. |
 | Mapped per-recording settings uploads | Command-list private `CommandListData`, attached with core `data::Create/Get/Delete` | Reuse only at a legal command-list reset; unmap/free when that list is destroyed. |
 | Recorded targets, sources, and candidate selection | Command-list recording | Recording reset/begin. Preserve the existing private-data identity and compatible layout. |
 | Accepted scene/UI/usage/source facts | Current acquired backbuffer use | Publish after accepted submit; clear only on successful acquisition, not on present. |
@@ -176,7 +178,9 @@ These are bounded storage and copying improvements, not a measured frame-time ga
 
 ### Setup failures and capability limits
 
-Setup validates resource ownership, dimensions, format, sample count, and required push-descriptor support. Partial create/view/map/layout/pipeline failure cleans up what this addon actually owns; it does not free borrowed originals or shared clones. Unpublished resources that were never queued do not require an invented per-frame wait.
+Setup validates resource ownership, dimensions, format, sample count, and required push-descriptor support. Partial create/view/map/layout/pipeline/sampler failure cleans up what this addon actually owns; it does not free borrowed originals or shared clones. Unpublished resources that were never queued do not require an invented per-frame wait.
+
+Each final-output pass gets one checked default sampler during local setup, before output publication. Its existing `generated_samplers` list owns destruction through `proxy.Destroy`; no extra owner or cleanup path is added. This keeps presentation out of the shared renderer's unchecked automatic sampler-creation path without changing core code. A failed setup does not retry at acquisition or presentation; only an explicit output recreation starts a new setup attempt. Successful sampling is unchanged, but allocation moves from first presentation to setup.
 
 Runtime identity, missing-clone, brightness-rendering, and final-output failures retain any potentially queued objects until safe retirement. Affected failures stay disabled at their existing image-use or backbuffer-lifetime scope; there is no expensive retry loop each present. Ordinary failure messages remain concise. A failed final HDR output is an error, **not a silent SDR fallback**. Missing optional diagnostics must not disable required output, and hook-removal failure must retain active original pointers/state instead of pretending removal succeeded.
 
@@ -236,7 +240,7 @@ The first allocation-failure summary scans existing resource records **outside t
 
 ### Narrow exception observation
 
-The first-chance access-violation observer applies when a descriptor batch is active or the instruction lies inside the known NVIDIA Vulkan driver range. It uses a nonblocking try-lock, rejects recursion, records exception context/register values and any active captured batch, and compares saved handle integers with register values. Candidate output is bounded to 16 matches.
+The exception observer records an access violation when a descriptor update is active, a hooked native call is creating a buffer view or destroying an image/buffer view, or the failing instruction is inside the known NVIDIA Vulkan driver range. An active native call lets it record an invalid jump outside the driver module too. That context does not prove what caused the fault. Each report names the active request, device, view, and operation; the same call is not reported twice. The observer skips reporting if its lock is busy or it is already running. It records CPU register values and any saved descriptor batch, then compares those register values with saved handles. It prints at most 16 possible matches.
 
 It performs **no freed-memory reads, native-object queries, nearby-memory search, observer stack walking, symbol lookup, or allocation**. It can print evidence already captured before the exception. Register matches are candidates, not proof of the faulting object's identity. Busy locks, missing history, or caps can leave no report. The observer always returns `EXCEPTION_CONTINUE_SEARCH`; another handler may recover, so first-chance observation is not automatically a fatal crash.
 
@@ -281,8 +285,8 @@ This maps responsibilities out of the old proxy, not a compatibility layer to ke
 
 ## Validation and remaining game checks
 
-Both diagnostic configurations have been built using the selected MSVC Release toolchain. Compile-time checks exhaust the accepted-state/recording Boolean combinations and validate native/shared layouts. An isolated real-header harness checks private-data layout against the previous field definitions, nested Submit1/2 and Begin scopes, acceptance/rejection, unchanged fake native calls, duplicate observation, input 129 beyond bounded batch storage, exception continuation, reuse, and report limits. Local resource-safety and LOAD-cache tests also pass. None of these tests executes the game's scene/UI rendering.
+Build target `rdr2vk` with the repository's existing build rules. No local test suite, extra CMake registration, or changes to shared RenoDX code are required. Both diagnostic configurations have been built using the selected MSVC Release toolchain. Local checks exercise production callbacks for drawing-state restoration, resource retirement, setup failures, and exception observation; they are development evidence, not a shipped dependency or proof of real scene/UI pixels.
 
-Both addon modes passed 100 legal view lifetimes each in isolated installed-ReShade Vulkan processes. The normal build produced no trace and excludes optional diagnostic markers and exception/stack-capture imports. Do not carry old blocker-dependent test results forward as proof of the observation-only rewrite, or run the old deliberate duplicate-native-destroy test. The old local lifetime test/runner still names removed headers and v4 fields and has not been silently rewritten.
+Earlier resource-safety, LOAD-cache, and 100-legal-view smoke checks per addon mode are historical, not current full-runtime validation. Current binary checks confirm absence of optional report markers in the normal variant and their presence in the diagnostic variant; they are not a full preprocessed/symbol equivalence proof. Do not carry old blocker-dependent results forward or run the old deliberate duplicate-native-destroy test.
 
-The pending game checklist is in the README. Accepted submission is never completion evidence; fresh-save/HUD transitions, pause composition, recreation, and prolonged play still need real checks. No rewritten addon has been deployed to the game as part of this work.
+The pending game checklist and unresolved AMD/OptiScaler compatibility report are in the README. Accepted submission is never completion evidence; fresh-save/HUD transitions, pause composition, recreation, actual HDR range, and prolonged play still need real checks. Loading an installed build alone does not satisfy that checklist.

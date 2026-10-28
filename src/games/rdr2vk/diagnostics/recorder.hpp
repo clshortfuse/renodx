@@ -134,6 +134,9 @@ struct NativeCall {
   std::uint64_t device = 0;
   std::uint64_t view = 0;
   bool creating = false;
+  bool destroying = false;
+  bool fault_reported = false;
+  ViewKind kind = ViewKind::IMAGE;
 };
 
 struct ViewObservation {
@@ -656,9 +659,15 @@ static LONG CALLBACK OnException(EXCEPTION_POINTERS* exception) noexcept {
   auto* batch = active_descriptor_batch;
   const auto& registers = *exception->ContextRecord;
   const bool driver_fault = registers.Rip >= trace.driver_begin && registers.Rip < trace.driver_end;
-  if ((batch == nullptr && !driver_fault) || (batch != nullptr && batch->fault_reported)) return EXCEPTION_CONTINUE_SEARCH;
+  const bool native_fault = native_call.request != 0 && (native_call.creating || native_call.destroying);
+  if ((batch == nullptr && !driver_fault && !native_fault)
+      || (batch != nullptr && batch->fault_reported)
+      || (native_fault && native_call.fault_reported)) return EXCEPTION_CONTINUE_SEARCH;
   if (batch != nullptr) {
     batch->fault_reported = true;
+  }
+  if (native_fault) {
+    native_call.fault_reported = true;
   }
   LARGE_INTEGER counter = {};
   QueryPerformanceCounter(&counter);
@@ -667,6 +676,12 @@ static LONG CALLBACK OnException(EXCEPTION_POINTERS* exception) noexcept {
   line.Number(" qpc=", counter.QuadPart);
   line.Number(" thread=", GetCurrentThreadId());
   line.Number(" hooked_batch=", static_cast<unsigned>(batch != nullptr));
+  line.Number(" native_request=", native_call.request);
+  line.Number(" native_device=", native_call.device, 16);
+  line.Number(" native_view=", native_call.view, 16);
+  line.Number(" native_creating=", static_cast<unsigned>(native_call.creating));
+  line.Number(" native_destroying=", static_cast<unsigned>(native_call.destroying));
+  line.Number(" native_buffer=", static_cast<unsigned>(native_call.kind == ViewKind::BUFFER));
   line.Number(" address=", reinterpret_cast<std::uintptr_t>(exception->ExceptionRecord->ExceptionAddress), 16);
   line.Number(" rip=", registers.Rip, 16);
   line.Number(" rsp=", registers.Rsp, 16);
@@ -771,7 +786,13 @@ class ViewDestroyScope {
  public:
   explicit ViewDestroyScope(const DestroyObservation& observation) noexcept
       : observation(observation), outer(internal::native_call) {
-    internal::native_call = {.request = NextRequest(), .device = observation.device, .view = observation.view};
+    internal::native_call = {
+        .request = NextRequest(),
+        .device = observation.device,
+        .view = observation.view,
+        .destroying = true,
+        .kind = observation.kind,
+    };
     internal::native_call.generation = internal::RecordView({
         .event = (observation.kind == ViewKind::BUFFER ? internal::ViewEvent::BUFFER_DESTROY_ENTER : internal::ViewEvent::IMAGE_DESTROY_ENTER),
         .device = observation.device,
@@ -793,6 +814,7 @@ class ViewDestroyScope {
         .request = internal::native_call.request,
         .generation = internal::native_call.generation,
     });
+    internal::native_call.destroying = false;  // The original returned normally.
   }
 
  private:
@@ -804,7 +826,12 @@ class BufferCreationScope {
  public:
   explicit BufferCreationScope(const BufferCreationObservation& observation) noexcept
       : observation(observation), outer(internal::native_call) {
-    internal::native_call = {.request = NextRequest(), .device = observation.device, .creating = true};
+    internal::native_call = {
+        .request = NextRequest(),
+        .device = observation.device,
+        .creating = true,
+        .kind = ViewKind::BUFFER,
+    };
     const internal::RecorderLock lock;
     if (lock && IsActive() && internal::trace.history != nullptr) {
       ++internal::trace.history->create_enters;
@@ -816,6 +843,7 @@ class BufferCreationScope {
   ~BufferCreationScope() { internal::native_call = outer; }
 
   void Returned(const CreationResultObservation& result) noexcept {
+    internal::native_call.creating = false;
     if (!IsActive()) return;
     std::uint32_t report = 0;
     {
