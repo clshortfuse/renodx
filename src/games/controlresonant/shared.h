@@ -25,6 +25,8 @@ struct ShaderInjectData {
   float custom_grain_type;
   float custom_grain_strength;
   float custom_random;
+
+  float color_grade_lut_strength;
 };
 
 #ifndef __cplusplus
@@ -52,6 +54,8 @@ cbuffer shader_injection : register(b0, space50) {
 #define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
 #define CUSTOM_RANDOM         shader_injection.custom_random
+
+#define COLOR_GRADE_LUT_STRENGTH shader_injection.color_grade_lut_strength
 
 #include "../../shaders/renodx.hlsl"
 
