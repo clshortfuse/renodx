@@ -5,9 +5,13 @@
 
 #pragma once
 
+#include "../diagnostics_config.hpp"
+
+#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
+
 #include <cstdint>
 
-namespace rdr2vk::view_lifetime_trace {
+namespace rdr2vk::diagnostics::lifetime {
 
 enum class Event : std::uint8_t {
   CREATE,
@@ -28,6 +32,8 @@ enum class Problem : std::uint8_t {
   REFERENCE_DURING_DESTROY,
 };
 
+// These are observations, not permission to skip a destroy or reuse a view.
+// A native return is CPU-side completion of that call, NOT GPU completion.
 struct LifetimeState {
   std::uint64_t generation = 0;
   std::uint64_t last_event_request = 0;
@@ -76,23 +82,43 @@ struct LifetimeState {
     }
     return Problem::NONE;
   }
+
+  [[nodiscard]] constexpr Problem ReferenceProblem() const {
+    if (active_destroys != 0) return Problem::REFERENCE_DURING_DESTROY;
+    if (native_completed || event_seen) return Problem::REFERENCE_AFTER_DESTROY;
+    return Problem::NONE;
+  }
 };
 
-// Check the basic rules during compilation, even when the test targets are off.
+// Pure models only: never exercise duplicate native destruction in the driver.
 static_assert([] {
   LifetimeState state;
   state.Apply(Event::CREATE, 0);
+  if (state.ReferenceProblem() != Problem::NONE) return false;
   if (state.Apply(Event::DESTROY_ENTER, 1) != Problem::NONE) return false;
+  if (state.ReferenceProblem() != Problem::REFERENCE_DURING_DESTROY) return false;
   if (state.Apply(Event::DESTROY_EVENT, 1) != Problem::NONE) return false;
   if (state.Apply(Event::DESTROY_EVENT, 1) != Problem::DUPLICATE_CALLBACK) return false;
   if (state.Apply(Event::DESTROY_RETURN, 1, 1) != Problem::NONE) return false;
+  if (state.ReferenceProblem() != Problem::REFERENCE_AFTER_DESTROY) return false;
   if (state.Apply(Event::DESTROY_ENTER, 2) != Problem::REPEATED_NATIVE_DESTROY) return false;
   state.Apply(Event::DESTROY_RETURN, 2, 1);
   state.Apply(Event::CREATE, 0);
   if (state.Apply(Event::DESTROY_ENTER, 3) != Problem::NONE) return false;
   if (state.Apply(Event::DESTROY_ENTER, 4) != Problem::OVERLAPPING_DESTROY) return false;
   if (state.Apply(Event::CREATE, 0) != Problem::RECREATE_DURING_DESTROY) return false;
-  return state.Apply(Event::DESTROY_RETURN, 3, 2) == Problem::RETURN_FROM_OLDER_LIFETIME;
+  return state.Apply(Event::DESTROY_RETURN, 3, 2) == Problem::RETURN_FROM_OLDER_LIFETIME
+         && !state.native_completed && state.ReferenceProblem() == Problem::NONE;
 }());
 
-}  // namespace rdr2vk::view_lifetime_trace
+static_assert([] {
+  LifetimeState unknown;
+  if (unknown.Apply(Event::DESTROY_EVENT, 0) != Problem::NONE) return false;
+  if (unknown.Apply(Event::DESTROY_EVENT, 0) != Problem::REPEATED_UNBRACKETED_EVENT) return false;
+  unknown.Apply(Event::CREATE, 0);
+  return unknown.generation == 1 && unknown.ReferenceProblem() == Problem::NONE;
+}());
+
+}  // namespace rdr2vk::diagnostics::lifetime
+
+#endif  // RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
