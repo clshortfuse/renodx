@@ -84,10 +84,11 @@ float4 main(
     _97 = _74;
   }
 
-  const float3 compressed_color = CompressLUTMixerOutput(float3(_95, _96, _97));
-  _95 = compressed_color.x;
-  _96 = compressed_color.y;
-  _97 = compressed_color.z;
+  float3 color = CompressLUTMixerOutput(float3(_95, _96, _97));
+  color = ApplyLUTStrength(color, SV_Position.xy, 48u);
+  _95 = color.x;
+  _96 = color.y;
+  _97 = color.z;
 
   _100 = mad(0.05144599452614784f, _97, mad(0.5363325476646423f, _96, (_95 * 0.4122214615345001f)));
   _103 = mad(0.10739696025848389f, _97, mad(0.6806995272636414f, _96, (_95 * 0.21190349757671356f)));

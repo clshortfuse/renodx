@@ -198,6 +198,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTStrength",
+        .binding = &shader_injection.color_grade_lut_strength,
+        .default_value = 100.f,
+        .label = "LUT Strength",
+        .section = "Color Grading",
+        .tooltip = "Controls the strength of the game's color grading LUTs.",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxGrainType",
         .binding = &shader_injection.custom_grain_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -330,6 +341,7 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"ColorGradeLUTStrength", 100.f},
       {"FxFilmGrainType", 0.f},
       {"FxGrainStrength", 50.f},
   });
