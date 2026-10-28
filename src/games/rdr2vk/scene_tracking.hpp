@@ -53,6 +53,7 @@ struct PendingBackBuffer {
   output::AcceptedDraws submitted;
   output::SettingsUpload* selected = nullptr;
   std::vector<reshade::api::resource> scene_resources;
+  std::uint64_t source_retirement_id = 0;
 };
 
 namespace internal {
@@ -445,7 +446,7 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
     return true;
   }
   using VulkanState = renodx::utils::state::internal::CommandListState<reshade::api::device_api::vulkan>;
-  auto saved_state = static_cast<const VulkanState*>(handle->state)->snapshot;
+  auto saved_state = static_cast<const VulkanState*>(handle->state)->Capture();
   saved_state.render_targets_known = false;
   renodx::utils::resource::GetResourceViewInfo(target.view, [&](const auto& info) {
     if (!info.destroyed && info.clone.handle != 0) {
@@ -597,7 +598,13 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
       }
     }
     if (pending_buffer == nullptr) {
-      pending_submissions->push_back({.owner = recorded.owner, .acquisition_id = buffer.acquisition_id, .submitted = buffer.submitted, .scene_resources = buffer.submitted_scene_resources});
+      pending_submissions->push_back({
+          .owner = recorded.owner,
+          .acquisition_id = buffer.acquisition_id,
+          .submitted = buffer.submitted,
+          .scene_resources = buffer.submitted_scene_resources,
+          .source_retirement_id = state->source_retirement_id,
+      });
       pending_buffer = &pending_submissions->back();
     }
     // Decide whether this list writes scene color before selecting its UI pass.
@@ -683,6 +690,7 @@ static void OnExecuteCommandList(reshade::api::command_queue* queue, reshade::ap
             .acquisition_id = image.acquisition_id,
             .submitted = image.submitted,
             .scene_resources = image.submitted_scene_resources,
+            .source_retirement_id = state->source_retirement_id,
         });
         found = std::prev(pending_submissions->end());
       }
@@ -728,7 +736,13 @@ inline void PublishSubmission(std::vector<PendingBackBuffer>* pending_buffers, b
       buffer.submitted = pending.submitted;
       // This consumes the finished source list. The submit scope releases the
       // displaced storage after unlocking; it must not publish this list twice.
-      buffer.submitted_scene_resources.swap(pending.scene_resources);
+      // Completion and resource retirement can occur before native submit
+      // returns. Do not resurrect handles removed by OnDestroyResource. A
+      // changed revision cannot prove the identity of any new pending source;
+      // retain the already-cleaned history instead, including across reuse.
+      if (pending.source_retirement_id == pending.owner.state->source_retirement_id) {
+        buffer.submitted_scene_resources.swap(pending.scene_resources);
+      }
     } else {
       buffer.submitted.failed = true;
     }

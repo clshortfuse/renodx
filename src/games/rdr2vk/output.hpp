@@ -159,6 +159,7 @@ struct SwapchainState {
   reshade::api::command_queue* queue = nullptr;
   bool closing = false;
   std::vector<BackBufferState> back_buffers;
+  std::uint64_t source_retirement_id = 0;
 };
 
 struct SwapchainEntry {
@@ -465,6 +466,20 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
       return;
     }
     pass.auto_generate_descriptor_table_updates = false;
+
+    // Supply the final-output sampler before publishing this image. The shared
+    // renderer does not check automatic sampler creation failures; its existing
+    // generated-sampler list still owns normal and partial-setup cleanup here.
+    auto& proxy_pass = buffer.proxy.pass;
+    proxy_pass.sampler_descs.emplace_back();
+    reshade::api::sampler sampler = {};
+    if (!device->create_sampler(proxy_pass.sampler_descs.front(), &sampler)) {
+      renodx::utils::log::e("rdr2vk: could not create the final output sampler; index=", index);
+      RetireSwapchain(state);
+      return;
+    }
+    proxy_pass.samplers.push_back(sampler);
+    proxy_pass.generated_samplers.push_back(sampler);
   }
   swapchains.try_emplace(swapchain, std::move(state));
 }
@@ -593,6 +608,7 @@ static void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   std::pmr::monotonic_buffer_resource owner_storage(owner_bytes.data(), owner_bytes.size());
   for (const auto& [swapchain, state] : GetDeviceSwapchains(device, &owner_storage)) {
     const std::unique_lock lock(state->mutex);
+    ++state->source_retirement_id;
     for (auto& buffer : state->back_buffers) {
       std::erase(buffer.submitted_scene_resources, resource);
     }
