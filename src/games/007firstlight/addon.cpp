@@ -6,7 +6,10 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_1
+// #define DEBUG_LEVEL_2
+// #define DEBUG_LEVEL_3
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -16,7 +19,6 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
-#include "dlss.hpp"
 #include "isfast_noise.hpp"
 #include "shared.h"
 
@@ -342,7 +344,6 @@ void OnPresetOff() {
       {"FxISFASTShadows", 0.f},
       {"FxSSRReflectionFix", 0.f},
   });
-  firstlight::dlss::OnPresetOff();
 }
 
 bool fired_on_init_swapchain = false;
@@ -375,7 +376,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
 
         firstlight::isfast::AddShaders(custom_shaders);
-        firstlight::dlss::AppendSettings(settings);
 
         initialized = true;
       }
@@ -395,7 +395,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-  firstlight::dlss::Use(fdw_reason);
 
   return TRUE;
 }
