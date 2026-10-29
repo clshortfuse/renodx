@@ -46,6 +46,7 @@
 #include "./cross_addon.hpp"
 #include "./data.hpp"
 #include "./minhook.hpp"
+#include "./opengl.hpp"
 #include "./platform.hpp"
 
 namespace renodx::utils::gpu_fence {
@@ -414,44 +415,23 @@ struct OpenGLSemaphore {
   unsigned int object = 0;
   HGLRC context = nullptr;
   HDC dc = nullptr;
-  decltype(&wglGetCurrentContext) get_current = nullptr;
-  decltype(&wglGetCurrentDC) get_dc = nullptr;
-  decltype(&wglMakeCurrent) make_current = nullptr;
-  void(APIENTRY* delete_semaphores)(int, const unsigned int*) = nullptr;
-  void(APIENTRY* parameter)(unsigned int, unsigned int, const std::uint64_t*) = nullptr;
-  void(APIENTRY* signal)(unsigned int, unsigned int, const unsigned int*, unsigned int, const unsigned int*, const unsigned int*) = nullptr;
-  void(APIENTRY* wait)(unsigned int, unsigned int, const unsigned int*, unsigned int, const unsigned int*, const unsigned int*) = nullptr;
 
   explicit OpenGLSemaphore(HANDLE handle) {
-    auto* module = GetModuleHandleW(L"opengl32.dll");
-    const auto get_proc = reinterpret_cast<decltype(&wglGetProcAddress)>(GetProcAddress(module, "wglGetProcAddress"));
-    get_current = reinterpret_cast<decltype(get_current)>(GetProcAddress(module, "wglGetCurrentContext"));
-    get_dc = reinterpret_cast<decltype(get_dc)>(GetProcAddress(module, "wglGetCurrentDC"));
-    make_current = reinterpret_cast<decltype(make_current)>(GetProcAddress(module, "wglMakeCurrent"));
-    if (get_proc == nullptr || get_current == nullptr || get_dc == nullptr || make_current == nullptr) {
+    const bool initialized = opengl::Initialize();
+    if (!initialized || opengl::pWglGetCurrentContext == nullptr || opengl::pWglGetCurrentDC == nullptr || opengl::pWglMakeCurrent == nullptr) {
       throw std::runtime_error("OpenGL semaphore requires WGL and GL exports");
     }
-    context = get_current();
-    dc = get_dc();
-    auto gen = reinterpret_cast<void(APIENTRY*)(int, unsigned int*)>(get_proc("glGenSemaphoresEXT"));
-    auto import = reinterpret_cast<void(APIENTRY*)(unsigned int, unsigned int, void*)>(get_proc("glImportSemaphoreWin32HandleEXT"));
-    delete_semaphores = reinterpret_cast<decltype(delete_semaphores)>(get_proc("glDeleteSemaphoresEXT"));
-    parameter = reinterpret_cast<decltype(parameter)>(get_proc("glSemaphoreParameterui64vEXT"));
-    signal = reinterpret_cast<decltype(signal)>(get_proc("glSignalSemaphoreEXT"));
-    wait = reinterpret_cast<decltype(wait)>(get_proc("glWaitSemaphoreEXT"));
-    const auto is_semaphore = reinterpret_cast<unsigned char(APIENTRY*)(unsigned int)>(get_proc("glIsSemaphoreEXT"));
-    const auto valid = [](auto proc) {
-      const auto address = reinterpret_cast<std::uintptr_t>(proc);
-      return address > 3 && address != std::numeric_limits<std::uintptr_t>::max();
-    };
-    if (context == nullptr || dc == nullptr || !valid(gen) || !valid(import) || !valid(delete_semaphores)
-        || !valid(parameter) || !valid(signal) || !valid(wait) || !valid(is_semaphore)) {
+    context = opengl::pWglGetCurrentContext();
+    dc = opengl::pWglGetCurrentDC();
+    if (context == nullptr || dc == nullptr || opengl::pGlGenSemaphoresEXT == nullptr || opengl::pGlImportSemaphoreWin32HandleEXT == nullptr
+      || opengl::pGlDeleteSemaphoresEXT == nullptr || opengl::pGlSemaphoreParameterui64vEXT == nullptr
+      || opengl::pGlSignalSemaphoreEXT == nullptr || opengl::pGlWaitSemaphoreEXT == nullptr || opengl::pGlIsSemaphoreEXT == nullptr) {
       throw std::runtime_error("OpenGL shared fences require EXT_semaphore_win32");
     }
-    gen(1, &object);
-    import(object, HANDLE_TYPE_D3D12_FENCE, handle);
-    if (object == 0 || is_semaphore(object) == 0) {
-      delete_semaphores(1, &object);
+    opengl::pGlGenSemaphoresEXT(1, &object);
+    opengl::pGlImportSemaphoreWin32HandleEXT(object, HANDLE_TYPE_D3D12_FENCE, handle);
+    if (object == 0 || opengl::pGlIsSemaphoreEXT(object) == 0) {
+      opengl::pGlDeleteSemaphoresEXT(1, &object);
       object = 0;
       throw std::runtime_error("OpenGL D3D12 fence import did not create a semaphore");
     }
@@ -460,21 +440,23 @@ struct OpenGLSemaphore {
     // Contexts/DCs are borrowed: retire GPU uses and destroy the fence before
     // releasing them, with no other thread using these contexts. Rebinding
     // must run outside ReShade WGL callbacks; destruction is never loader-safe.
-    auto* const previous_context = get_current();
+    auto* const previous_context = opengl::pWglGetCurrentContext();
     if (previous_context == context) {
-      delete_semaphores(1, &object);
+      opengl::Initialize();
+      opengl::pGlDeleteSemaphoresEXT(1, &object);
       return;
     }
-    auto* const previous_dc = get_dc();
-    if (make_current(dc, context) == FALSE) {
+    auto* const previous_dc = opengl::pWglGetCurrentDC();
+    if (opengl::pWglMakeCurrent(dc, context) == FALSE) {
       const auto error = GetLastError();
       reshade::log::message(reshade::log::level::error,
                             ("utils::gpu_fence GL import retirement bind failed, Win32 error=" + std::to_string(error)).c_str());
       assert(false && "Could not bind GL import context for retirement");
       return;
     }
-    delete_semaphores(1, &object);
-    if (make_current(previous_dc, previous_context) == FALSE) {
+    opengl::Initialize();
+    opengl::pGlDeleteSemaphoresEXT(1, &object);
+    if (opengl::pWglMakeCurrent(previous_dc, previous_context) == FALSE) {
       const auto error = GetLastError();
       reshade::log::message(reshade::log::level::error,
                             ("utils::gpu_fence GL import retirement restore failed, Win32 error=" + std::to_string(error)).c_str());
@@ -483,12 +465,13 @@ struct OpenGLSemaphore {
   }
 
   void Submit(bool signal_operation, std::uint64_t value) const {
-    assert(get_current() == context && "GL fence submission requires its owning context");
-    parameter(object, D3D12_FENCE_VALUE, &value);
+    assert(opengl::pWglGetCurrentContext() == context && "GL fence submission requires its owning context");
+    opengl::Initialize();
+    opengl::pGlSemaphoreParameterui64vEXT(object, D3D12_FENCE_VALUE, &value);
     if (signal_operation) {
-      signal(object, 0, nullptr, 0, nullptr, nullptr);
+      opengl::pGlSignalSemaphoreEXT(object, 0, nullptr, 0, nullptr, nullptr);
     } else {
-      wait(object, 0, nullptr, 0, nullptr, nullptr);
+      opengl::pGlWaitSemaphoreEXT(object, 0, nullptr, 0, nullptr, nullptr);
     }
   }
 };
@@ -498,39 +481,22 @@ struct OpenGLFence {
   // Release the GL import first; CPU observation never requires a GL context.
   std::shared_ptr<D3DKMTFence::Native> fence;
   std::unique_ptr<OpenGLSemaphore> semaphore;
-  HDC dc = nullptr;
-  HGLRC producer = nullptr;
-  decltype(&wglGetCurrentContext) get_current = nullptr;
-  decltype(&wglGetCurrentDC) get_dc = nullptr;
   std::uint64_t value = 0;
 
   OpenGLFence() {
-    auto* const module = GetModuleHandleW(L"opengl32.dll");
-    if (module == nullptr) throw std::runtime_error("OpenGL fence requires loaded opengl32.dll");
-    get_current = reinterpret_cast<decltype(get_current)>(GetProcAddress(module, "wglGetCurrentContext"));
-    get_dc = reinterpret_cast<decltype(get_dc)>(GetProcAddress(module, "wglGetCurrentDC"));
-    const auto get_proc = reinterpret_cast<decltype(&wglGetProcAddress)>(GetProcAddress(module, "wglGetProcAddress"));
-    if (get_current == nullptr || get_dc == nullptr || get_proc == nullptr) {
+    const bool initialized = opengl::Initialize();
+    if (!initialized || opengl::pWglGetCurrentContext == nullptr || opengl::pWglGetCurrentDC == nullptr) {
       throw std::runtime_error("OpenGL fence requires WGL context exports");
     }
-    producer = get_current();
-    dc = get_dc();
-    if (producer == nullptr || dc == nullptr) throw std::runtime_error("OpenGL fence requires a current producer context/DC");
-    const auto get_integer = reinterpret_cast<void(APIENTRY*)(unsigned int, int*)>(GetProcAddress(module, "glGetIntegerv"));
-    const auto get_string = reinterpret_cast<const unsigned char*(APIENTRY*)(unsigned int, unsigned int)>(get_proc("glGetStringi"));
-    const auto get_bytes = reinterpret_cast<void(APIENTRY*)(unsigned int, unsigned char*)>(get_proc("glGetUnsignedBytevEXT"));
-    const auto valid = [](auto proc) {
-      const auto address = reinterpret_cast<std::uintptr_t>(proc);
-      return address > 3 && address != std::numeric_limits<std::uintptr_t>::max();
-    };
-    if (!valid(get_bytes) || !valid(get_string) || get_integer == nullptr) {
+    if (opengl::pWglGetCurrentContext() == nullptr || opengl::pWglGetCurrentDC() == nullptr) throw std::runtime_error("OpenGL fence requires a current producer context/DC");
+    if (opengl::pGlGetUnsignedBytevEXT == nullptr || opengl::pGlGetStringi == nullptr || opengl::pGlGetIntegerv == nullptr) {
       throw std::runtime_error("OpenGL fence requires EXT external-object adapter identification");
     }
     int extension_count = 0;
-    get_integer(0x821D, &extension_count);  // GL_NUM_EXTENSIONS
+    opengl::pGlGetIntegerv(0x821D, &extension_count);  // GL_NUM_EXTENSIONS
     bool supported = false;
     for (int index = 0; index < extension_count; ++index) {
-      const auto* extension = get_string(0x1F03, static_cast<unsigned int>(index));  // GL_EXTENSIONS
+      const auto* extension = opengl::pGlGetStringi(0x1F03, static_cast<unsigned int>(index));  // GL_EXTENSIONS
       if (extension != nullptr && std::string_view(reinterpret_cast<const char*>(extension)) == "GL_EXT_semaphore_win32") {
         supported = true;
         break;
@@ -579,7 +545,7 @@ struct OpenGLFence {
     owner->destroy = reinterpret_cast<decltype(owner->destroy)>(load("D3DKMTDestroyDevice"));
     owner->close = reinterpret_cast<decltype(owner->close)>(load("D3DKMTCloseAdapter"));
     D3DKMT_OPENADAPTERFROMLUID adapter{};
-    get_bytes(0x9599, reinterpret_cast<unsigned char*>(&adapter.AdapterLuid));  // GL_DEVICE_LUID_EXT
+    opengl::pGlGetUnsignedBytevEXT(0x9599, reinterpret_cast<unsigned char*>(&adapter.AdapterLuid));  // GL_DEVICE_LUID_EXT
     require(reinterpret_cast<decltype(&D3DKMTOpenAdapterFromLuid)>(load("D3DKMTOpenAdapterFromLuid"))(&adapter), "GL backing open adapter");
     owner->adapter = adapter.hAdapter;
     D3DKMT_CREATEDEVICE device{.hAdapter = owner->adapter};
@@ -1282,8 +1248,8 @@ template <QueueSubmitter Submitter>
         }
       } else if constexpr (std::is_same_v<std::decay_t<decltype(implementation)>, std::unique_ptr<internal::OpenGLFence>>) {
         auto* gl = implementation.get();
-        assert(gl->get_current() == gl->producer && gl->get_dc() == gl->dc);
-        if (gl->get_current() != gl->producer || gl->get_dc() != gl->dc) {
+        assert(opengl::pWglGetCurrentContext() == gl->semaphore->context && opengl::pWglGetCurrentDC() == gl->semaphore->dc);
+        if (opengl::pWglGetCurrentContext() != gl->semaphore->context || opengl::pWglGetCurrentDC() != gl->semaphore->dc) {
           throw std::invalid_argument("GL signal requires its producer context/DC");
         }
         if (gl->value >= std::numeric_limits<std::uint64_t>::max() - 1) {
