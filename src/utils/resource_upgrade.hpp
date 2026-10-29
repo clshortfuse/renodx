@@ -21,6 +21,7 @@
 #include "./data.hpp"
 #include "./descriptor.hpp"
 #include "./log.hpp"
+#include "./opengl.hpp"
 #include "./resource.hpp"
 #include "./swapchain.hpp"
 
@@ -826,7 +827,13 @@ inline void RewriteRenderTargets(
   auto* new_rtvs = ApplyRenderTargetClones(rtvs, count);
   if (new_rtvs == nullptr) return;
   if (cmd_list->get_device()->get_api() == reshade::api::device_api::opengl) {
+    renodx::utils::opengl::Initialize();
+    int read_framebuffer = 0;
+    renodx::utils::opengl::pGlGetIntegerv(renodx::utils::opengl::READ_FRAMEBUFFER_BINDING, &read_framebuffer);
     cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs, {0u});
+    // ReShade binds GL_FRAMEBUFFER (READ and DRAW). Only DRAW is redirected;
+    // preserve the game's source for a subsequent framebuffer blit.
+    renodx::utils::opengl::pGlBindFramebuffer(renodx::utils::opengl::READ_FRAMEBUFFER, static_cast<unsigned int>(read_framebuffer));
   } else {
     cmd_list->bind_render_targets_and_depth_stencil(count, new_rtvs, dsv);
   }
