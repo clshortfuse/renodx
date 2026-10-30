@@ -202,6 +202,7 @@ bool HandleUICompositing(float4 ui_color, float4 scene_color, inout float4 outpu
 
   float3 bt2020_color = renodx::color::bt2020::from::BT709(linear_color);
   float3 pq_color = renodx::color::pq::EncodeSafe(bt2020_color, RENODX_DIFFUSE_WHITE_NITS);
-  output_color = float4(pq_color, 1.f);
+  // Keep UI coverage in alpha: DLSS-FG's UI hint extraction reads backbuffer alpha
+  output_color = float4(pq_color, saturate(ui_color.a));
   return true;
 }
