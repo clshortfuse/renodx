@@ -1,0 +1,101 @@
+name: Build Wuthering Waves CN
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, discord]
+    paths:
+      - "src/games/wutheringwaves/**"
+      - "src/utils/**"
+      - ".github/workflows/build-wuwa.yml"
+      - "tools/**"
+      - "i18n/**"
+      - "renodx-wutheringwaves.addon64"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_CACHE_SIZE: "5G"
+      SCCACHE_C_CUSTOM_CACHE_BUSTER: "${{ github.workflow }}"
+      PYTHONIOENCODING: "utf-8"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Set up shader tools
+        shell: pwsh
+        run: .\scripts\setup-dev-env.ps1 -Update -Tools dxc,slang,glslang
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
+
+      - name: Configure build for amd64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Configure CMake (x64)
+        run: cmake --preset clang-x64 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Build Wuthering Waves Target
+        run: cmake --build --preset clang-x64-release --target wutheringwaves --verbose
+
+      - name: Package Release as CN
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          New-Item -ItemType Directory -Force -Path output
+          if (Test-Path "renodx-wutheringwaves.addon64") {
+            Write-Host "Patching embedded zh-Hans dictionary for Discord addon..."
+            python tools/patch_renodx_i18n.py renodx-wutheringwaves.addon64 i18n/zh-Hans_additions.json -o output/renodx-wutheringwaves-CN.addon64
+          } else {
+            Copy-Item build\Release\renodx-wutheringwaves.addon64 -Destination output\renodx-wutheringwaves-CN.addon64
+          }
+          if (Test-Path "build\Release\renodx-wutheringwaves.pdb") {
+            Copy-Item build\Release\renodx-wutheringwaves.pdb -Destination output\renodx-wutheringwaves-CN.pdb
+          }
+          Compress-Archive -Path output\* -DestinationPath output\renodx-wutheringwaves-CN.zip -Force
+          Get-ChildItem output | Format-Table Name, Length
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: renodx-wutheringwaves-CN
+          path: output/*
+
+      - name: Auto Publish Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/discord' || startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: ${{ github.ref == 'refs/heads/discord' && 'discord-latest' || 'latest' }}
+          name: ${{ github.ref == 'refs/heads/discord' && '鸣潮 RenoDX HDR 模组 Discord分支最新构建 (renodx-wutheringwaves-CN)' || '鸣潮 RenoDX HDR 模组 最新构建 (renodx-wutheringwaves-CN)' }}
+          body: |
+            《鸣潮》(Wuthering Waves) RenoDX HDR 模组简体中文版最新自动构建产物。
+
+            - **分支**: ${{ github.ref_name }}
+            - **核心插件**: `renodx-wutheringwaves-CN.addon64`（下载后放入游戏目录即可生效）
+            - **完整压缩包**: `renodx-wutheringwaves-CN.zip`
+            - **构建 Commit**: ${{ github.sha }}
+
+            ### 安装使用方法
+            1. 将 `renodx-wutheringwaves-CN.addon64` 复制到鸣潮游戏目录：
+               `<鸣潮安装目录>\Wuthering Waves Game\Client\Binaries\Win64\`
+            2. 建议删除或移除旧的英文版 `renodx-wutheringwaves.addon64`。
+            3. 启动游戏按 `Home` 键在 ReShade 的 Add-ons 界面中即可体验全中文 RenoDX 设置。
+          prerelease: ${{ github.ref == 'refs/heads/discord' }}
+          files: |
+            output/*

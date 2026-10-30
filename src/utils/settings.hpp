@@ -58,13 +58,13 @@ static std::string global_name = "renodx";
 static int preset_index = 1;
 static std::vector<std::string> preset_strings = {
     "Off",
-    "Preset #1",
-    "Preset #2",
-    "Preset #3",
+    "预设 #1",
+    "预设 #2",
+    "预设 #3",
 };
 static const std::vector<std::string> BOOLEAN_STRINGS = {
-    "Off",
-    "On",
+    "关闭",
+    "开启",
 };
 
 static std::vector<std::function<void()>> on_preset_off_callbacks;
@@ -501,14 +501,14 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       if ((preset_style & SettingStyle::SEGMENTED)
           == SettingStyle::SEGMENTED) {
         changed_preset = SegmentedButtons(
-            "Preset",
+            "预设",
             &preset_index,
             preset_strings,
             (preset_style & SettingStyle::MULTILINE)
                 == SettingStyle::MULTILINE);
       } else {
         changed_preset = ImGui::SliderInt(
-            "Preset",
+            "预设",
             &preset_index,
             0,
             preset_strings.size() - 1,
@@ -716,7 +716,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
                 0,
                 1,
                 setting->labels.empty()
-                    ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
+                    ? ((setting->value_as_int == 0) ? "关闭" : "开启")  // NOLINT(readability-avoid-nested-conditional-operator)
                     : setting->labels.at(setting->value_as_int).c_str(),
                 slider_flags | ImGuiSliderFlags_NoInput);
           }
