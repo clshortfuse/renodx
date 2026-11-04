@@ -276,7 +276,7 @@ static bool GetHDREnabled(const DISPLAYCONFIG_PATH_INFO& path) {
   advanced_color_info_1.header.adapterId = path.targetInfo.adapterId;
   advanced_color_info_1.header.id = path.targetInfo.id;
   if (DisplayConfigGetDeviceInfo(&advanced_color_info_1.header) == ERROR_SUCCESS) {
-    return advanced_color_info_1.advancedColorEnabled != 0;
+    return advanced_color_info_1.advancedColorEnabled != 0 && advanced_color_info_1.wideColorEnforced == 0;
   }
   return false;
 }
