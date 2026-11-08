@@ -1,4 +1,0 @@
-https://github.com/aras-p/ToyPathTracer
-
-Modified to render only 10 frames. Client part requires 12 GB, server part
-requires 6.4 GB.
