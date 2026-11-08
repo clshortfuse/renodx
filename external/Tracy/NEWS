@@ -1,0 +1,1743 @@
+Note: There is no guarantee that version mismatched client and server will
+be able to talk with each other. Network protocol breakages won't be listed
+here.
+
+v0.14.1 (2026-08-22)
+--------------------
+
+- Dropped support for loading pre-0.11 traces.
+- Silenced MSVC warning C4366: The result of the unary '&' operator may be
+  unaligned.
+- Fixed section setup in on-demand mode.
+- Hardened string length encoding in protocol.
+- Fixed compilation failure related to VSync when targeting 32-bit on
+  Windows.
+- Added TRACY_NO_WAIT_STACKS compile time macro.
+- Improved documentation of requirements in edge cases:
+  - Memory allocation reporting needs to be done under a lock.
+  - Manual lifetime management requires shutdown of the profiler.
+  - Documented how zones behave when crossing the on-demand connection
+    boundary.
+  - Mention that statistics time range limit also affects source view.
+- Memory events are now attributed to virtual fiber threads.
+- Added TRACY_ASSERT macro allowing user-defined handling of asserts in the
+  profiler.
+- Fixed csvexport options: -t, --sep, --filter.
+- Configuration of plot color now matches the documented RGB channels order.
+- Link profiler executable with libdl (required by old glibc versions).
+- Improve coverage of link-time macro mismatch detection.
+- Removed TRACY_DELAYED_INIT option. It was no-op since 2020.
+- Fixed illegal instruction in rpmalloc on ARMv6 and older.
+- Fixed handling of source code queries in no-callstack builds. Previously
+  the profiling session would hang at exit.
+- Hardened Lua on-demand handling.
+- Fixed system tracing on Linux kernels older than 4.1.
+- Linux system tracing setup failures are now reported via Tracy debug
+  message functionality.
+- Improved version handling in CMake / Meson / Python build systems.
+- Fixed D3D12 readback buffer error.
+- Child zone list in zone info window can be now sorted by name or by time.
+- File dialog failures (e.g. related to the XDG portal) are now reported
+  in the modal dialog.
+- Fixed NO_FILESELECTOR builds.
+- Fixed possible profiler hang when there was not enough space to draw
+  a plot on the timeline.
+- Update check can be now interrupted, e.g. when exiting the profiler.
+- Patched the file selector library to use modern Wayland protocol for
+  setting parent-child window relation.
+
+
+v0.14.0 (2026-08-09)
+--------------------
+
+- API break: removed "secure" variants of memory alloc and free macros. The
+  secure code path is now always enabled. Migrate by removing "Secure" from
+  the macros you use, e.g. TracySecureAlloc(...) -> TracyAlloc(...).
+- Added printf-style variants of the C API zone text and name macros:
+  TracyCZoneTextF and TracyCZoneNameF now accept a format string and
+  arguments, instead of a fixed-length text buffer.
+- Added tracy-capture-daemon for automated multi-client trace capture.
+- Added tracy-merge utility for combining multiple trace files into one.
+- Added support for Windows on ARM64 with MSVC.
+- Added support for WebGPU.
+- Binary releases are now also provided for macOS (needs manual quarantine
+  handling) and Linux (AppImage with Ubuntu 24.04 base, requires Wayland).
+- Trace-specific settings storage has been completely overhauled. It is now
+  possible to make the settings sidecar file public, saved next to the trace
+  file.
+- External frames are now omitted in the single-line call stack list visible
+  in messages list, or in memory allocation info window.
+- External frames are now hidden by default in various contexts where they
+  were previously enabled:
+  - Flame graph window.
+  - Call stack window.
+  - Statistics window (sampling mode).
+- Wait stacks have a separate setting for external frames, as you would
+  typically want to know what caused the wait state, which can be inferred
+  from the external code.
+- External frames are now dimmed out in call stacks in various parts of UI.
+- Sample markers on the timeline are now colored according to sample type:
+  - Green for samples in the profiled program,
+  - Blue for samples in external code,
+  - Red for samples in kernel.
+- Single-line call stacks now have ellipsis at the end, if there are frames
+  remaining.
+- Sample entry stacks window can now also show the stacks by which a symbol
+  was reached, i.e. it was present anywhere on the call stack, not only when
+  it was executing. Recursive re-entries can be either ignored or counted
+  separately.
+  - Entry stacks are now also available for symbols which were only reached,
+    but never directly sampled, e.g. in the assembly view of a call site with
+    purely child sample costs, or in the statistics window for symbols which
+    only have inclusive counts.
+- Fixed inclusive sample counts of symbols with inline functions. Each
+  sample was counted multiple times: once for the symbol itself and once for
+  every of its inline functions present on the call stack.
+- Fixed context switch samples leaking into per-symbol sample lists and
+  child sample data on trace load. This inflated range-limited sample counts
+  and child call costs, and made loaded traces disagree with live sessions,
+  where such samples are excluded from sampling statistics.
+- Fixed wrong results of range-limited child call queries during live
+  capture, when some samples had to wait for context switch data to arrive.
+- Fixed crashes when opening the sample entry stacks window for symbols
+  without any sampling data.
+- Sampling statistics percentages are now calculated against the number of
+  samples that were actually collected. Previously, enabling the range
+  filter switched the calculation to a theoretical single-thread estimate,
+  which changed both the meaning and the scale of the displayed values.
+- Find zone sample count percentages are now relative to the matched zones,
+  consistent with the time percentages in the same list, instead of being
+  relative to the whole trace.
+- Context switch samples are now consistently excluded from all sampling
+  statistics views.
+- System tracing on Windows has been refactored to be more robust.
+- Tracing on Arm macOS will now have more precise timer readings.
+- Extended CUDA support to track some previously missing memory operations.
+- Added support for setting message's source and severity, through the
+  TracyLogString macro.
+- The "zone trace" list in zone information window has been removed. It was
+  never convenient to use properly. It was replaced by "parent zones" list,
+  which is basically a less convoluted equivalent.
+- Added inline call stack list to the zone information window.
+  - The "call stack" button for opening the call stack in a separate window
+    is still there.
+- Call stacks are now also displayed in zone and memory allocation tooltips
+  (single-line).
+- Implemented heuristic reconstruction of zone call stacks for zones that
+  were captured without call stacks.
+  - Requires sampling to be enabled, and at least one sample in the zone
+    extent.
+  - Since this is a heuristic, the result can be wrong.
+  - The reconstructed call stack can be displayed in the zone tooltip and in
+    the inline call stack view in zone information window.
+  - Reconstructed call stacks are indicated with the "magic wand" icon.
+- Various LLM integration improvements.
+  - The protocol has been updated to use model templates. As a result, tools
+    are now specified in a common way and the reasoning is performed in a
+    separate content stream.
+  - Several new tools were added, which in concert enable the assistant to
+    answer very general questions, such as "how to optimize this program?".
+  - Smaller models are now viable to use. Models as small as 4B parameters do
+    now work really well. You can run such models on virtually all hardware.
+  - Added horizontal scroll bars to code segments.
+  - LLM thinking regions are now hidden by default.
+    - The assistant may notify the user about its current findings, then
+      resume thinking, after which it may give a more complete answer. In
+      such cases, the initial part of the reply will be faded out.
+  - Sampled execution costs are now included in assembly attachments.
+  - Source code retrieval now has an optional line context parameter.
+  - Added ability to search the code for keywords.
+  - Calls in assembly attachments are now annotated with function names.
+  - Wikipedia search will now return 10 results, not only the top one.
+  - Brave search engine is now available as an alternative web search option.
+  - Added emoji font.
+  - Maximum tool reply size has been tweaked to better work with larger
+    contexts.
+  - Tool reply size limit is now configurable in LLM settings.
+  - Tool reply eviction logic for context management has been adjusted to
+    better work with larger contexts. Additional logic was added to prefer
+    eviction of old responses.
+  - Certain LLM actions want to run in a fast mode, with reasoning disabled.
+    In most scenarios the default chat model will have to do here. If you
+    have the memory to spare, you can optionally load two models at once,
+    setting the "fast" model to a smaller and much quicker one.
+  - Chat topic description is now provided, based on the first user question.
+  - Each assistant reply is now labeled with used model and reply time.
+  - Follow-up questions can be automatically suggested.
+  - It is now possible to alter the assistant personality.
+- Expanded LLM attachments.
+  - You can now attach complete symbol assembly.
+  - Entry call stacks can be now attached (previously it was only regular
+    call stacks).
+  - Crash call stack attachments are now annotated with crash info.
+  - Wait stack attachments now contain wait metadata.
+  - Source code can be attached (also with execution costs in symbol view).
+  - Zone histogram data can be attached for analysis.
+- Added MCP server.
+- Markdown renderer improvements.
+  - Tables are now properly rendered.
+  - Tasklist rendering has been implemented.
+  - Strikethrough is now supported.
+  - Clickable links are now underlined.
+- Tweaked high-resolution scroll handling on Wayland.
+- Touchpad gestures on the timeline now either scroll or zoom, but not both
+  simultaneously.
+- Full user name is now stored in trace info.
+- External functions can be filtered out in the sampling statistics view.
+- Tweaked external paths heuristics.
+  - Check for both 64-bit and 32-bit versions of Program Files directory.
+  - Hidden unix files and directories are now also considered external. For
+    example: $(HOME)/.cache/cpm/somelib/file.h.
+- Call stack window can now provide LLM summaries.
+  - These summaries can be performed automatically. Enable in LLM settings.
+- The capture utility is now displaying query backlog, just like the profiler
+  GUI.
+- Lua source locations that are script code will now have newlines removed.
+  This is a capture-time change, so previously captured broken Lua source
+  locations won't be fixed.
+- Call stack window will now display notification if viewing a crash call
+  stack.
+- Call stack window will now show a proper label if viewing a wait stack.
+- Removal of Tracy crash handler stack from the reported crash call stack
+  should now work again on Linux.
+- In disassembly line view, source file names are now displayed instead of
+  "unknown", in case the source line number is not known.
+- Trace host info is now properly formatted.
+- It is now possible to sort the order of threads on the timeline ("visible
+  threads" in trace settings).
+- Added clipboard support to emscripten backend.
+- Added TRACY_DISALLOW_HW_TIMER define for virtualized environments and WSL2,
+  which may not have reliable access to hardware timer registers. Falls back
+  to standard library timer with reduced resolution.
+- Fixed TRACY_NO_CODE_TRANSFER define. It didn't prevent source code transfer
+  before.
+- Fixed DPI scaling on macOS.
+- Thread names are no longer truncated to 15 characters on Apple.
+- Executable path is now inspected when looking for PDB files on Windows.
+- Added ___tracy_get_time() C API as an equivalent for Profiler::GetTime().
+- D3D12 instrumentation improvements.
+- CUDA instrumentation improvements.
+- Properly set API visibility attributes on MSVC + clang.
+- Fixed regression in data sorting algorithm that could cause broken (going
+  back in time) plots. A retroactive fix is included for previously broken
+  traces.
+- All tools provided by the project now report the version number and git sha
+  revision on the command line help output.
+- Microarchitectural data has been updated to include the latest uops.info
+  measurements.
+- Added validation check for SymSrv.dll on Windows.
+- Various CMake options are now available to control optional build settings:
+  - NO_LTO disables link-time optimization.
+  - NO_MOLD_LINKER disables use of the mold linker.
+  - NO_CCACHE disables use of ccache (compiler cache).
+- The Tracy library now has TRACY_ENABLED unset by default in the CMake and
+  Meson default configurations. This now matches what the documentation was
+  always saying. Some build setups may need updating.
+- Adjust to max sampling rate on Linux.
+- Further improvements to tracefs mount path discovery robustness.
+- Macro mismatch detection between Tracy configuration and client code.
+  - Tracy client build settings change the ABI of the library.
+  - Mismatched versions will break at linking.
+  - As a reminder, Tracy *always* required using the same set of compilation
+    options for the entire program.
+- Message windows were improved.
+  - Full message will be now displayed in a tooltip for multi-line messages.
+  - Added right click context menu with option to copy message to clipboard.
+- Greatly improved the in-profiler user manual.
+  - There is now chapter tree and the manual contents are displayed section
+    by section.
+  - Links to chapters are now properly working.
+  - The "bclogo" blocks are now correctly processed and displayed as proper
+    admonitions.
+  - The font awesome icons now show as in the rest of the UI.
+  - Footnotes are now rendered as proper footnotes.
+  - Tables are now rendered as intended.
+  - LaTeX math is now converted to readable form.
+  - Added a button to download the full PDF manual to the user manual window.
+- Call stack window will now show the thread viewed call stack originates
+  from (if possible).
+- "Visible threads" checkboxes in messages, flame graph and wait stacks
+  windows are now displayed in multiple columns, and the maximum number of
+  visible rows is limited, with fallback to scrollable view.
+- Improved child call distribution list in the symbol view window.
+  - The visible area can be now resized horizontally.
+  - The list is now displayed as a table with resizable columns, etc.
+  - Child calls time percentage is now shown as a percentage of calls (as
+    it was before), and also as a percentage of total symbol time.
+- Child calls time is now also displayed as a percentage.
+- Prototype implementation of system tracing on Apple devices.
+- Local (inline) call stack printouts were added to tooltips in statistics
+  window, in sampling mode.
+- Ironed out some code corners to make integration of closed gaming console
+  platforms easier. Added support for custom platform headers.
+- Bottom and top sample trees (in wait stacks, or in entry call stacks)
+  now display aggregation counts if "group by function name" is enabled.
+- HW sample view in symbol view are now disabled by default.
+- The profiler can no longer be built with the statistics disabled.
+- Fixed NVCC builds.
+- Fixed possible lockups in Vulkan timer calibration loop.
+- Flame graph improvements.
+  - The flame graph view now supports zooming in and panning with the mouse.
+  - Sampling flame graph items can be now also grouped by name, in addition
+    to symbol address.
+  - Sampling flame graph no longer omits display of unknown symbols. These
+    are now aggregated into blocks named after the executable image.
+- General application crash information polish in the profiler UI.
+- The achievements system has been converted to use markdown renderer.
+- Offline symbol resolution with the update utility now supports custom
+  addr2line-compatible tools via -a and -A command line parameters.
+  Additionally, it is now possible to reset all call stack frame symbols to
+  unresolved with the -R parameter.
+- Periodic recalibration of the clock drift in OpenGL contexts can be enabled
+  with the TRACY_OPENGL_AUTO_CALIBRATION compilation define. Note that this
+  requires a full CPU/GPU sync on each calibration event. These events will
+  not fire more often than once every second.
+- Additional hardening of OpenGL tracing.
+- Added missing C API for shared locks.
+- Implemented semi-unique, nonsense random name generator.
+  - Can be used to set a trace description.
+  - Will be used to provide default description for newly added annotations.
+- Polished look and feel of annotation regions on the timeline.
+- Annotations can now be hidden.
+- It is now possible to create annotations from time range limits.
+- Expanded available tests.
+  - The previously existing "test" program now lives in "tests/tracy".
+  - The tests directory also contains some repro cases for solved problems.
+- Expanded examples showing how to use the profiler.
+  - Includes "Dyna.net", a small 2D game that is a variation of Bomberman.
+- Made numeric input field for trace parameters usable again.
+- Added new type of trace parameter that exposes a trigger button.
+- Added "sections" feature for marking high-level sections of program
+  execution.
+  - For example, a game with multiple levels may have each of the levels
+    marked as a section.
+  - Each section is a distinct region not restricted by other sections.
+  - Multiple sections can overlap.
+  - Sections can be assigned to user-defined categories.
+  - Can be used to set time range limits.
+  - Exposed via Lua bindings.
+- Find zone window now also displays coefficient of variation, in addition
+  to standard deviation.
+- Moved frame statistics from trace information window to its own window.
+  - Added various statistical data to bring frame statistics up to par with
+    the find zone window.
+  - Added a new time range limit for frame statistics. This accompanies the
+    previously existing "limit to view" option.
+- More robust statistics for functions that recursively call themselves.
+- General uplift of the compare traces window.
+  - Added all the statistical parameters displayed in find zone window that
+    were missing here.
+  - Frame comparison now also displays FPS values.
+  - The "more" and "less" indicators are now color coded to show their
+    importance. The amount of color these keywords are printed with is now
+    dependant on how divergent the numeric values are.
+  - It is now possible to limit time range for both traces that are compared
+    to their respective annotations or sections.
+- Frame image playback improvements.
+  - Playback can be looped.
+  - The range of played frame images can be limited, either manually, or by
+    copying annotation, section, or time range limit. There's an "require
+    frame coverage" option to only include frames that are at least 75%
+    within the source region.
+- Most windows now have a minimum width, in order to make sure all controls
+  provided in the window are visible. Previously it was easy to oversee some
+  button that was out of the window draw area.
+- The ignore memory faults functionality (enabled by default if profiling
+  programs on Apple platforms) will now also ignore allocating memory at the
+  same location twice, without an intermediate free. Thanks, Tim Apple!
+
+
+v0.13.1 (2025-12-11)
+--------------------
+
+- Fixed parsing of extended model and family of x86 CPUID.
+- Fixed memory corruption when a "long" user name was used on Android.
+- Fixed wrong function signature when TRACY_DEBUGINFOD was enabled.
+- Mount list is now read using proper API instead of processing /proc/mounts.
+- Fixed shadow warning supression not being enabled on gcc.
+- Silently ignore lost ETW Vsync events instead of asserting.
+- Worked around few cases where old macOS machines do not support C++20
+  properly. Thanks Tim Apple!
+- Added truncated mean parameter to csvexport.
+- Added experimental viewer for the user manual.
+- Memory free faults can be now ignored with the TRACY_IGNORE_MEMORY_FAULTS
+  option.
+- Fixed race condition during profiler shutdown.
+
+
+v0.13.0 (2025-11-11)
+--------------------
+
+- Added optional LLM integration.
+  - Can be completely disabled in options.
+  - Requires you to provide a local LLM service.
+  - Can be used to retrieve information from the user manual.
+  - Can answer queries about application call stacks, assembly code, other
+    general questions.
+  - Will refer to network resources to obtain information.
+  - The required setup is detailed in the user manual.
+- Added support for Microsoft Game Development Kit (GDK).
+- Added support for ROCm / Rocprof.
+- Default values for certain settings can be now saved in the options
+  window.
+- The display height of any timeline thread can be limited with a thread
+  cropper widget at the left border of the screen.
+- System tracing is now stopped when the profiled program wants to exit.
+- System tracing can be now enabled and disabled by the profile program.
+- Added support for host query reset when collecting Vulkan traces.
+- The find zone statistics now also show P99 and P99.9.
+- Timeline for a thread will no longer hide if there are no zones to show,
+  but samples are visible.
+- Fixed problems with Wayland integration.
+  - Proper order of operations is now ensured during initialization.
+  - The window size calculations for fractional scaling are now done
+    correctly.
+- The Linux tracefs mount path is now properly detected, instead of relying
+  on a hardcoded value.
+- Fixed LockMark macro expansion.
+- Fixed invalid reported fiber enter time.
+- Properly handle fiber enter and leave events in the on demand mode.
+- Removed calibration of queue delay time. It served no real purpose.
+- Various improvements have been made to speed up symbol and executable
+  image queries.
+- Exposed internal mutex variable in Lockable and SharedLockable.
+- Fixed problems with Linux systems that do not use glibc.
+- Fixed edge case that could corrupt rpmalloc state in the profiled
+  application.
+- Extended ZoneNameF macro with compiler checks for proper printf args.
+- Warnings about variable redefinition by nested zone macros are now
+  supressed by default. The old behavior can be restored by adding the
+  TRACY_ALLOW_SHADOW_WARNING define during compilation of your program.
+- Fixed window icon and dock integration on macOS.
+- Fixed edge case with symbols thread not behaving as expected when on
+  demand mode was used and a rapid reconnection was made.
+- Properly defer GPU context events in serial C API.
+
+
+v0.12.2 (2025-06-25)
+--------------------
+
+- Fixed builds made out of git checkout directory.
+- Added range limits for flame graph.
+- Fixed wayland include paths for distros that use non-standard package
+  layouts.
+- Workarounded MinGW build problems. Safe symbol retrieval is not available
+  on this platform.
+- Fixed Lua bindings when TRACY_NO_CALLSTACK is defined.
+
+
+v0.12.1 (2025-06-07)
+--------------------
+
+- Fixed window size calculation on macOS, most notably enabling the vertical
+  timeline scroll bar.
+- Made debug builds of the GUI profiler work with broken Apple compiler.
+- Fixed profiler compilation when build directory is outside the source
+  directory.
+- Set proper include path when using CMake integration.
+- Added the Tracy Metal and CUDA headers to CMake install configuration.
+- Documented flame graphs.
+
+
+v0.12.0 (2025-05-30)
+--------------------
+
+- Enabled workaround for MSVC runtime library SNAFU, which manifested with
+  the profiler executables crashing at startup inside mutex code.
+- CPU topology data now includes CPU die information.
+- Clients running under Wine will now report that in the trace info.
+- Added flame graph.
+- The Git ref information for the build is now included in the about dialog.
+- Added support for clipboard copy and paste on Wayland.
+- The welcome dialog client address entry field will now trim the entered
+  address, so that stray spaces at the start and the end are removed. This
+  should reduce the amount of user precision required when copy pasting the
+  address from somewhere else.
+- GPU profiling is now available with Metal and CUDA.
+- Profiling zones can now optionally inherit their parent color.
+- It is no longer needed to have up-to-date copy of wayland-protocols
+  installed. CMake will download the required version from GitHub.
+- Added option to show the top inline in symbol statistics list in stead of
+  the symbol name.
+- Parallel sorting is now performed with PPQSort (which removes potential
+  dependency on TBB).
+- Added CMake option TRACY_DEBUGINFOD to enable use of libdebuginfod to
+  retrieve symbols on Linux clients.
+- Added a "custom" label as an option to select for GPU context type.
+- Symbol code retrieval is now protected against reading no longer available
+  memory.
+- Clicking on a symbol in the symbol statistics list will now open a popup
+  with two options. This change intends to make the useful but quite hidden
+  disassembly view more discoverable.
+  - "View symbol" shows the symbol code disassembly. It was previously
+    available by right-click on the source file name.
+  - "Sample entry stacks" shows the list window that was previously
+    opened when the symbol entry was clicked.
+- Plots are now extended to the end of the trace, instead of ending at the
+  last data point.
+- Added TracyMemoryDiscard macros to mark that all allocations made in a
+  certain memory pool were freed. This enables better support for arena
+  allocators.
+- It is now possible to fine-tune horizontal and vertical mouse wheel scroll
+  sensitivity.
+- Added p75 and p90 percentiles in the Find zone window.
+- Zone info window will now display (approximate) wall-clock time of when
+  the zone appeared, in addition to the previously displayed time from the
+  start of the program.
+- Zone values passed via ZoneValue macro will be now also displayed in hex.
+- The csvexport utility can now export:
+  - plots,
+  - GPU zones,
+  - zone text.
+- Fortran integration is now available.
+- Added TRACY_LTO CMake option to enable Link-Time Optimizations.
+- Executable image names will now be shortened to just the file name. The
+  full path is available as a tooltip. Shortening can be disabled with a
+  "scissors" checkbox.
+- Entry stacks can be now also viewed via a button in the symbol view.
+- On Wayland the application icon is now set even without the desktop file.
+- Lua code can be now automatically instrumented via a hook.
+- User text set in zone can be now copied to clipboard.
+- The LockMark() macro is now less strict about what object you can pass
+  to it. It is now possible to pass members, e.g. LockMark(obj.mutex).
+- The profiler application now adapts to per-monitor DPI on Windows.
+- It is now possible to save the UI scale of the profiler (needs to be
+  enabled in settings).
+- Added thread wakeup visualization.
+
+
+v0.11.1 (2024-08-22)
+--------------------
+
+- Utilities import-chrome and import-fuchsia now live together in the import
+  directory.
+- Added TRACY_VERBOSE to available CMake options.
+- It is now possible to set TRACY_SAMPLING_HZ via a environment variable.
+- Thread group hints can be now used to group threads together in the
+  profiler UI.
+- Limit Lua file names to 255 characters, as the source string can contain
+  the whole script, if loaded with loadstring().
+
+
+v0.11.0 (2024-07-16)
+--------------------
+
+- Support for pre-0.9 traces has been dropped.
+- The old server-side build system has been replaced by CMake. The client
+  integration is not affected. Refer to the manual for details.
+  - Most importantly, a known version of the capstone library is now
+    downloaded from GitHub. You will need to have git installed for this
+    to work (there is a CMake option to use the capstone installed on the
+    system, as was done previously).
+- Various Meson fixes.
+- Proper way of loading Vulkan calibrated timestamps extension.
+- Fixed C API support for GPU tracing when on demand mode is enabled.
+- Added a way to resynchronize CPU and GPU timestamps.
+  - Using calibrated contexts should always be preferred.
+  - Each synchronization event requires a sync of CPU and GPU, which is
+    something you always want to avoid.
+  - This is not exposed as an easy-to-use API available through the GPU
+    wrappers.
+- Added TracyIsStarted macro to check if the profiler has been started.
+  Using this functionality only makes sense in the manual lifetime mode,
+  and will always return true in any other mode of operation.
+- Added basic QNX support.
+- Zmmword is now recognized as an assemble size directive.
+- Libunwind can be used for call stack capture on Linux if you build with
+  the TRACY_LIBUNWIND_BACKTRACE define.
+- Preloading symbols for all modules on Windows, which is always performed
+  on program init, and which can be quite slow, may now be omitted through
+  the TRACY_NO_DBGHELP_INIT_LOAD define. In this mode, symbols will be
+  loaded as needed.
+- Validation of discontinuous frames has been disabled in on-demand mode.
+  It's quite likely to connect in the middle of a discontinuous frame,
+  which resulted in frame end event for a frame that hasn't been started.
+- Symbols can be now resolved offline on Windows and Linux.
+  - Enabled with the TRACY_SYMBOL_OFFLINE_RESOLVE define or env variable.
+  - The update utility has two additional options:
+    - -r, which enables resolving symbol and patching stack frames in the
+      trace.
+    - -p, which you can use to modify the paths used for symbol resolution.
+  - Some functionality will be missing if this mode is used. For example,
+    symbol statistics are unavailable.
+- Resolving symbol names on Linux will now use image cache to reduce the
+  number of dladdr() calls.
+- Compiling with the TRACY_LIBBACKTRACE_ELF_DYNLOAD_SUPPORT define will
+  enable support for run-time updating of known elf ranges in libbacktrace
+  on Linux. Previously, shared objects dlopened() after libbacktrace init
+  would not be visible during symbol resolution.
+- Zone group count in the Find zone window is now explicitly displayed.
+- Instrumentation statistics now display in how many threads each source
+  location has appeared in.
+- Added import tool for fuchsia traces.
+  - https://fuchsia.dev/fuchsia-src/reference/tracing/trace-format
+- Added checks for overflow of source locations.
+  - As a reminder, Tracy only allows to have 64K unique source locations,
+    split in half between static and dynamic locations.
+  - Runtime checks are active during capture and will stop a trace that
+    goes beyond the limit.
+  - Load-time checks will stop any broken trace file from loading.
+- Opening the source code view that has no associated address in code
+  (i.e., from the list of instrumented zones, or from the find zone
+  window) will now search the list of symbols for a function name match.
+  - In many cases this will result in displaying the full disassembly view
+    where previously you would only see the source code.
+  - Matching is performed by string comparisons, which in rare cases may
+    result in showing false data.
+  - Press ctrl key while opening source view to keep the old behavior.
+  - If more than one matching symbol is found (e.g., if two classes have
+    methods with the same name, or if a template is instantiated in multiple
+    places in code), it is not possible to tell which of the code locations
+    the source location corresponds to and only the source code will be
+    displayed.
+- Added TracyNoop macro, which inserts a reference to Tracy's object file
+  into your application. Use it if you want to use Tracy in sampling mode,
+  without any manual instrumentation (so no references of your own exist)
+  and link Tracy as a static library. Linkers will only include library code
+  if code references it, and this doesn't work as intended with Tracy, as it
+  ignores global constructors that have side effects.
+- ZoneText and ZoneName macros now have a printf-like variant, denoted with
+  a 'F' postfix.
+- The 'tracy_shared_libs' Meson option was removed. Use interface provided
+  by Meson to set the library type instead.
+- Dropped the 'tracy_' prefix from Meson options. The `tracy_enable` option
+  remains as it was, as it can be inherited from parent projects.
+- Fixed display of active / inactive allocations in memory call tree.
+- Instrumentation statistics can be now sorted by source location.
+- Added option to hide external code frames in call stack view.
+- There's now a copy to clipboard button in the statistics view. It copies
+  the visible rows of either the instrumentation or GPU statistics view to
+  a CSV string matching a subset of the csvexport format.
+- Source file contents can be copied to the clipboard.
+- Added key binding for immediate reconnect: Ctrl+Shift+Alt+R.
+- Lock markup is now available through the C API.
+- Symbol statistics window now allows aggregation of inlined functions in
+  symbols.
+- Cost measurements of inlined functions in the symbol statistics window
+  can be now relative to the base symbol instead of total program run time.
+- ScopedZone and AllocSourceLocation now accept color parameter. Impact on
+  existing code should be minimal.
+  - AllocSourceLocation has a new parameter with a default value.
+  - __tracy_alloc_srcloc and __tracy_alloc_srcloc_name break the existing
+    API. This can be easily fixed by setting the last parameter to zero.
+- To build the profiler GUI with Wayland you now need wayland-scanner and
+  wayland-protocols to be installed. A reasonably recent release of the
+  protocols is required, which, as always, is not available on Ubuntu.
+  Seriously, stop trying to build modern software with that broken distro.
+- Fractional DPI scaling is now properly supported on Wayland.
+- Added Python bindings.
+- The per-line sampling statistics are now also displayed as a percentage
+  of total program run time.
+- The out-of-focus render frame rate reduction can be now disabled in
+  global settings.
+- It is now possible to load source files that are newer than the trace.
+  The default setting is still to reject such files.
+- Memory limit for a capture can be now set, both in the GUI profiler and
+  in the capture utility.
+- Thread list can be now sorted alphabetically.
+- It is now possible to adjust plot height.
+- Trace comparison statistics were expanded and made more clear.
+- Implemented retrieval of kernel symbol code on Linux.
+- Added support for multiple compression streams in trace files. This
+  effectively parallelizes both load and save operations.
+  - The default save setup is now set to Zstd level 3 with 4 compression
+    streams. This gives both faster compression time and smaller file size.
+- New users will be now eased into the profiler with a set of tutorial
+  achievements.
+- You can now set the timeline options default values in global settings.
+- Added a check for program memory being available before symbol retrieval
+  on Windows.
+
+
+v0.10.0 (2023-10-16)
+--------------------
+
+- Missed frames region of on-demand captures will be now ignored when
+  calculating trace time span, zone percentages, etc.
+  - Due to technicalities information about locks, frame statistics in trace
+    information window and csvexport utility still include the missed frames
+    time.
+- When source location dynamic zone coloring mode is enabled, collapsed
+  zones will be now gray-colored. Previously such regions falled back to
+  showing thread colors, which may have been confusing to users.
+- Vulkan contexts can now use VK_EXT_host_query_reset extension.
+- System power usage is now reported on x86 Linux.
+- Program name displayed in broadcast messages can be now changed with the
+  TracySetProgramName() macro.
+- Zone error markers (red regions and error bars) have been removed for
+  consistency with how all other profiling events are displayed.
+- It is now possible to export messages in the csvexport utility.
+- Major overhaul of how timeline items are processed in GUI.
+  - The process of figuring out what needs to be drawn on the timeline has
+    been heavily parallelized.
+  - The impact is especially visible with traces containing large amounts
+    of data. The framerate improvement in such cases can be ~30x.
+  - Consequently, the profiler GUI will now produce multi-core spikes when
+    rendering frames. This may have impact on the profiled application's
+    performance, if both the application and the profiler GUI are running
+    on the same machine. If this is a problem, you may consider the capture
+    utility instead, which is not affected by these changes. Alternatively,
+    you may disable parallelization in the options menu.
+  - Most of the timeline item logic has been written from scratch, which
+    may have taken care of some elusive bugs.
+- Added global configuration settings dialog. You can find it in the
+  profiler's about menu (the wrench icon in the welcome dialog).
+- List of found zones in the Find zone menu can be filtered by user text.
+- Fixed div-by-zero in cvsexport utility when there was only one zone of
+  a kind.
+- Fixed compatibility problems with FreeBSD.
+- Added support for dynamically loaded Vulkan symbols.
+- Trace description or filename is now displayed on the window title bar.
+- The csvexport utility will now export thread id data.
+- Improved compatibility with MSVC projects not defining NOMINMAX.
+- Improved compatibility with Linux setups targeting musl as libc.
+- Thread safety of Vulkan instrumentation has been reviewed.
+- D3D11 and D3D12 instrumentation was rewritten.
+- Added support for efficient profiling when running under rr, the record-
+  replaying debugger. This is enabled with TRACY_PATCHABLE_NOPSLEDS define.
+- History of viewed symbols is now preserved and you can go back to
+  previously displayed entries.
+
+
+v0.9.1 (2023-02-26)
+-------------------
+
+- Support for pre-0.8 traces has been dropped.
+- Profiled programs will ignore dlclose() calls.
+- Added warning when the profiler interface is run with privilege elevation.
+  Advice is given to instead run the client with admin rights.
+- Switched to official ZEN4 uarch data.
+- Handle cases when thread name is set, but not through Tracy facilities.
+- Allow customization of source location data through the following macros:
+  - TracyFunction - defaults to __FUNCTION__
+  - TracyFile - defaults to __FILE__
+  - TracyLine - defaults to __LINE__
+- Tracy on Linux now targets and requires Wayland by default.
+  - Please don't ask about window decorations on Gnome. Current behavior is
+    the intended behavior. Gnome does not want windows to have decorations,
+    and Tracy respects this choice. If you find this problematic, use a
+    desktop environment that actually listens to its users.
+  - Pass LEGACY=1 parameter to make, if you want to instead rely on the GLFW
+    library, like before.
+  - Other platforms still use GLFW.
+- Compare traces menu can now display source code differences between two
+  traces.
+- Assembly listings saved to files have been improved.
+  - Listings are now annotated with source line information.
+  - To improve compatibility with external tools comments are now prefixed
+    with '#' instead of ';'.
+- Histogram tooltip will now also show left/right counts.
+- Tracy now actively manages timeline vertical scroll offset in order to keep
+  the thread under the mouse cursor in the same place on screen.
+- Removed support for AT&T assembly syntax.
+- Tracy will not display notification if the file selector can't be used.
+  Possible reasons for failure include lack of xdg-desktop-portal.
+- Using the TRACY_NO_CRASH_HANDLER define will disable handling of
+  application crashes by the profiler.
+- Tracy will now query jump and call target addresses. This enables discovery
+  of target function names, even if such function has no samples and is not
+  present in any call stack.
+
+
+v0.9.0 (2022-10-26)
+-------------------
+
+- Attention! All the header and source files used for integrating Tracy with
+  applications were moved to the public/ directory. This will break your
+  integration!
+  - To fix this, update the source and include directories lists to point to
+    the new location.
+  - Tracy include files directly referenced by the client were moved to
+    tracy/ subdirectory, to facilitate setups which previously had Tracy
+    checkout parent directory in the include paths list (i.e. when you
+    included "tracy/Tracy.hpp").
+  - Previously, if you have included the Tracy checkout directory in your
+    project include directories list (i.e. you could include "Tracy.hpp"),
+    this could result in third-party library conflicts, e.g. with ImGui.
+    Such scenarios are no longer the case.
+- Tracy macros now require to be terminated with a semicolon.
+- The undocumented ___tracy_demangle() function API has been changed. Please
+  refer to the source code for further instructions.
+- The parameter callback and its registration macro have been extended to
+  include user data pointer. You will need to update your code accordingly.
+- Plots visualization has been improved.
+  - Each plot now has its own color, which can also be defined by the user.
+  - The area below the plot is now optionally filled with a color.
+  - Plots can now also be configured to be staircase instead of smooth. This
+    new setting is appropriate for many inputs where only discrete values
+    make sense, e.g. the memory allocation plot.
+  - The API for TracyPlotConfig() macro has been changed. Please refer to
+    the manual to see how you can fix this.
+- Some text labels in the user interface are now more easy to read.
+- The profiler will now instruct the user in the UI on what can be done, if
+  the send queue is slow to process (typically due to symbol resolution).
+- If a client with an incompatible protocol is discovered, Tracy will now
+  try to show which versions can be used to handle the connection.
+- Messages list in zone info window can now show messages exclusive to the
+  zone, filtering out the messages emitted from child zones.
+- Added capture of vertical synchronization timings on Linux.
+- The range of frame bar colors in the frames overview on top of the screen
+  can be now controlled with the "Target FPS" entry box in the options menu.
+  - The "Draw frame targets" option does not need to be selected.
+  - Previously the hardcoded FPS target thresholds were: 30, 60, 144 FPS.
+  - Currently the FPS target threshold is: half of target, target, twice the
+    target.
+- Reworked the way zone names are shortened.
+  - Previously shortening supported only namespace removal, in a way that
+    didn't consider function parameters or template arguments.
+    - Shortening to one-letter namespace chains is no longer available.
+  - The new shortening rules first perform normalization of the function name.
+    - The function const qualifier is removed.
+    - Common return types are removed.
+    - All function parameters and all template arguments are removed.
+  - The next steps consist of repeated removal of namespaces, starting with
+    the most outermost one.
+    - While the old process was all or nothing, the new implementation by
+      default will dynamically adjust to the space available, trying to show
+      the most context possible.
+  - It is also possible to completely disable shortening, or require that it
+    is always performed in full.
+  - Function name normalization is enabled by default, even if there is space
+    to show full function name. This can be changed in options.
+  - Previously shortening was only applied to the zone names displayed on the
+    timeline. Currently this process will also apply to all other places in
+    the UI where function names are displayed. However, in these cases the
+    function names will only be normalized.
+    - Full function names are still available as tooltips, or in fine print if
+      the normalized name is already displayed in a tooltip.
+    - This functionality is disabled if zone name shortening is disabled.
+- Added context menu for timeline labels. Currently the only option is to hide
+  the selected thread, plot, etc.
+- You can now provide custom source file contents through a profiler callback.
+- Exposed Tracy version to client applications (available through the
+  common/TracyVersion.hpp header file).
+- D3D12 instrumentation is now thread-safe.
+- Timeline can be now navigated with WASD keys.
+- Symbol file paths are now normalized on libbacktrace systems. For example,
+  instead of "/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/12.2.0/../../../../
+  include/c++/12.2.0/bits/std_mutex.h" Tracy will now report such file as
+  "/usr/include/c++/12.2.0/bits/std_mutex.h".
+- The import-chrome utility interprets Instant (`i`/`I`) events where the
+  `name` field contains the word `frame` as a frame event. The `name` is the
+  frame set name.
+- Frame data won't be displayed if there was no frame instrumentation in the
+  profiling session.
+  - Note that some automated functionality (e.g. vertical synchronization
+    capture) may automatically generate frame data, which will force frames to
+    be displayed.
+- Tracy threads will now be collapsed by default on the timeline.
+- Clicking on a local thread in the CPU data view will make the thread visible
+  and uncollapsed on the timeline.
+- Assembly view is now in color.
+- The profiler UI will no longer unnecessarily redraw the screen if nothing
+  was changed. This should have a profound impact on power usage.
+- Added microarchitecture data for Zen 4.
+- Implemented optional propagation of inline cost down the local call stack.
+  - This feature may be useful when trying to get a general outlook of the
+    cost at the top-level function in the symbol.
+  - It is possible to get nonsense data when this is enabled, for example
+    total cost exceeding 100%. This is by design.
+  - Assembly line costs are not affected.
+- Available clients now also broadcast their PID.
+- Reversed mouse button assignments for jumping to source / assembly line in
+  symbol view. The left mouse button will now focus the target line.
+- Assembly lines tooltip will now display local call stack of inline functions
+  (within the symbol).
+  - Right-clicking the source location entry in assembly line will show the
+    local call stack, along with source code preview of each entry and ability
+    to navigate to any selected inline function.
+- The profiler UI will now indicate that it needs attention if the window is
+  not focused and something interesting happens. For example when a connection
+  is established, or when a saved trace finishes loading, etc. How the
+  attention request is indicated depends on the operating system.
+- Clicking on the red microarchitecture icon in the symbol view assembly pane
+  will switch the selected microarchitecture to one the profiled application
+  was running on.
+- Removed option to display instruction latencies in a graphical form. Latency
+  data is still available in instruction tooltip.
+
+
+v0.8.2 (2022-06-28)
+-------------------
+
+- Added support for debuginfod debug information services. Note that
+  since this depends on proper system configuration, vendors providing
+  the debug information, and network retrieval, it is disabled by
+  default. To enable, compile the profiled application with the
+  TRACY_DEBUGINFOD define and link with libdebuginfod.
+- When Tracy server-side utilities are build with MSVC, the required
+  libraries will be now automatically retrieved and built with vcpkg.
+- Added microarchitecture data for: Bonnell, Airmont, Goldmont, Goldmont
+  Plus, Tremont.
+- Recognize additional CPUIDs of Zen 3, Alder Lake, Ice Lake
+  microarchitectures.
+- Assembly line width will be now extended, if needed. Previously the line
+  width was calculated for the initial layout and changing amount of
+  displayed data (especially listing the read/written registers) didn't
+  affect this, which may have made some lines partially unreadable.
+- Added ability to filter call stacks in memory tab by inactive allocations.
+  Filtering by inactive allocations helps to pinpoint wasteful allocations
+  in the program.
+- Plot graph will no longer display min/max values interpolated for
+  animation, but rather true values.
+- The CPU topology tree structure was replaced by a CPU schematic showing
+  the same thing in a more concise way.
+
+
+v0.8.1 (2022-04-21)
+-------------------
+
+- Support for pre-0.7 traces has been dropped.
+- Update utility can now scan for source files missing in the trace cache,
+  if the '-c' parameter is given. Found files will be added to the cache.
+- Added high-priority queue for fast queries to bypass slow symbol queries.
+- Fixed Android documentation to show how to enable context switch tracing.
+- Workaround MSVC 2015 stupidity which prevented compilation as C++11.
+- Added support for showing branch cost data for CPUs that don't report
+  branch retirement events (but do report branch misses).
+- The right-click context menu available for jump arrows in the symbol view
+  window will now additionally display jump context, i.e. jump sources and
+  jump target source code fragments.
+- Added freedesktop.org compliant desktop entry and MIME type definition.
+- The call stack column in list of messages will now be only displayed when
+  at least one message on the list has call stack data.
+- File dialogs on Unix will be now native to the desktop environment you are
+  using. Note that this relies on xdg-desktop-portal and dbus.
+
+
+v0.8.0 (2022-03-28)
+-------------------
+
+- Support for Cygwin has been dropped. It was not working for a very long
+  time and nobody had complained about it.
+- Mingw is deprecated due to lack of interest.
+- Added TRACY_NO_CALLSTACK_INLINES macro to disable inline functions
+  resolution in call stacks on Windows.
+- Improved function matching algorithm in compare traces view.
+- Added CMake integration.
+- Reworked rpmalloc initialization.
+- Fixed display of messages with newlines on messages list.
+- Excluded some uninteresting wrapper functions from call stacks (for
+  example SIMD pass-through intrinsics to the compiler built-ins).
+- Adjusted coloring of instruction hotness in symbol view.
+- Properly handle rare cases when sampling on Linux is momentary not able to
+  resolve time stamps.
+- Added Rocket Lake microarchitectural data.
+- Updated CPU identifier lists.
+- Implemented GPU timer overflow handling heuristics.
+- Assembly instructions are now assigned to inline symbols.
+  - You can not only see the assembly source file and line, but also the
+    originating function.
+  - If symbol view is restricted to a single inline function, all assembly
+    instructions not in this context will be dimmed out.
+  - Likewise, the navigation in assembly code will be limited just to the
+    inline context, if a single function is selected.
+- Kernel call stacks will be now properly captured and displayed in the
+  profiler. Kernel functions are marked with the red color.
+- The CPU hardware performance counters can be now sampled on Linux.
+  - Three inferred statistics are displayed for lines in both source and
+    assembly code in the symbol view window:
+    - Instructions executed per cycle.
+    - Branch miss rate.
+    - Cache miss rate.
+  - Instruction cost estimation method is no longer tied to software call
+    stack sampling.
+- The image name filter entry field is now providing a list of available
+  images.
+- Reentrant function calls may be now excluded from calculations in the
+  statistics view.
+- Crash handler is now properly removed during profiler destruction.
+- Repeatedly right-clicking on the same source line in the symbol view
+  window will now cycle through assembly blocks associated with this source
+  line.
+- Vulkan headers must be now explicitly included before including
+  TracyVulkan.hpp.
+- The capture utility may now limit capture time to a specified number of
+  seconds.
+- Fixed message thread assignment in the import-chrome utility.
+- Sampling data can be now also found in the find zone menu.
+- Instrumentation failures may now display their context, e.g. the zone text
+  that was to be set.
+- A warning is now displayed when sampling data is out-of-order.
+- Average value for plots can be now viewed.
+- Moved symbol resolution to a separate thread. Profiling will no longer be
+  stuck when there is a large number of symbols to resolve. This not only
+  improves user experience, but also prevents buildup of data (and memory
+  consumption) on the client side.
+- Android device name will be now reported.
+- Added support for capturing fibers.
+  - Fibers require additional processing, which has to be enabled by adding
+    the TRACY_FIBERS define on the client side.
+  - Client code requires additional instrumentation using the new macros
+    TracyFiberEnter and TracyFiberLeave (or the corresponding C API
+    variants).
+  - Fibers are represented in traces as separate threads, and are
+    distinguished by green color. Faux context switch regions are used to
+    indicate when a fiber is being run by the worker thread.
+- Continuous frame marks no longer need to be issued from a single thread.
+- Context switch call stacks are now captured on Windows and Linux.
+  - Hovering the context switch wait region will now display wait stack,
+    which may provide additional insight into why the switch happened.
+  - Wait stacks inspection can be performed in a new view.
+    - Stacks can be limited to certain threads and to a selected time range.
+    - Stacks are presented either as a sorted list, or as a bottom-up and
+      top-down trees.
+- Entry call stacks can be now also viewed as a bottom-up and top-down
+  trees.
+- Updated project build files to MSVC 2022.
+- Call stack tooltips now also show the executable image name.
+- Playback frames can be now changed by interacting with the frame image
+  slider using the mouse wheel.
+- Signal used to handle crashes on Linux can be now redefined.
+- Various DPI scaling improvements.
+- User interface can be now scaled in run time.
+- Symbol code retrieval now also supports kernel on Windows.
+- Added low-level C API interface for GPU zones.
+- Symbol child calls can be now listed.
+- Replaced "restrict time" in memory window with a proper time range limit.
+- Added Alder Lake microarchitectural data.
+- Added GPU zone statistics.
+- Universal Windows Platform support.
+- All call stack related functionality can be now disabled with the
+  TRACY_NO_CALLSTACK macro.
+- Added ability to add full-view annotations from the annotations list
+  window.
+
+
+v0.7.8 (2021-05-19)
+-------------------
+
+- Updated Zen 3 and added Tiger Lake microarchitectural data.
+- Manually disconnecting from the server will no longer display erroneous
+  warning message.
+- Added ability to display sample time spent in child function calls.
+- Fixed issue which may have prevented sampling on ARM64.
+- Added TRACY_NO_FRAME_IMAGE macro to disable frame image compression
+  thread.
+- Ctrl and shift keys will now modify mouse wheel zoom speed.
+- Improved user experience in the symbol view window.
+- Added support for Direct3D 11 instrumentation.
+- Vulkan contexts can be now calibrated on Linux.
+- Support loading zstd-compressed chrome traces.
+- Chrome traces with multiple PID entries (and possibly conflicting TIDs)
+  can be now imported.
+- Added support for custom source location tag ("loc") in chrome traces.
+- Sampling frequency can be now controlled using TRACY_SAMPLING_HZ macro.
+- Trace compression can be now selected when saving a trace.
+- If a trace cannot be saved, a failure dialog will be displayed.
+- Run-time memory usage of frame images can be reduced by calculating
+  a compression dictionary. This can be only performed when a trace is saved
+  or through the update utility.
+
+
+v0.7.7 (2021-04-01)
+-------------------
+
+- Linux crash handler will now also catch SIGABRT.
+- Fixed invalid name assignment to source files discovered client-side.
+- Added ability to check if a zone is active (which may be used to avoid
+  preparing zone text, etc., as it wouldn't be used anyway).
+- Improved sorting behavior of internal vectors.
+  - Some data will now be always properly displayed during live capture.
+    This was not particularly visible before, as it mainly concerns edge
+    cases.
+  - Sorting is performed only as needed.
+    - In case of plots the performance during live capture may be decreased,
+      as these were sorted with at least 0.25 second intervals before. Now
+      the sorting is performed every frame.
+    - Some other data, which previously was not sorted, is sorted now.
+    - In headless capture mode sorting will be only performed when the trace
+      is saved to disk.
+- Fixed some typos in macros.
+- Fixed handling of non-ANSI file names on Windows. You can now name your
+  traces 'ęśąćż.tracy' and it should work as intended. This is supported on
+  Windows 10 release 1903 and newer.
+- Fixed sending GPU context name in on-demand mode.
+- Fixed color channel order in ZoneColor() macro.
+- Handle failure state when a memory pointer allocation is reported twice,
+  without an intermediate free.
+- Renamed "call stack parents" to "entry call stacks".
+- Display number of entry call stacks in assembly line sample count tooltip.
+- Added tooltips with preview of source code in various places in the UI.
+
+
+v0.7.6 (2021-02-06)
+-------------------
+
+- Various fixes in build scripts.
+- Fixed a faulty rpmalloc initialization path when the first thing the
+  thread did was sending a message with call stack.
+- Added fallback timer define for various virtualized environments, which
+  may not be able to access the hardware timer registers. This will result
+  in usage of timer provided by the standard library, with reduced
+  resolution.
+- Further OpenCL improvements.
+- Updated libbacktrace.
+  - Adds Mach-O 64-bit FAT support.
+  - Fixes memory corruption when processing Mach-O data.
+  - Fixes missing matching entries during binary search.
+  - Adds support for MiniDebugInfo.
+  - Adds fallback to ELF symbol table if no debug info is available.
+  - Various other fixes.
+- Store build time of profiled program in captures.
+- GPU contexts can be now named.
+- Implemented client -> server source code transfer.
+
+
+v0.7.5 (2021-01-23)
+-------------------
+
+- More robust handling of system tracing on Android.
+- Added warning dialog when the connection is lost before all needed data
+  can be retrieved.
+- Fixed handling of NaN plot entries (by skipping them).
+- Dynamic zone colors are now supported through the ZoneColor() macro.
+- Fixed Arm machine code printout to match the one printed by objdump.
+- Fixed client memory corruption when using colored messages.
+- Switched to the next-gen ImGui table UI.
+  - Table columns can have their order rearranged, can be hidden, can be
+    sorted both in ascending and descending order (where appropriate).
+  - Table columns state is now preserved between runs.
+- Various fixes related to restricting listening to localhost.
+- Improved compatibility of ETW tracing with non-MSVC compilers.
+- Fixed Vulkan call stack transfer.
+- Added support for transient GPU zones (OpenGL, Vulkan, Direct3D 12).
+- OpenCL fixes for assert-less builds and non-active zones.
+- Added support for thread names and title bar description in traces
+  imported from chrome tracing format.
+
+
+v0.7.4 (2020-11-15)
+-------------------
+
+- Added support for user-provided locks to keep dbghelp calls thread-safe.
+- Call stacks can be now copied to clipboard.
+- Allow more control over which automated captures are performed.
+- Added textual descriptions for some assembly instructions.
+- Profiler memory usage is now also displayed as a percentage of available
+  physical memory.
+- Microarchitecture mismatch is now clearly displayed in the source view
+  window.
+- Added Zen 3 and Cascade Lake microarchitectural data.
+- Ghost zones are now supporting all zone coloring modes and namespace
+  shortening.
+- Extend C API to support memory pools.
+- Frame rate targets can be now visually represented on the timeline view.
+
+
+v0.7.3 (2020-10-06)
+-------------------
+
+- Properly support DPI scaling on Linux (requires GLFW 3.3).
+- Added early checks for output file validity in the capture utility.
+- Improvements to presence broadcast handling.
+- Custom zone colors can be optionally ignored.
+- Added support for tracking multiple memory pools.
+- Memory free failure dialog can now show call stack pointing to the failure
+  location.
+- Added support for Wayland on Linux.
+- If during the first 5 seconds of the trace there are no frames being
+  reported, the profiler will switch to following last 5 seconds of the
+  trace, instead of displaying three last frames.
+
+
+v0.7.2 (2020-09-14)
+-------------------
+
+- Note: the bitbucket repository is obsolete and will soon stop receiving
+  updates. Migrate to https://github.com/wolfpld/tracy, if you haven't
+  already.
+- The "waiting for connection" dialog no longer has "cancel" button. To
+  abort connection attempt just use the "close window" button.
+- Added update notification.
+- The most recent traced events can be now viewed regardless of timeline
+  zoom level.
+- Fixed going-to-line in source view (again).
+- Crash handling on client is now not performed, if there is no active
+  connection.
+- Added ability to listen only on IPv4 interfaces.
+
+
+v0.7.1 (2020-08-24)
+-------------------
+
+- Dropped support for pre-v0.6 traces.
+- Fixed regression on non-AVX2 CPUs.
+- Fixed incorrect calculation of some ghost zones.
+- Added list of cached source files.
+- Added import of plot data.
+- Secure versions of alloc/free macros.
+- Automated tracing of vertical synchronization on Windows.
+- Fixed attachment of postponed frame images.
+- Source location data can be now copied to clipboard from zone info window.
+- Zones in find zones menu can be now grouped by zone name.
+- Vulkan and D3D12 GPU contexts can be now calibrated.
+- Added CSV export utility.
+- "Go to frame" popup no longer has a dedicated button. To show it, click on
+  the frame counter.
+- Added macro for checking if profiler is connected.
+- Implemented optional data removal from traces in the update utility.
+- Allow manual management of profiler lifetime.
+- Adjusted priority of ETW threads to time critical.
+- Annotations can be now freely adjusted on the timeline.
+- Limiting time range for find zone functionality has been significantly
+  improved.
+- Added time range limits for statistics and symbol view.
+- Implemented call stack sampling on Linux (including Android).
+- Exact time from start of profiling session can be now viewed by hovering
+  the mouse over the time scale.
+- Code transfer can be now compiled-out.
+- Added support for zone markup in unloadable modules.
+- Added image name filter to sampling statistics results window.
+
+
+v0.7 (2020-06-11)
+-----------------
+
+This is the last release which will be able to load pre-v0.6 traces. Use the
+update utility to convert your old traces now!
+
+- chrome:tracing importer now imports zone metadata from "args" key.
+- Added display of statistical mode to find zone menu.
+- Automatic stack sampling is now available on windows.
+- Properly handle tracing on long-running systems.
+- Message list entries can now show associated frame image.
+- Call stack window will now display module names.
+- Symbol location in call stack window may now also display symbol address.
+- Statistics menu can now be used to display call stack sampling data or
+  list available symbols.
+- All call paths leading to the sampled instruction in a call stack can be
+  now displayed.
+- Frame image compression ratio (lossless in-memory compression, not taking
+  into account DXT compression) is displayed in playback window.
+- Allow reconnection straight from the discard data dialog.
+- Added ability to set custom names for locks.
+- Improved handling of network ports.
+- Added time percentage display to instrumentation statistics.
+- Display of ghost zones (generated from automated call stack sampling).
+- Notify when empty labels display is enabled.
+- Small fragments of executable code will be now sent from client to server.
+- Added notification about query backlog.
+- Fixed performance problem with query backlog.
+- Display number of in-flight queries, in addition to query backlog.
+- Improved failure reports.
+- The capture utility will connect to localhost by default.
+- Added optional support for QPC timer on windows.
+- Complete rewrite of source file viewer. It is now 100% reliable when going
+  to a source location.
+- Symbol source view was added.
+  - Extension of source file viewer.
+  - Can display source file, assembly view, or both at the same time.
+  - May include display of statistical profiling data.
+  - Ability to switch between source files which were used to build the
+    symbol.
+  - Ability to switch between inlined functions which are incorporated into
+    the symbol.
+  - Graphical representation of control flow in program.
+  - Display of micro-architectural data for each assembly instruction.
+  - Tracking register dependencies between assembly instructions.
+  - Disassembly may be saved to a file, in order to be processed by external
+    tools.
+- If the default listening port is occupied, profiler will now try listening
+  on other ports.
+- Added possibility to perform source file names substitution.
+- Profiler windows can be now docked.
+- CPU usage tooltip now displays a list of running threads.
+- Added possibility to filter discovered clients list.
+- Source files are now cached during capture.
+- Profiler will now display a popup when application crashes.
+- Added ability to send simple integral values as extra payload for zones.
+- Per-frame zone times on the frames plot can now display self time.
+- Ability to bind only on localhost interface.
+- OpenCL profiling.
+- Direct3D 12 profiling.
+
+
+v0.6.3 (2020-02-13)
+-------------------
+
+- Fixed performance issues with loading saved traces on Ryzen CPUs.
+- Profiler window contents are now properly updated during window resize.
+- Improved tid to pid mapping on windows.
+- Zero length and unfinished zones are no longer taken into account for
+  statistics.
+- Build files for shared library are now available (experimental).
+- GPU zones now also have "active" parameter.
+- Further reduction of memory usage and on-disk trace size.
+- Replaced ska::flat_hash_map with robin-hood-hashing.
+- Speed-up rendering of long lists of items.
+- Exact event time is displayed in some places in the UI.
+- Memory allocation lists can now be sorted.
+- Added display of trace file compression ratio.
+- Optional Zstd compression of trace files.
+- Frame images are now internally compressed using Zstd (instead of LZ4).
+- Fix display of continuous frame set tooltips.
+
+
+v0.6.2 (2019-12-30)
+-------------------
+
+- Improved call stack decoding on OSX.
+- Collection of CPU topology data.
+- C API now supports allocated source locations.
+- Added chrome:tracing importer.
+- Allow merging of ZoneText() strings.
+- Time distribution can now show both exclusive and inclusive times.
+- Display proper value of selection time in find zone menu.
+- Implemented limiting find zone search to a specified time range.
+- Highlight hovered zone from find zone menu zone list on the histogram.
+- Allow copying user data directory location to the clipboard.
+
+
+v0.6.1 (2019-11-28)
+-------------------
+
+- Dropped support for pre-v0.5 traces.
+- Improve BSD support.
+- GPU zone CPU thread highlight will now highlight whole thread, not only
+  the thread name.
+- Added CPU thread highlight for CPU data items.
+- Client parameters may be now set from the server.
+- Minor UI fixes.
+
+
+v0.6 (2019-11-17)
+-----------------
+
+This is the last release which will be able to load pre-v0.5 traces. Use the
+update utility to convert your old traces now!
+
+- Dropped support for pre-v0.4 traces.
+- Major memory usage decrease.
+- Significant network bandwidth decrease.
+- Implemented context switch capture on selected platforms.
+  - Zone timings in various UI places can now take into account only the
+    time when the thread was executing.
+  - Zone information window can now display regions in which thread was
+    suspended by the operating system.
+  - CPUs on which the zone was running are enumerated.
+  - Thread activity regions can be graphed on the timeline.
+- API breakage: SetThreadName() now only works on current thread.
+- Fixed thread name retrieval after thread is destroyed.
+- Added number of CPU cores to host info.
+- Limited number of possible source locations to 64K.
+- Limited supported capture length to 1.6 days.
+- CPU cores are now displayed on the timeline.
+  - Thread execution workload is displayed, including threads from external
+    programs.
+  - Thread migrations across CPU cores can be graphed.
+  - System-wide workload distribution is now plotted on the timeline.
+- Added "CPU data" window showing programs competing for CPU during the
+  capture.
+- Switched to using native thread identifiers (relatively small numbers), as
+  opposed to pthreads identifiers, which in reality were pointers.
+- Improved thread name discovery if context switch capture is enabled.
+- Per-trace state is now preserved between profiling sessions:
+  - Timeline view position.
+  - Item categories draw/hide settings.
+- Timeline zones will be highlighted using a different color, when a
+  matching time range is selected on histogram.
+- Per-frame zone times are now displayed on the frames plot when a zone is
+  selected in the find zone menu.
+- Zone color is now displayed in zone information window.
+- Zone colors can now be determined basing on depth and thread or source
+  location.
+- Thread colors are displayed across the profiler application.
+- Frame times can be now compared.
+- Expose more lock handling functionality.
+- Network port can be now specified by the user.
+- Proper handling of multithreaded Vulkan code.
+- Added extreme compression level in update utility.
+- Added time distribution data in the zone information window.
+- Trace file name is now displayed in trace information window.
+- Annotations can be now added to the timeline.
+- Server now performs network data retrieval and decompression on a dedicated
+  thread.
+- Added examples of Tracy integration.
+- Allow grouping of zones in the find zone menu by zone parent or with no
+  grouping.
+- Zone list in the statistics window can be now filtered.
+- Implemented configuration of plots.
+- Messages can now collect call stacks.
+
+
+v0.5 (2019-08-10)
+-----------------
+
+This is the last release which will be able to load pre-v0.4 traces. Use the
+update utility to convert your old traces now!
+
+- Major decrease of trace dump file size.
+- Major optimizations across the board.
+- Vcpkg is now used for library management on Windows.
+- Display dump file size change in the update utility.
+- Added notification area.
+  - Display trace loading time.
+  - Display background processing tasks after trace is loaded.
+  - Display trace save notification.
+  - Show crash icon, if there was a crash.
+- Added C API.
+- Profiling session may now gracefully terminate, due to incorrect
+  instrumentation. A popup with termination reason will be displayed.
+- Call stack improvements.
+  - Call stack frames now have a proper source file and file line
+    information on Linux.
+  - Single call stack frame may now have multiple entries, representing
+    inlined function calls.
+  - Call stack grouping in the find zone menu now has a special display
+    mode.
+  - Call stack memory allocations tree improvements:
+    - Add top-down variant to complement the previously available bottom-up
+      one.
+    - Add ability to group tree nodes by function name.
+    - Allow restricting tree to display only active allocations.
+  - Added support for Lua call stack capture.
+- Self time of zones may be now displayed in the find zone menu.
+- Added ability to disconnect from a client.
+- Find zone groups can now be sorted by mean time per call.
+- Zones displayed in the find zone menu can be now grouped by order of
+  appearance, execution time or name.
+- Time is now displayed without trailing fractional zeros (e.g. "2.5 ms"
+  instead of "2.50 ms").
+- Child zones displayed in zone info window can be now grouped by source
+  location.
+- Selected or hovered lock is now highlighted on the timeline.
+- Locks are now grouped into single and multithreaded (contended and
+  uncontended) in the options menu locks list.
+- On broken platforms the profiler can now be initialized as needed (and
+  possible), taking a performance and functionality hit.
+- User experience improvements in the graphical profiler.
+  - Thread position and height is now animated, to eliminate flickering that
+    was happening when depth of displayed zones was changing.
+  - Zooming in/out using the mouse wheel is now animated.
+  - Plot range adjustment is now animated.
+  - Various other UI improvements.
+- System CPU usage is now being monitored.
+- Threads that have nothing to display in the current view are now hidden by
+  default.
+- Dimmed-out the timeline outside the profiling area.
+- Source file view can now be opened also from statistics menu.
+- Display standard deviation in find zone and compare traces menus.
+- Display zone messages in zone information window.
+- Display order of threads can be changed in the options menu.
+- Prevent deadlocks by querying socket send buffer size.
+- Frame set statistics can be now limited to frames visible on the screen.
+- Messages can be now colored.
+- Zone selection in compare traces menu can be now linked to the other
+  trace.
+- Added support for frame image (screen shot) storage.
+- Implemented ability to cut off outliers on histograms.
+- Zone or frame that is currently hovered by the mouse cursor will be
+  highlighted on the histogram.
+- Server now displays available clients in the local network.
+- Source code whitespace visibility can now be enabled or disabled.
+- Profiler will now check if proper timer readings can be performed on
+  x86/x64.
+- Application can now log app-specific information, similarly to how the
+  host info reports system information.
+- Message list will automatically scroll down to the most recent message.
+  - Feature will disable when the list is scrolled by user.
+  - To re-enable, scroll to the bottom of the list.
+- Message list can be now filtered.
+- A notification popup will be displayed during trace cleanup.
+- Source file view won't be available if a source file is newer than the
+  capture.
+- Added ability to set custom trace descriptions.
+- Added frame time target lines.
+- FPS counts are now displayed next to frame times.
+- GPU drift value can be now automatically measured.
+- Connection window is now a popup hidden under a dedicated button.
+
+
+v0.4.1 (2018-12-30)
+-------------------
+
+- Active frame set can be now switched by clicking on a frame set on the
+  timeline.
+- Add ability to go to a specified frame.
+- Most commonly used addresses can be now selected from the drop-down menu.
+- Fixed corner case problem with profiler initialization on Windows.
+- Added third state (stopped) to the pause/resume button. It will be used
+  after the connection to the client is terminated.
+- Active trace can be discarded.
+- Call stack capture may be forced through TRACY_CALLSTACK define.
+- Lock info window has been added.
+- Time of lock creation and termination is now being tracked.
+- Menu bar buttons are now toggles that can also close their corresponding
+  windows.
+- Find zone and compare menu improvements.
+  - Ability to ignore case during search.
+  - Pressing enter key will now start search, just like pressing the "find"
+    button.
+  - Using the ^F keyboard shortcut will open the find zone menu and focus
+    the input box.
+- Added ability to automatically connect to an IP address in the graphical
+  profiler application (use "-a address" argument to enable).
+- Pressing enter key after entering client address in the welcome dialog
+  will now automatically begin connection process.
+
+
+v0.4 (2018-10-09)
+-----------------
+
+- Renamed "standalone" utility to "profiler".
+- Added trace update utility, which will convert files saved in previous
+  versions of tracy to be up-to-date.
+  - Optional high compression (--hc) mode is available that will increase
+    the compression level, at the cost of considerably longer compression
+    time.
+- Fix regression causing varying size of profiler window for different
+  captures.
+- Added support for on-demand tracing.
+  - If a client application is compiled with the TRACY_ON_DEMAND macro
+    defined, tracing will not begin until a connection to server is
+    established.
+  - Since data is not fully captured in this mode, the resulting trace will
+    be less precise, until application state is appropriately reset. For
+    example, locks need to be fully released, zone stacks need to be
+    flushed. This is an automatic process.
+  - All tracing macros are able to work in the on-demand mode.
+- Improved compatibility with various system setups.
+- Aside from using TRACY_NO_EXIT define you can also set the same-named
+  environmental variable to 1 to get the same effect.
+- Added ability to show/hide all threads and plots.
+- Performance improvements.
+- Improvements to memory data presentation.
+  - Added memory allocation info window.
+  - Selecting memory allocation on a plot will draw time range of the
+    allocation.
+  - Middle clicking on an memory allocation address (or on a button in
+    memory allocation info window) will zoom the view to the allocation
+    range.
+- Find zone menu improvements:
+  - Zones can be now also grouped by call stacks.
+  - Zone groups can be now also sorted by time spend in each zone.
+  - Zone groups list now displays group times.
+  - Average and median zone times are now displayed on the histogram.
+  - Selected zones will be highlighted on the timeline view.
+- Added named versions of tracing macros that allow specifying scoped
+  variable name.
+- The main profiler window is now kept at the bottom of windows stack.
+- The "profiler" utility will now use a custom embedded font.
+- Microseconds are now displayed using correct symbol ('μ' instead of 'u').
+- Unix builds of the "profiler" utility will now ask for a file name when
+  saving a trace.
+- Progress popup is now displayed when a trace file is loading.
+- Zones that share source location with a zone that is hovered over are now
+  highlighted.
+- Added ability to zoom-in to a selection range made using middle mouse
+  button.
+  - Holding the ctrl key will switch to zoom-out mode.
+- The "profiler" utility will use less resources when its window is
+  out-of-focus or minimized.
+- Added support for cross-DLL profiling.
+- Items in options menu (locks, threads, etc.) are now described with number
+  of events.
+  - Source location of lock declaration is also provided.
+- Created an extensive user manual for the profiler.
+- Added ability to capture multiple frame sets.
+  - Viewer will display multiple frame ranges at once.
+  - Only one frame set can be active at once. The selected one is used for
+    the frame navigation graph, frame navigation buttons and drawing frame
+    separators.
+  - The active frame set will be highlighted, and the rest will be dimmed
+    out.
+  - Frames can now also be discontinuous.
+- Frames and zones too small to be displayed will be marked with a zig-zag
+  pattern.
+- General improvements to message list and message markers.
+  - Hovering over message on a list will highlight its marker (previously it
+    only worked the other way).
+  - Left clicking on a message marker will focus the message list on the
+    selected message.
+  - Middle clicking on a message marker will center it on screen.
+- Added trace information window.
+  - This includes frame time statistics and histogram.
+- Displayed memory sizes are now properly formatted.
+- Added call stack tree for memory allocations.
+  - You can display allocations list for each call stack tree entry.
+- The source code of the profiled application may now be viewed in the
+  profiler.
+  - BIG FAT WARNING: The actual profiled program source code is not known to
+    the profiler. It only checks if there is a file on your disk that
+    matches the file name of the captured source location. Even if the file
+    is displayed, it may be out of date.
+  - CPU and GPU zones will have "Source" button, if source file can be
+    opened.
+  - Source files for call stack traces can be opened by right-clicking on
+    the file name. Since in this case there is no button that can be hidden,
+    a small animation will be played to notify user if the source cannot be
+    opened.
+- The main profiler view will now occupy the whole window. Previous behavior
+  is still available for embedded use cases.
+- Many button labels are now accompanied by icons.
+- Fonts should now be less blurry.
+- "Go to parent" button in zone info window won't be displayed if there is
+  no parent to go to.
+- Improvements to the compare traces menu.
+  - There are now colored markers to make it easier to distinguish "this" and
+    "external" traces.
+  - The amount of saved time is now displayed (a difference between total
+    run times of both traces).
+- Tracy will now collect host information, like CPU name, amount of system
+  memory, etc.
+- Windows builds of the "profiler" utility will perform a check of supported
+  CPU instruction set and match it against the one required by the binary
+  (by default AVX2 is used). If the program cannot be executed on the
+  processor, a message dialog with workaround instructions will be
+  displayed.
+- Tracy can intercept crashes and finish sending data from a dying process.
+  - Currently this is only implemented on Windows, Linux and Android.
+- Call stack window may now display addresses of the frames, instead of
+  source file locations.
+- Memory events will now properly register their thread.
+- Profiler settings are now stored in a persistent location.
+  - On Windows settings are stored in %APPDATA%/tracy.
+  - On other platforms settings are stored in $XDG_CONFIG_HOME/tracy or
+    $HOME/.config/tracy, if the variable is not set.
+  - The main profiler window position, size and maximized state are saved
+    and restored.
+  - The size and position of internal windows now doesn't depend on the
+    runtime directory of the profiler executable.
+- Added connection handshake.
+  - Server won't be able to connect to client if there's a protocol version
+    mismatch.
+  - Client not in on-demand mode will refuse connections after the first
+    connection was made and the initial event buffers were cleared.
+- A single server will no longer try to connect to multiple clients.
+- The capture utility will now display time span of the ongoing capture.
+
+
+v0.3 (2018-07-03)
+-----------------
+
+- Breaking change: the format of trace files has changed.
+  - Previous tracy version will crash when trying to open new traces.
+  - Loading of traces saved by previous version is supported.
+  - Tracy will no longer crash when trying to load traces saved by future
+    versions. Instead, a dialog advising to update will be displayed.
+  - Tracy will no longer crash in most cases when trying to open files that
+    are not traces. Some crashes are still possible, due to support of old,
+    header-less traces.
+- Ability to track every memory allocation in profiled program.
+  - Allocation event queuing must be done in order, which requires exclusive
+    access to the serialized queue on the client side. This has no effect on
+    the rest of events, which are stored in a concurrent queue, as before.
+  - You can search for a memory address and see where it was allocated, for
+    how long, etc. This lists all matching allocations since the program was
+    started.
+  - All active (non-freed) allocations may be listed. This shows the current
+    memory state by default, but can go back to any point in time.
+  - Graphical representation of process memory map may be displayed. New
+    allocations/frees are displayed in a bright color and fade out with
+    time. This feature also can look back in time.
+  - Memory usage plot is automatically generated.
+  - Basic allocation information is displayed in memory plot tooltips.
+  - A summary of memory events within a zone (and its children) is now
+    printed in zone info window.
+- Support loading profile dumps with no memory allocation data (generated by
+  v0.2).
+- Added ability to display global statistics of a selected zone from the
+  zone info window.
+- Fixed regression with lock announce processing that appeared during
+  worker/viewer split.
+- Allow selecting/unselecting all locks for display.
+- Performance improvements.
+- Don't save unneeded lock information in trace file.
+- Don't save thrash in message list data.
+- Allow expanding view span up to one hour, instead of one minute.
+- Added trace comparison window.
+  - An external trace has to be loaded first.
+  - Zone query in both traces (current and external).
+  - Both results are overlaid on the same histogram.
+  - Graphs can be adjusted as-if there was the same number of zones
+    collected.
+- Read time directly from a hardware register on ARM/ARM64, if possible.
+  - User-space access to the timer needs to be enabled in the kernel, so
+    tracy will perform run-time checks and fallback to the old method if the
+    check fails.
+- Prevent connections in a TIME-WAIT state from blocking new listen
+  connections.
+- Display y-range of plots.
+- Added ability to unload traces loaded from files. To do so close the main
+  profiler window. You will return to the connect/open selection dialog.
+  Live captures cannot be terminated this way.
+- Zones previously displayed in zone info window are remembered and you can
+  go back to them. Closing the zone info window or switching between CPU and
+  GPU zones will clear the memory.
+- Improved message list window.
+  - Messages are now displayed in columns.
+  - Originating thread of each message is now included in the list.
+  - Messages can be filtered by the originating thread.
+- You can now navigate to next and previous frame.
+- Zone statistics can be now displayed using only self times.
+- Support for tracing GPU events using Vulkan.
+- Timeline will now display "OpenGL context" or "Vulkan context" instead of
+  "GPU context".
+- Fixed regression causing invalid display of GPU context appearance time.
+- Fixed regression causing invalid reporting of an active CPU in zone end
+  events, if MSVC rdtscp optimization was not enabled.
+- Ability to collect true call stacks.
+  - Supported on Windows, Linux, Android.
+  - The following events can collect call stacks:
+    - Memory alloc/free.
+    - Zone begin.
+    - GPU zone begin.
+  - Zone stack trace now also displays frames from a real call trace.
+  - On Linux call stack frame name resolution requires a call to dladdr,
+    which in turn requires linking with libdl.
+- Allow manual entry of GPU time drift value.
+- Unix build system no longer shares object files between different build
+  units.
+  - Fixes inability to build debug and release versions of a single utility
+    without "make clean".
+  - Fixes incompatibility between "standalone" and "capture" utilities due
+    to different set of used feature flags.
+- On Windows "standalone" utility now adapts to system DPI setting.
+- Optional per-call zone naming.
+
+
+v0.2 (2018-04-05)
+-----------------
+
+- Fixed broken TRACY_NO_EXIT behavior.
+- Visual refresh (new color scheme).
+- Added optional support for live in-depth zone analysis.
+  - Ability to search for zones matching a query.
+  - Histogram of zone time spans.
+  - List occurrences of a zone, grouped by thread, or by user text.
+  - Zone groups can be selected and highlighted on histogram graph.
+  - Support for linear and logarithmic display of time and values.
+  - Histogram bins can show zone counts or total execution time.
+  - Listed zones can be narrowed down by data range selection on histogram.
+- Separation of server data handling code from the visualisation.
+- Implementation of a command line capture utility.
+- Support libraries have been updated.
+- Fixed an issue that prevented de-duplication of source location payloads.
+- Fixed an issue that prevented the ability to disable threads in settings
+  menu, if two threads had the same name.
+- Performance optimizations.
+- Visual clean up of the settings menu.
+- Zone info windows improvements.
+  - Visual improvements to zone info window child list.
+  - Zone info windows now show zone thread.
+  - Display zone stack trace.
+- Hide pause/resume button if there's no data connection (i.e. trace was
+  loaded from file).
+- Source location statistics view has been added.
+- Fixed crash when a saved trace was opened, but no trace capture session
+  was performed before.
+- Standalone server will now open trace files passed as an argument to the
+  executable.
+- Fix possible crash in SetThreadName, that could happen if TLS init was
+  delayed until first use of thread local variable.
+- Store full thread name if pthreads (with 15 character name limit) are
+  used.
+- Properly handle unaligned memory access (no performance impact).
+- Fixed broken lock identifiers in try_lock().
+
+
+v0.1 (2017-12-18)
+-----------------
+
+- Initial release.

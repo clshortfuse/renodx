@@ -1,0 +1,165 @@
+#include "TracyFileselector.hpp"
+
+#include <string>
+#ifndef TRACY_NO_FILESELECTOR
+#  ifdef __EMSCRIPTEN__
+#    include <emscripten.h>
+#  else
+#    include <nfd.h>
+#  endif
+#endif
+
+namespace tracy::Fileselector
+{
+
+static bool s_hasFailed = false;
+
+#if !defined TRACY_NO_FILESELECTOR && !defined __EMSCRIPTEN__
+static nfdwindowhandle_t s_windowHandle;
+static std::string s_error;
+#endif
+
+void Init( size_t type, void* handle )
+{
+#if !defined TRACY_NO_FILESELECTOR && !defined __EMSCRIPTEN__
+    NFD_Init();
+    s_windowHandle = {
+        .type = type,
+        .handle = handle
+    };
+#endif
+}
+
+void Shutdown()
+{
+#if !defined TRACY_NO_FILESELECTOR && !defined __EMSCRIPTEN__
+    NFD_Quit();
+#endif
+}
+
+bool HasFailed()
+{
+    if( s_hasFailed )
+    {
+        s_hasFailed = false;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+const char* GetError()
+{
+#if !defined TRACY_NO_FILESELECTOR && !defined __EMSCRIPTEN__
+    return s_error.empty() ? nullptr : s_error.c_str();
+#else
+    return nullptr;
+#endif
+}
+
+#ifdef __EMSCRIPTEN__
+static std::function<void(const char*)> s_openFileCallback;
+
+extern "C" int nativeOpenFile()
+{
+    s_openFileCallback( "upload.tracy" );
+    return 0;
+}
+#endif
+
+static bool OpenFileImpl( const char* ext, const char* desc, const std::function<void(const char*)>& callback )
+{
+#ifndef TRACY_NO_FILESELECTOR
+#  ifdef __EMSCRIPTEN__
+    s_openFileCallback = callback;
+    EM_ASM( {
+        var input = document.createElement( 'input' );
+        input.type = 'file';
+        input.accept = UTF8ToString( $0 );
+        input.onchange = (e) => {
+            var file = e.target.files[0];
+            var reader = new FileReader();
+            reader.readAsArrayBuffer( file );
+            reader.onload = () => {
+                var buf = reader.result;
+                var view = new Uint8Array( buf );
+                FS.createDataFile( '/', 'upload.tracy', view, true, true );
+                Module.ccall( 'nativeOpenFile', 'number', [], [] );
+                FS.unlink( '/upload.tracy' );
+            };
+        };
+        input.click();
+    }, ext );
+    return true;
+#  else
+    nfdu8filteritem_t filter = { desc, ext };
+    nfdu8char_t* fn;
+    const nfdopendialogu8args_t args = {
+        .filterList = &filter,
+        .filterCount = 1,
+        .parentWindow = s_windowHandle,
+    };
+    const auto res = NFD_OpenDialogU8_With( &fn, &args );
+    if( res == NFD_OKAY )
+    {
+        callback( (const char*)fn );
+        NFD_FreePathU8( fn );
+        return true;
+    }
+    else
+    {
+        if( res == NFD_ERROR )
+        {
+            const auto err = NFD_GetError();
+            if( err ) s_error = err;
+        }
+        return res != NFD_ERROR;
+    }
+#  endif
+#endif
+    return false;
+}
+
+static bool SaveFileImpl( const char* ext, const char* desc, const std::function<void(const char*)>& callback )
+{
+#if !defined TRACY_NO_FILESELECTOR && !defined __EMSCRIPTEN__
+    nfdu8filteritem_t filter = { desc, ext };
+    nfdu8char_t* fn;
+    const nfdsavedialogu8args_t args = {
+        .filterList = &filter,
+        .filterCount = 1,
+        .parentWindow = s_windowHandle,
+    };
+    const auto res = NFD_SaveDialogU8_With( &fn, &args );
+    if( res == NFD_OKAY )
+    {
+        callback( (const char*)fn );
+        NFD_FreePathU8( fn );
+        return true;
+    }
+    else
+    {
+        if( res == NFD_ERROR )
+        {
+            const auto err = NFD_GetError();
+            if( err ) s_error = err;
+        }
+        return res != NFD_ERROR;
+    }
+#endif
+    return false;
+}
+
+void OpenFile( const char* ext, const char* desc, const std::function<void(const char*)>& callback )
+{
+    if( !OpenFileImpl( ext, desc, callback ) ) s_hasFailed = true;
+}
+
+void SaveFile( const char* ext, const char* desc, const std::function<void(const char*)>& callback )
+{
+    if( !SaveFileImpl( ext, desc, callback ) ) s_hasFailed = true;
+}
+
+}

@@ -349,26 +349,9 @@ inline void to_json(json& j, const RatioStats& value) {
     const reshade::api::subresource_data& mapped_data,
     uint32_t width,
     uint32_t height) {
-  const auto row_pitch = reshade::api::format_row_pitch(format, width);
-  const auto slice_pitch = reshade::api::format_slice_pitch(format, row_pitch, height);
-  if (row_pitch == 0u || slice_pitch == 0u || mapped_data.data == nullptr) {
-    return 0u;
-  }
-
-  if (mapped_data.row_pitch == row_pitch) {
-    return renodx::utils::hash::ComputeCRC32(static_cast<const std::uint8_t*>(mapped_data.data), slice_pitch);
-  }
-
-  const auto row_count = std::max<std::size_t>(1u, slice_pitch / row_pitch);
-  auto crc = 0xFFFFFFFFu;
-  const auto* bytes = static_cast<const std::uint8_t*>(mapped_data.data);
-  for (std::size_t row_index = 0; row_index < row_count; ++row_index) {
-    crc = renodx::utils::hash::UpdateCRC32(
-        crc,
-        bytes + (static_cast<std::size_t>(mapped_data.row_pitch) * row_index),
-        row_pitch);
-  }
-  return renodx::utils::hash::FinalizeCRC32(crc);
+  const auto layout = renodx::utils::texture_upload::GetLayout(format, width, height, mapped_data.row_pitch);
+  if (!layout || mapped_data.data == nullptr) return 0u;
+  return renodx::utils::texture_upload::ComputeCRC32(mapped_data.data, *layout);
 }
 
 [[nodiscard]] inline bool TryBuildRawPngPixels(

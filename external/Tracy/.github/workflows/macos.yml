@@ -1,0 +1,80 @@
+name: macos
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/cpm-cache
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Cache CPM packages
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.CPM_SOURCE_CACHE }}
+        key: ${{ runner.os }}-cpm-${{ hashFiles('**/vendor.cmake', '**/CMakeLists.txt') }}
+        restore-keys: ${{ runner.os }}-cpm-
+    - name: Install dependencies
+      run: brew install pkg-config meson
+    - name: Trust git repo
+      run: git config --global --add safe.directory '*'
+    - name: Build library
+      run: meson setup -Dtracy_enable=true build && meson compile -C build
+    - name: Test application
+      uses: ./.github/actions/test-tracy
+    - name: Build profiler
+      run: |
+        cmake -B profiler/build -S profiler -DCMAKE_BUILD_TYPE=Release -DBUNDLE=ON -DGIT_REV=${{ github.sha }}
+        cmake --build profiler/build --parallel 2 --config Release
+    - name: Build update
+      run: |
+        cmake -B update/build -S update -DCMAKE_BUILD_TYPE=Release -DGIT_REV=${{ github.sha }}
+        cmake --build update/build --parallel --config Release
+    - name: Build capture
+      run: |
+        cmake -B capture/build -S capture -DCMAKE_BUILD_TYPE=Release -DGIT_REV=${{ github.sha }}
+        cmake --build capture/build --parallel --config Release
+    - name: Build csvexport
+      run: |
+        cmake -B csvexport/build -S csvexport -DCMAKE_BUILD_TYPE=Release -DGIT_REV=${{ github.sha }}
+        cmake --build csvexport/build --parallel --config Release
+    - name: Build import
+      run: |
+        cmake -B import/build -S import -DCMAKE_BUILD_TYPE=Release -DGIT_REV=${{ github.sha }}
+        cmake --build import/build --parallel --config Release
+    - name: Build merge
+      run: |
+        cmake -B merge/build -S merge -DCMAKE_BUILD_TYPE=Release -DGIT_REV=${{ github.sha }}
+        cmake --build merge/build --parallel --config Release
+    - name: Package artifacts
+      run: |
+        mkdir -p bin
+        cp -r profiler/build/tracy-profiler.app bin
+        cp update/build/tracy-update bin
+        cp capture/build/tracy-capture bin
+        cp capture/build/tracy-capture-daemon bin
+        cp csvexport/build/tracy-csvexport bin
+        cp import/build/tracy-import-chrome bin
+        cp import/build/tracy-import-fuchsia bin
+        cp merge/build/tracy-merge bin
+        strip bin/tracy-profiler.app/Contents/MacOS/tracy-profiler
+        strip bin/tracy-update bin/tracy-capture bin/tracy-capture-daemon bin/tracy-csvexport bin/tracy-import-chrome bin/tracy-import-fuchsia bin/tracy-merge
+    - uses: actions/upload-artifact@v4
+      with:
+        name: macos
+        path: bin

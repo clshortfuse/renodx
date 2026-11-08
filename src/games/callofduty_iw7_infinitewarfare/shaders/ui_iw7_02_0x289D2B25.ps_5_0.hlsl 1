@@ -1,0 +1,211 @@
+// ---- Created with 3Dmigoto v1.3.16 on Sat Sep 13 00:39:46 2025
+#include "../shared.h"
+
+Texture2D<float4> t4 : register(t4);
+
+Texture2D<float4> t3 : register(t3);
+
+Texture2D<float4> t2 : register(t2);
+
+Texture3D<float4> t1 : register(t1);
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s4_s : register(s4);
+
+SamplerState s3_s : register(s3);
+
+SamplerState s2_s : register(s2);
+
+SamplerState s1_s : register(s1);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb13 : register(b13)
+{
+  float4 cb13[3];
+}
+
+cbuffer cb2 : register(b2)
+{
+  float4 cb2[24];
+}
+
+
+
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float4 v1 : COLOR0,
+  float2 v2 : TEXCOORD0,
+  float2 w2 : TEXCOORD11,
+  float2 v3 : TEXCOORD12,
+  float2 w3 : TEXCOORD16,
+  out float4 o0 : SV_TARGET0)
+{
+  float4 r0,r1,r2,r3,r4,r5,r6;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+  if (!CUSTOM_IS_UI) discard;
+
+  r0.x = cmp(0 < cb2[16].w);
+  if (r0.x != 0) {
+    r0.yz = cb2[16].yx * v0.yx;
+    r0.yz = floor(r0.yz);
+    r1.xy = float2(2.33999991,0.800000012) * cb2[17].zw;
+    r0.w = frac(r1.x);
+    r0.w = 0.100000001 + r0.w;
+    r0.yz = r0.yz + r0.ww;
+    r1.xz = float2(0.554549694,0.308517009) * r0.zy;
+    r1.xz = frac(r1.xz);
+    r0.yz = r0.zy * r1.xz + r0.yz;
+    r0.y = r0.y * r0.z;
+    r0.y = frac(r0.y);
+    r0.y = 678.900024 * r0.y;
+    r0.y = frac(r0.y);
+    r0.z = cmp(r0.y < r1.y);
+    r0.y = r0.y / r1.y;
+    r0.y = r0.y * 2 + -1;
+    r1.xy = ddx_coarse(v2.xy);
+    r1.xy = cb2[17].xx * r1.xy;
+    r0.yw = r1.xy * r0.yy + v2.xy;
+    r0.yz = r0.zz ? r0.yw : v2.xy;
+  } else {
+    r0.yz = v2.xy;
+  }
+  r1.xyzw = t0.SampleBias(s0_s, r0.yz, cb2[23].y).xyzw;
+  r1.xyzw = v1.xyzw * r1.xyzw;
+  r0.y = t3.Sample(s3_s, w2.xy).x;
+  r0.z = t4.Sample(s4_s, v3.xy).x;
+  r0.y = r0.y * r0.z;
+  r0.y = cb2[9].x * r0.y;
+  r0.y = cb2[9].y * r0.y;
+  r2.w = r1.w * r0.y;
+  r0.y = cmp(r2.w == 0.000000);
+  if (r0.y != 0) {
+    if (-1 != 0) discard;
+  }
+  r0.yzw = r1.xyz * r1.xyz;
+  r1.x = cmp(0 < cb2[13].x);
+  if (r1.x != 0) {
+    r1.xy = -cb2[15].xy + v0.xy;
+    r1.xy = cb2[15].zw * r1.xy;
+    r1.xyz = t2.SampleLevel(s2_s, r1.xy, cb2[13].x).xyz;
+    r3.xyz = cmp(r1.xyz < cb13[0].xxx);
+    r4.xyzw = r3.xxxx ? cb13[2].xyzw : cb13[1].xyzw;
+    r1.xw = r4.xy * r1.xx + r4.zw;
+    r4.x = saturate(r1.x / r1.w);
+    r5.xyzw = r3.yyyy ? cb13[2].xyzw : cb13[1].xyzw;
+    r1.xy = r5.xy * r1.yy + r5.zw;
+    r4.y = saturate(r1.x / r1.y);
+    r3.xyzw = r3.zzzz ? cb13[2].xyzw : cb13[1].xyzw;
+    r1.xy = r3.xy * r1.zz + r3.zw;
+    r4.z = saturate(r1.x / r1.y);
+    r1.x = saturate(dot(r4.xyz, cb2[20].xyz));
+    r1.y = saturate(dot(r4.xyz, cb2[21].xyz));
+    r1.z = saturate(dot(r4.xyz, cb2[22].xyz));
+    r1.xyz = log2(r1.xyz);
+    r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+    r1.xyz = exp2(r1.xyz);
+    r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+    r1.xyz = max(float3(0,0,0), r1.xyz);
+    r1.xyz = r1.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
+    r1.xyz = t1.SampleLevel(s1_s, r1.xyz, 0).xyz;
+    r0.yzw = r1.xyz * r0.yzw;
+  }
+  r1.x = cmp(0 < cb2[14].w);
+  if (r1.x != 0) {
+    r1.x = (uint)cb2[14].z;
+    r1.xy = (int2)r1.xx & int2(1,2);
+    r1.zw = float2(1,0.5) * v0.xy;
+    r1.zw = floor(r1.zw);
+    r1.xz = r1.xx ? v0.xy : r1.zw;
+    r1.z = cb2[14].y * r1.z;
+    r1.y = r1.y ? 0 : r1.z;
+    r1.x = r1.x + r1.y;
+    r1.x = r1.x / cb2[14].x;
+    r1.x = frac(r1.x);
+    r1.xy = cmp(r1.xx < float2(0.333000004,0.666000009));
+    r1.zw = cb2[14].ww * float2(1,-1) + float2(1,1);
+    r3.xy = cb2[14].ww * float2(-1,1) + float2(1,1);
+    r3.yz = r1.yy ? r1.zw : r3.xy;
+    r1.yzw = cb2[14].www * float3(1,-1,-1) + float3(1,1,1);
+    r3.x = 1 + -cb2[14].w;
+    r1.xyz = r1.xxx ? r1.yzw : r3.xyz;
+    r0.yzw = r1.xyz * r0.yzw;
+  }
+  if (r0.x != 0) {
+    r1.xyzw = cb2[16].xyzw * v0.xyxy;
+    r1.xyz = floor(r1.xyz);
+    r3.xyzw = float4(8,2.33999991,0.200000003,0.5) * cb2[17].wzww;
+    r0.x = frac(r3.y);
+    r0.x = 0.100000001 + r0.x;
+    r1.xy = r1.yx + r0.xx;
+    r4.xy = float2(0.554549694,0.308517009) * r1.yx;
+    r4.xy = frac(r4.xy);
+    r1.xy = r1.yx * r4.xy + r1.xy;
+    r0.x = r1.x * r1.y;
+    r0.x = frac(r0.x);
+    r1.x = cmp(r0.x < r3.z);
+    r4.xyz = float3(92.1419983,12.3450003,9.12300014) * r0.xxx;
+    r4.xyz = frac(r4.xyz);
+    r5.xz = r4.xx * r0.yw;
+    r0.x = 1 + -r4.x;
+    r5.y = r0.z * r0.x;
+    r5.xyz = r1.xxx ? r5.xyz : r0.yzw;
+    r0.x = cmp(r4.y < r3.w);
+    r1.x = 0.333333343 * r1.z;
+    r1.xw = frac(r1.xw);
+    r1.xy = cmp(r1.xx < float2(0.330000013,0.660000026));
+    r6.yz = r1.yy ? float2(1,0.200000003) : float2(0.200000003,1);
+    r6.x = 0.200000003;
+    r1.xyz = r1.xxx ? float3(1,0.200000003,0.200000003) : r6.xyz;
+    r1.xyz = r5.xyz * r1.xyz;
+    r1.xyz = r0.xxx ? r1.xyz : r5.xyz;
+    r0.x = r4.z * r4.z;
+    r0.x = cb2[17].w * r0.x;
+    r0.x = saturate(-r0.x * 3 + 1);
+    r1.w = r1.w * 2 + -1;
+    r3.x = saturate(r3.x);
+    r1.w = -abs(r1.w) * r3.x + 1;
+    r0.x = min(r1.w, r0.x);
+    r2.w = r2.w * r0.x;
+    r0.yzw = r1.xyz * r0.xxx;
+  }
+  r0.x = cmp(0 < cb2[12].x);
+  if (r0.x != 0) {
+    r1.xy = ddx_fine(w3.xy);
+    r1.zw = ddy_fine(w3.xy);
+    r0.x = r1.x * r1.w;
+    r0.x = r1.y * r1.z + -r0.x;
+    r0.x = 1 / r0.x;
+    r3.xyzw = float4(1,-1,-1,1) * r1.zwxy;
+    r1.xyzw = r3.xyzw * r0.xxxx;
+    r0.x = dot(r1.xz, r1.xz);
+    r3.x = sqrt(r0.x);
+    r0.x = dot(r1.yw, r1.yw);
+    r3.y = sqrt(r0.x);
+    r1.xy = w3.xy * r3.xy;
+    r1.zw = w3.xy * r3.xy + -r3.xy;
+    r1.xy = max(-r1.xy, r1.zw);
+    r1.zw = max(float2(0,0), r1.xy);
+    r0.x = dot(r1.zw, r1.zw);
+    r0.x = sqrt(r0.x);
+    r1.x = max(r1.x, r1.y);
+    r1.x = min(0, r1.x);
+    r0.x = r1.x + r0.x;
+    r0.x = -1 + r0.x;
+    r0.x = saturate(-0.5 * r0.x);
+    r1.x = r0.x * -2 + 3;
+    r0.x = r0.x * r0.x;
+    r0.x = r1.x * r0.x;
+    r2.w = r2.w * r0.x;
+  }
+  r2.xyz = sqrt(r0.yzw);
+  o0.xyzw = min(float4(32255,32255,32255,32255), r2.xyzw);
+  return;
+}

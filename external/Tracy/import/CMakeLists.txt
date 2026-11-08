@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.16)
+
+set(NO_STATISTICS ON)
+
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/version.cmake)
+
+set(CMAKE_CXX_STANDARD 20)
+
+project(
+    tracy-import
+    LANGUAGES C CXX
+    VERSION ${TRACY_VERSION_STRING}
+)
+
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/config.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/vendor.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/server.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/GitRef.cmake)
+
+add_executable(tracy-import-chrome
+    src/import-chrome.cpp
+)
+add_git_ref(tracy-import-chrome)
+target_link_libraries(tracy-import-chrome PRIVATE TracyServer nlohmann_json::nlohmann_json)
+
+add_executable(tracy-import-fuchsia
+    src/import-fuchsia.cpp
+)
+add_git_ref(tracy-import-fuchsia)
+target_link_libraries(tracy-import-fuchsia PRIVATE TracyServer)
+
+set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})

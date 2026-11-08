@@ -1,0 +1,13 @@
+{
+  "parameters": {
+    "enabled": true,
+    "ubo_binding": 13,
+    "arb_start": 80,
+    "arb_mode": "local",
+    "values": [
+      {"name": "exposure", "label": "Exposure multiplier", "value": 1.0, "min": 0.0, "max": 8.0},
+      {"name": "saturation", "label": "Saturation", "value": 1.0, "min": 0.0, "max": 2.0},
+      {"name": "paper_white", "label": "Paper white (nits)", "value": 203.0, "min": 80.0, "max": 500.0}
+    ]
+  }
+}

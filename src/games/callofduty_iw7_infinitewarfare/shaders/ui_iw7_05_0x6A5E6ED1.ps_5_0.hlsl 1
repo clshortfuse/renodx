@@ -1,0 +1,176 @@
+// ---- Created with 3Dmigoto v1.3.16 on Sat Sep 13 00:24:09 2025
+#include "../shared.h"
+
+Texture2D<float4> t4 : register(t4);
+
+Texture2D<float4> t3 : register(t3);
+
+Texture2D<float4> t2 : register(t2);
+
+Texture3D<float4> t1 : register(t1);
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s4_s : register(s4);
+
+SamplerState s3_s : register(s3);
+
+SamplerState s2_s : register(s2);
+
+SamplerState s1_s : register(s1);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb13 : register(b13)
+{
+  float4 cb13[3];
+}
+
+cbuffer cb2 : register(b2)
+{
+  float4 cb2[15];
+}
+
+
+
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float4 v1 : COLOR0,
+  float2 v2 : TEXCOORD0,
+  float2 w2 : TEXCOORD1,
+  float2 v3 : TEXCOORD2,
+  out float4 o0 : SV_TARGET0)
+{
+  float4 r0,r1,r2,r3,r4,r5,r6;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+  if (!CUSTOM_IS_UI) discard;
+  r0.x = cmp(0 < cb2[10].w);
+  if (r0.x != 0) {
+    r0.yz = cb2[10].yx * v0.yx;
+    r0.yz = floor(r0.yz);
+    r1.xy = float2(2.33999991,0.800000012) * cb2[11].zw;
+    r0.w = frac(r1.x);
+    r0.w = 0.100000001 + r0.w;
+    r0.yz = r0.yz + r0.ww;
+    r1.xz = float2(0.554549694,0.308517009) * r0.zy;
+    r1.xz = frac(r1.xz);
+    r0.yz = r0.zy * r1.xz + r0.yz;
+    r0.y = r0.y * r0.z;
+    r0.y = frac(r0.y);
+    r0.y = 678.900024 * r0.y;
+    r0.y = frac(r0.y);
+    r0.z = cmp(r0.y < r1.y);
+    r0.y = r0.y / r1.y;
+    r0.y = r0.y * 2 + -1;
+    r1.xy = ddx_coarse(v2.xy);
+    r1.xy = cb2[11].xx * r1.xy;
+    r0.yw = r1.xy * r0.yy + v2.xy;
+    r0.yz = r0.zz ? r0.yw : v2.xy;
+  } else {
+    r0.yz = v2.xy;
+  }
+  r0.y = t0.Sample(s0_s, r0.yz).w;
+  r0.y = v1.w * r0.y;
+  r0.z = t3.Sample(s3_s, w2.xy).x;
+  r0.w = t4.Sample(s4_s, v3.xy).x;
+  r0.z = r0.z * r0.w;
+  r0.z = cb2[4].x * r0.z;
+  r0.z = cb2[4].y * r0.z;
+  r1.w = r0.y * r0.z;
+  r0.yzw = v1.xyz * v1.xyz;
+  r2.x = cmp(0 < cb2[7].x);
+  if (r2.x != 0) {
+    r2.xy = -cb2[9].xy + v0.xy;
+    r2.xy = cb2[9].zw * r2.xy;
+    r2.xyz = t2.SampleLevel(s2_s, r2.xy, cb2[7].x).xyz;
+    r3.xyz = cmp(r2.xyz < cb13[0].xxx);
+    r4.xyzw = r3.xxxx ? cb13[2].xyzw : cb13[1].xyzw;
+    r2.xw = r4.xy * r2.xx + r4.zw;
+    r4.x = saturate(r2.x / r2.w);
+    r5.xyzw = r3.yyyy ? cb13[2].xyzw : cb13[1].xyzw;
+    r2.xy = r5.xy * r2.yy + r5.zw;
+    r4.y = saturate(r2.x / r2.y);
+    r3.xyzw = r3.zzzz ? cb13[2].xyzw : cb13[1].xyzw;
+    r2.xy = r3.xy * r2.zz + r3.zw;
+    r4.z = saturate(r2.x / r2.y);
+    r2.x = saturate(dot(r4.xyz, cb2[12].xyz));
+    r2.y = saturate(dot(r4.xyz, cb2[13].xyz));
+    r2.z = saturate(dot(r4.xyz, cb2[14].xyz));
+    r2.xyz = log2(r2.xyz);
+    r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz;
+    r2.xyz = exp2(r2.xyz);
+    r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+    r2.xyz = max(float3(0,0,0), r2.xyz);
+    r2.xyz = r2.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
+    r2.xyz = t1.SampleLevel(s1_s, r2.xyz, 0).xyz;
+    r0.yzw = r2.xyz * r0.yzw;
+  }
+  r2.x = cmp(0 < cb2[8].w);
+  if (r2.x != 0) {
+    r2.x = (uint)cb2[8].z;
+    r2.xy = (int2)r2.xx & int2(1,2);
+    r2.zw = float2(1,0.5) * v0.xy;
+    r2.zw = floor(r2.zw);
+    r2.xz = r2.xx ? v0.xy : r2.zw;
+    r2.z = cb2[8].y * r2.z;
+    r2.y = r2.y ? 0 : r2.z;
+    r2.x = r2.x + r2.y;
+    r2.x = r2.x / cb2[8].x;
+    r2.x = frac(r2.x);
+    r2.xy = cmp(r2.xx < float2(0.333000004,0.666000009));
+    r2.zw = cb2[8].ww * float2(1,-1) + float2(1,1);
+    r3.xy = cb2[8].ww * float2(-1,1) + float2(1,1);
+    r3.yz = r2.yy ? r2.zw : r3.xy;
+    r2.yzw = cb2[8].www * float3(1,-1,-1) + float3(1,1,1);
+    r3.x = 1 + -cb2[8].w;
+    r2.xyz = r2.xxx ? r2.yzw : r3.xyz;
+    r0.yzw = r2.xyz * r0.yzw;
+  }
+  if (r0.x != 0) {
+    r2.xyzw = cb2[10].xyzw * v0.xyxy;
+    r2.xyz = floor(r2.xyz);
+    r3.xyzw = float4(8,2.33999991,0.200000003,0.5) * cb2[11].wzww;
+    r0.x = frac(r3.y);
+    r0.x = 0.100000001 + r0.x;
+    r2.xy = r2.yx + r0.xx;
+    r4.xy = float2(0.554549694,0.308517009) * r2.yx;
+    r4.xy = frac(r4.xy);
+    r2.xy = r2.yx * r4.xy + r2.xy;
+    r0.x = r2.x * r2.y;
+    r0.x = frac(r0.x);
+    r2.x = cmp(r0.x < r3.z);
+    r4.xyz = float3(92.1419983,12.3450003,9.12300014) * r0.xxx;
+    r4.xyz = frac(r4.xyz);
+    r5.xz = r4.xx * r0.yw;
+    r0.x = 1 + -r4.x;
+    r5.y = r0.z * r0.x;
+    r5.xyz = r2.xxx ? r5.xyz : r0.yzw;
+    r0.x = cmp(r4.y < r3.w);
+    r2.x = 0.333333343 * r2.z;
+    r2.xw = frac(r2.xw);
+    r2.xy = cmp(r2.xx < float2(0.330000013,0.660000026));
+    r6.yz = r2.yy ? float2(1,0.200000003) : float2(0.200000003,1);
+    r6.x = 0.200000003;
+    r2.xyz = r2.xxx ? float3(1,0.200000003,0.200000003) : r6.xyz;
+    r2.xyz = r5.xyz * r2.xyz;
+    r2.xyz = r0.xxx ? r2.xyz : r5.xyz;
+    r0.x = r4.z * r4.z;
+    r0.x = cb2[11].w * r0.x;
+    r0.x = saturate(-r0.x * 3 + 1);
+    r2.w = r2.w * 2 + -1;
+    r3.x = saturate(r3.x);
+    r2.w = -abs(r2.w) * r3.x + 1;
+    r0.x = min(r2.w, r0.x);
+    r1.w = r1.w * r0.x;
+    r0.yzw = r2.xyz * r0.xxx;
+  }
+  r1.xyz = sqrt(r0.yzw);
+  o0.xyzw = r1.xyzw;
+  return;
+}

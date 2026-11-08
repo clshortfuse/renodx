@@ -1,0 +1,28 @@
+
+
+
+float3 colorUntonemapped, colorTonemapped;
+
+
+colorUntonemapped = .xyz * Tonemap_CalculatePreExposureMultiplier(cb13[0].xyz, cb13[1].xyz, cb13[2].xyz);
+
+
+.xyz = renodx::color::srgb::EncodeSafe(.xyz);
+
+
+colorTonemapped = o0.xyz;
+  o0.xyz = Tonemap_Do(colorUntonemapped, colorTonemapped, v1.xy, t0);
+
+
+
+
+
+
+
+
+o0.xyz = Tonemap2nd_Do(o0.xyz, s0_s, t0, v1);
+
+
+
+
+iw7_u9

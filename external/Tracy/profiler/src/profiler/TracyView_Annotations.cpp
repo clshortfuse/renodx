@@ -1,0 +1,182 @@
+#include <string.h>
+
+#include "TracyImGui.hpp"
+#include "TracyNameGen.hpp"
+#include "TracyPrint.hpp"
+#include "TracyView.hpp"
+#include "tracy_pdqsort.h"
+#include "../Fonts.hpp"
+
+namespace tracy
+{
+
+void View::AddAnnotation( int64_t start, int64_t end )
+{
+    auto ann = std::make_shared<Annotation>();
+    ann->text = GenerateAbstractName();
+    ann->range.active = true;
+    ann->range.min = start;
+    ann->range.max = end;
+    ann->color = 0x888888;
+    m_selectedAnnotation = ann.get();
+    m_annotations.emplace_back( std::move( ann ) );
+    pdqsort_branchless( m_annotations.begin(), m_annotations.end(), []( const auto& lhs, const auto& rhs ) { return lhs->range.min < rhs->range.min; } );
+}
+
+void View::DrawSelectedAnnotation()
+{
+    assert( m_selectedAnnotation );
+    bool show = true;
+    ImGui::Begin( "Annotation", &show, ImGuiWindowFlags_AlwaysAutoResize );
+    if( !ImGui::GetCurrentWindowRead()->SkipItems )
+    {
+        ImGui::Checkbox( "Visible", &m_selectedAnnotation->visible );
+        ImGui::SameLine();
+        if( ImGui::Button( ICON_FA_MICROSCOPE " Zoom to annotation" ) )
+        {
+            ZoomToRange( m_selectedAnnotation->range.min, m_selectedAnnotation->range.max );
+        }
+        ImGui::SameLine();
+        if( ImGui::Button( ICON_FA_TRASH_CAN " Remove" ) )
+        {
+            for( auto it = m_annotations.begin(); it != m_annotations.end(); ++it )
+            {
+                if( it->get() == m_selectedAnnotation )
+                {
+                    m_annotations.erase( it );
+                    break;
+                }
+            }
+            ImGui::End();
+            m_selectedAnnotation = nullptr;
+            return;
+        }
+        ImGui::Separator();
+        {
+            const auto desc = m_selectedAnnotation->text.c_str();
+            const auto descsz = std::min<size_t>( 1023, m_selectedAnnotation->text.size() );
+            char buf[1024];
+            buf[descsz] = '\0';
+            memcpy( buf, desc, descsz );
+
+            const char* buttonText = ICON_FA_DICE;
+            auto buttonSize = ImGui::CalcTextSize( buttonText );
+            buttonSize.x += ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+            ImGui::SetNextItemWidth( ImGui::GetContentRegionAvail().x - buttonSize.x );
+            bool changed = ImGui::InputTextWithHint( "##anndesc", "Describe annotation", buf, 256 );
+            ImGui::SameLine();
+            if( ImGui::Button( buttonText ) )
+            {
+                changed = true;
+                const auto name = GenerateAbstractName();
+                const auto len = std::min( sizeof( buf ) - 1, name.size() );
+                memcpy( buf, name.c_str(), len );
+                buf[len] = '\0';
+            }
+            if( changed )
+            {
+                m_selectedAnnotation->text.assign( buf );
+            }
+        }
+        ImVec4 col = ImGui::ColorConvertU32ToFloat4( m_selectedAnnotation->color );
+        ImGui::ColorEdit3( "Color", &col.x );
+        m_selectedAnnotation->color = ImGui::ColorConvertFloat4ToU32( col );
+        ImGui::Separator();
+        TextFocused( "Annotation begin:", TimeToStringExact( m_selectedAnnotation->range.min ) );
+        TextFocused( "Annotation end:", TimeToStringExact( m_selectedAnnotation->range.max ) );
+        TextFocused( "Annotation length:", TimeToString( m_selectedAnnotation->range.max - m_selectedAnnotation->range.min ) );
+    }
+    ImGui::End();
+    if( !show ) m_selectedAnnotation = nullptr;
+}
+
+void View::DrawAnnotationList()
+{
+    const auto scale = GetScale();
+    ImGui::SetNextWindowSize( ImVec2( 600 * scale, 300 * scale ), ImGuiCond_FirstUseEver );
+    ImGui::Begin( "Annotation list", &m_showAnnotationList );
+    if( ImGui::GetCurrentWindowRead()->SkipItems ) { ImGui::End(); return; }
+
+    if( ImGui::Button( ICON_FA_NOTE_STICKY " Add annotation" ) )
+    {
+        AddAnnotation( m_vd.zvStart, m_vd.zvEnd );
+    }
+
+    if( m_annotations.empty() )
+    {
+        ImGui::Separator();
+        ImGui::PushFont( g_fonts.normal, FontBig );
+        ImGui::Dummy( ImVec2( 0, ( ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeight() * 2 ) * 0.5f ) );
+        TextCentered( ICON_FA_HORSE );
+        TextCentered( "No annotations" );
+        ImGui::PopFont();
+        ImGui::End();
+        return;
+    }
+    else
+    {
+        ImGui::SameLine();
+        ImGui::SeparatorEx( ImGuiSeparatorFlags_Vertical );
+        ImGui::SameLine();
+    }
+
+    TextFocused( "Annotations:", RealToString( m_annotations.size() ) );
+    ImGui::Separator();
+    ImGui::BeginChild( "##annotationList" );
+    const bool ctrl = ImGui::GetIO().KeyCtrl;
+    int remove = -1;
+    int idx = 0;
+    for( auto& ann : m_annotations )
+    {
+        ImGui::PushID( idx );
+        ImGui::Checkbox( "##visible", &ann->visible );
+        ImGui::SameLine();
+        if( ImGui::Button( ICON_FA_PEN_TO_SQUARE ) )
+        {
+            m_selectedAnnotation = ann.get();
+        }
+        ImGui::SameLine();
+        if( ImGui::Button( ICON_FA_MICROSCOPE ) )
+        {
+            ZoomToRange( ann->range.min, ann->range.max );
+        }
+        ImGui::SameLine();
+        if( ButtonDisablable( ICON_FA_TRASH_CAN, !ctrl ) )
+        {
+            remove = idx;
+        }
+        if( !ctrl ) TooltipIfHovered( "Press ctrl key to enable removal" );
+        ImGui::SameLine();
+        ImGui::ColorButton( "c", ImGui::ColorConvertU32ToFloat4( ann->color | 0xFF000000 ), ImGuiColorEditFlags_NoTooltip );
+        ImGui::SameLine();
+        if( m_selectedAnnotation == ann.get() )
+        {
+            bool t = true;
+            ImGui::Selectable( "##annSelectable", &t );
+            ImGui::SameLine( 0, 0 );
+        }
+        if( ann->text.empty() )
+        {
+            TextDisabledUnformatted( "Empty annotation" );
+        }
+        else
+        {
+            ImGui::TextUnformatted( ann->text.c_str() );
+        }
+        ImGui::SameLine();
+        ImGui::Spacing();
+        ImGui::SameLine();
+        ImGui::TextDisabled( "%s - %s (%s)", TimeToStringExact( ann->range.min ), TimeToStringExact( ann->range.max ), TimeToString( ann->range.max - ann->range.min ) );
+        ImGui::PopID();
+        idx++;
+    }
+    if( remove >= 0 )
+    {
+        if( m_annotations[remove].get() == m_selectedAnnotation ) m_selectedAnnotation = nullptr;
+        m_annotations.erase( m_annotations.begin() + remove );
+    }
+    ImGui::EndChild();
+    ImGui::End();
+}
+
+}

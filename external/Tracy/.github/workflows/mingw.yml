@@ -1,0 +1,68 @@
+name: build-mingw
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mingw-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/cpm-cache
+
+jobs:
+  build-mingw:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+    - name: Install dependencies
+      run: |
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm --needed mingw-w64-gcc cmake git nodejs meson
+    - name: Trust git repo
+      run: git config --global --add safe.directory '*'
+    - uses: actions/checkout@v4
+    - name: Cache CPM packages
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.CPM_SOURCE_CACHE }}
+        key: ${{ runner.os }}-cpm-${{ hashFiles('**/vendor.cmake', '**/CMakeLists.txt') }}
+        restore-keys: ${{ runner.os }}-cpm-
+    - name: Build TracyClient
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DTRACY_ENABLE=ON \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+          -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+        cmake --build build
+    - name: Library (meson)
+      run: |
+        cat > mingw-cross.txt << 'EOF'
+        [binaries]
+        c = '/usr/bin/x86_64-w64-mingw32-gcc'
+        cpp = '/usr/bin/x86_64-w64-mingw32-g++'
+        ar = '/usr/bin/x86_64-w64-mingw32-ar'
+        strip = '/usr/bin/x86_64-w64-mingw32-strip'
+
+        [host_machine]
+        system = 'windows'
+        cpu_family = 'x86_64'
+        cpu = 'x86_64'
+        endian = 'little'
+        EOF
+        meson setup build-meson --cross-file mingw-cross.txt -Ddefault_library=static -Dtracy_enable=true
+        meson compile -C build-meson
+    - name: Test application
+      uses: ./.github/actions/test-tracy
+      with:
+        extra_cmake_flags: >-
+          -DCMAKE_SYSTEM_NAME=Windows
+          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc
+          -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
