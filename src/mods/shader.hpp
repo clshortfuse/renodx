@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -191,7 +192,7 @@ static thread_local std::unordered_map<uint64_t, std::vector<std::vector<reshade
 
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
-static bool use_pipeline_layout_cloning = false;
+[[deprecated]] static bool use_pipeline_layout_cloning = false; // Not working
 static bool manual_shader_scheduling = false;
 static bool force_pipeline_cloning = false;
 [[deprecated]] static bool trace_unmodified_shaders = false;  // Deprecated/dead no-op.
@@ -220,7 +221,7 @@ static bool using_custom_replace = false;
 static bool using_custom_inject = false;
 static bool using_counted_shaders = false;
 
-struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
+struct __declspec(uuid("bf14be8a-b1eb-46de-9731-68dd1160a150")) DeviceData {
   bool use_pipeline_layout_cloning = false;
   // bool force_pipeline_cloning = false;
   int32_t expected_constant_buffer_index = -1;
@@ -229,7 +230,11 @@ struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
   std::vector<reshade::api::pipeline_layout_param> injected_descriptor_params;
   reshade::api::resource shared_buffer_range_resource = {0u};
   reshade::api::buffer_range root_signature_buffer_range = {};
-  std::shared_ptr<std::shared_mutex> root_signature_buffer_mutex = std::make_shared<std::shared_mutex>();
+  struct RootSignatureBufferState {
+    std::shared_mutex mutex;
+    std::once_flag init;
+    std::atomic_bool ready = false;
+  } root_signature_buffer_state;
 };
 
 static void OnInitDevice(reshade::api::device* device) {
@@ -347,44 +352,6 @@ static void OnInitDevice(reshade::api::device* device) {
     if (use_root_signature_cbv && shader_injection != nullptr && shader_injection_size != 0u) {
       assert(expected_constant_buffer_index >= 0);
       const uint64_t size = ((shader_injection_size * sizeof(float)) + alignment - 1u) & ~(alignment - 1u);
-      reshade::api::resource buffer = {0u};
-      const reshade::api::resource_desc desc(
-          size,
-          reshade::api::memory_heap::cpu_to_gpu,
-          reshade::api::resource_usage::constant_buffer);
-      if (device->create_resource(
-              desc,
-              nullptr,
-              reshade::api::resource_usage::constant_buffer,
-              &buffer)) {
-        void* mapped_data = nullptr;
-        if (device->map_buffer_region(
-                buffer,
-                0u,
-                size,
-                reshade::api::map_access::write_only,
-                &mapped_data)) {
-          std::memcpy(
-              mapped_data,
-              shader_injection,
-              shader_injection_size * sizeof(float));
-          device->unmap_buffer_region(buffer);
-          data->root_signature_buffer_range = {
-              .buffer = buffer,
-              .offset = 0u,
-              .size = size,
-          };
-        } else {
-          reshade::log::message(
-              reshade::log::level::error,
-              "mods::shader::OnInitDevice(failed to map root-signature constants buffer)");
-          device->destroy_resource(buffer);
-        }
-      } else {
-        reshade::log::message(
-            reshade::log::level::error,
-            "mods::shader::OnInitDevice(failed to create root-signature constants buffer)");
-      }
       for (auto& [shader_hash, custom_shader] : custom_shaders) {
         (void)shader_hash;
         const auto existing_binding = std::ranges::find_if(
@@ -399,10 +366,44 @@ static void OnInitDevice(reshade::api::device* device) {
               .type = reshade::api::descriptor_type::constant_buffer,
               .slot = static_cast<uint32_t>(expected_constant_buffer_index),
               .space = expected_constant_buffer_space,
-              .get_constants_range = [range = data->root_signature_buffer_range,
-                                      buffer_mutex = data->root_signature_buffer_mutex](reshade::api::command_list*) {
-                const std::shared_lock lock(*buffer_mutex);
-                return range;
+              .get_constants_range = [data, size](reshade::api::command_list* cmd_list) {
+                std::call_once(data->root_signature_buffer_state.init, [data, size, cmd_list]() {
+                  // init_device runs inside ReShade's device-creation lock. Allocate only at first use.
+                  auto* device = cmd_list->get_device();
+                  reshade::api::resource buffer = {0u};
+                  if (!device->create_resource(
+                          reshade::api::resource_desc(
+                              size,
+                              reshade::api::memory_heap::cpu_to_gpu,
+                              reshade::api::resource_usage::constant_buffer),
+                          nullptr,
+                          reshade::api::resource_usage::constant_buffer,
+                          &buffer)) {
+                    reshade::log::message(reshade::log::level::error,
+                                          "mods::shader(failed to create root-signature constants buffer)");
+                    assert(false && "root-signature constants buffer creation failed");
+                    return;
+                  }
+                  void* mapped_data = nullptr;
+                  if (!device->map_buffer_region(
+                          buffer, 0u, size, reshade::api::map_access::write_only, &mapped_data)) {
+                    reshade::log::message(reshade::log::level::error,
+                                          "mods::shader(failed to map root-signature constants buffer)");
+                    device->destroy_resource(buffer);
+                    assert(false && "root-signature constants buffer mapping failed");
+                    return;
+                  }
+                  std::memcpy(mapped_data, shader_injection, shader_injection_size * sizeof(float));
+                  device->unmap_buffer_region(buffer);
+                  data->root_signature_buffer_range = {
+                      .buffer = buffer,
+                      .offset = 0u,
+                      .size = size,
+                  };
+                  // Present observes the immutable range only after the initial upload completes.
+                  data->root_signature_buffer_state.ready.store(true, std::memory_order_release);
+                });
+                return data->root_signature_buffer_range;
               },
           });
         }
@@ -889,8 +890,10 @@ static bool OnCreatePipelineLayout(
   }
 
   const bool expand_vulkan_push_constants = is_vulkan && vk_expand_pc_index != -1 && found_full_stage_pc_match;
+  const bool has_push_constant_injection = shader_injection_size != 0u
+                                           && (!use_root_signature_cbv || device_api != reshade::api::device_api::d3d12);
 
-  if (pc_count != 0 && !allow_multiple_push_constants && !expand_vulkan_push_constants) {
+  if (has_push_constant_injection && pc_count != 0 && !allow_multiple_push_constants && !expand_vulkan_push_constants) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
     s << "Pipeline layout already has push constants: " << pc_count;
@@ -923,8 +926,6 @@ static bool OnCreatePipelineLayout(
   const auto* injected_descriptor_param = has_descriptor_injection && !is_vulkan ? data->injected_descriptor_params.data() : nullptr;
   assert(!has_descriptor_injection || injected_descriptor_param != nullptr || (is_vulkan && has_descriptor_injection));
 
-  const bool has_push_constant_injection = shader_injection_size != 0u
-                                           && (!use_root_signature_cbv || device_api != reshade::api::device_api::d3d12);
   uint32_t existing_set_count = 0u;
   if (is_vulkan && has_descriptor_injection) {
     for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
@@ -2237,6 +2238,43 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
 
         const bool use_descriptor_tables = context.cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
 
+        if (use_descriptor_tables) {
+          static thread_local std::vector<reshade::api::descriptor_table_update> updates;
+          if (updates.size() < pending_descriptor_push_count) {
+            updates.resize(pending_descriptor_push_count);
+          }
+          size_t set_begin = 0u;
+          while (set_begin < pending_descriptor_push_count) {
+            const uint32_t layout_param = pending_descriptor_pushes[set_begin].layout_param;
+            size_t set_end = set_begin;
+            while (set_end < pending_descriptor_push_count
+                   && pending_descriptor_pushes[set_end].layout_param == layout_param) {
+              const auto& push = pending_descriptor_pushes[set_end];
+              updates[set_end - set_begin] = {
+                  .binding = push.binding,
+                  .count = 1u,
+                  .type = push.type,
+                  .descriptors = (push.type == reshade::api::descriptor_type::constant_buffer
+                                      ? static_cast<const void*>(&push.constants)
+                                      : static_cast<const void*>(&push.view)),
+              };
+              ++set_end;
+            }
+            reshade::api::descriptor_table table = {};
+            if (!renodx::utils::descriptor::TryGetImmutableDescriptorTable(
+                    context.cmd_list->get_device(), pipeline_layout,
+                    state.pipeline_details->injection_layout, layout_param,
+                    {updates.data(), set_end - set_begin}, &table)) {
+                    response.bypass_draw = true;
+              return response;
+            }
+            context.cmd_list->bind_descriptor_tables(
+                descriptor_stages, state.pipeline_details->injection_layout, layout_param, 1u, &table);
+            set_begin = set_end;
+          }
+          return response;
+        }
+
         static thread_local std::vector<reshade::api::resource_view> descriptor_views;
         static thread_local std::vector<reshade::api::buffer_range> descriptor_constants;
         if (descriptor_views.size() < pending_descriptor_push_count) {
@@ -2265,42 +2303,7 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
             ++span_end;
           }
 
-          reshade::api::descriptor_table table = {};
-          if (use_descriptor_tables) {
-            if (first_view_push.layout_param < state.pipeline_details->descriptor_tables.size()) {
-              table = state.pipeline_details->descriptor_tables[first_view_push.layout_param];
-            }
-
-            if (table.handle == 0u) {
-              if (!renodx::utils::descriptor::GetOrAllocateDescriptorTable(
-                      context.cmd_list->get_device(),
-                      pipeline_layout,
-                      state.pipeline_details->injection_layout,
-                      first_view_push.layout_param,
-                      &table)) {
-#ifdef DEBUG_LEVEL_0
-                std::stringstream s;
-                s << "mods::shader::OnCommandAction(";
-                s << "descriptor table allocation failed for shader ";
-                s << PRINT_CRC32(custom_shader_info->crc32);
-                s << ": set=" << first_view_push.layout_param;
-                s << ", pipeline: " << PRINT_PTR(state.pipeline.handle);
-                s << ", injection layout: " << PRINT_PTR(state.pipeline_details->injection_layout.handle);
-                s << ")";
-                reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-                return response;
-              }
-            }
-
-            if (state.pipeline_details->descriptor_tables.size() <= first_view_push.layout_param) {
-              state.pipeline_details->descriptor_tables.resize(first_view_push.layout_param + 1u);
-            }
-            state.pipeline_details->descriptor_tables[first_view_push.layout_param] = table;
-          }
-
           const reshade::api::descriptor_table_update update{
-              .table = table,
               .binding = first_view_push.binding,
               .array_offset = 0,
               .count = descriptor_view_count,
@@ -2310,15 +2313,7 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
                                  : static_cast<const void*>(descriptor_views.data()),
           };
 
-          if (use_descriptor_tables) {
-            context.cmd_list->get_device()->update_descriptor_tables(1u, &update);
-            context.cmd_list->bind_descriptor_tables(
-                descriptor_stages,
-                state.pipeline_details->injection_layout,
-                first_view_push.layout_param,
-                1u,
-                &table);
-          } else if (descriptor_stages == reshade::api::shader_stage::all_graphics
+          if (descriptor_stages == reshade::api::shader_stage::all_graphics
                      && context.cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12
                      && first_view_push.type == reshade::api::descriptor_type::buffer_unordered_access_view
                      && first_view_push.binding == 0u
@@ -2413,11 +2408,12 @@ inline void OnPresent(
   }
 
   if (use_root_signature_cbv
-      && swapchain->get_device()->get_api() == reshade::api::device_api::d3d12) {
+      && swapchain->get_device()->get_api() == reshade::api::device_api::d3d12
+      && data->root_signature_buffer_state.ready.load(std::memory_order_acquire)) {
     auto* device = swapchain->get_device();
+    const std::unique_lock lock(data->root_signature_buffer_state.mutex);
     const auto& range = data->root_signature_buffer_range;
     if (range.buffer.handle != 0u) {
-      const std::unique_lock lock(*data->root_signature_buffer_mutex);
       void* mapped_data = nullptr;
       if (!device->map_buffer_region(
               range.buffer,
@@ -2425,6 +2421,9 @@ inline void OnPresent(
               shader_injection_size * sizeof(float),
               reshade::api::map_access::write_only,
               &mapped_data)) {
+              reshade::log::message(reshade::log::level::error,
+                    "mods::shader::OnPresent(failed to map root-signature constants buffer)");
+              assert(false && "root-signature constants buffer update failed");
         return;
       }
       std::memcpy(mapped_data, shader_injection, shader_injection_size * sizeof(float));
@@ -2574,7 +2573,10 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
         reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 
-      if (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr)) {
+      if (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr)
+          || std::any_of(custom_shaders.begin(), custom_shaders.end(), [](const auto& entry) {
+               return !entry.second.views.empty();
+             })) {
         if (new_injections != nullptr) {
           shader_injection_size = sizeof(T) / sizeof(uint32_t);
           shader_injection = reinterpret_cast<float*>(new_injections);
