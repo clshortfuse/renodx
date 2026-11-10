@@ -27,8 +27,8 @@ param(
   [string]$Bin,
   [switch]$Install,
   [switch]$Update,
-  [ValidateSet('dxc', 'slang', 'glslang', '3dmigoto')]
-  [string[]]$Tools = @('dxc', 'slang', 'glslang', '3dmigoto')
+  [ValidateSet('dxc', 'slang', 'glslang', 'spirv-tools', '3dmigoto')]
+  [string[]]$Tools = @('dxc', 'slang', 'glslang', 'spirv-tools', '3dmigoto')
 )
 
 Set-StrictMode -Version Latest
@@ -73,12 +73,12 @@ if ($LASTEXITCODE -ne 0) {
 
 $toolVersions = @{}
 foreach ($line in $toolVersionOutput) {
-  if ($line.ToString().Trim() -match '^(RENODX_[A-Z0-9_]+_MIN_VERSION)=([0-9]+(?:\.[0-9]+)+)$') {
+  if ($line.ToString().Trim() -match '^(RENODX_[A-Z0-9_]+)=(.+)$') {
     $toolVersions[$Matches[1]] = $Matches[2]
   }
 }
 
-foreach ($name in @('DXC', 'SLANG', 'GLSLANG', 'THREEDMIGOTO')) {
+foreach ($name in @('DXC', 'SLANG', 'GLSLANG', 'SPIRV_TOOLS', 'THREEDMIGOTO')) {
   if (-not $toolVersions.ContainsKey("RENODX_${name}_MIN_VERSION")) {
     throw "CMake did not export RENODX_${name}_MIN_VERSION from $toolVersionsPath"
   }
@@ -121,6 +121,16 @@ $toolDefinitions = @{
     PrimaryFile    = 'glslang.exe'
     VersionCommand = @('--version')
     VersionPattern = 'Glslang Version:\s+\d+:([0-9]+(?:\.[0-9]+){2,3})'
+  }
+  'spirv-tools' = @{
+    ProductName    = 'SPIRV-Tools (clshortfuse unofficial build)'
+    DesiredVersion = $toolVersions['RENODX_SPIRV_TOOLS_MIN_VERSION']
+    Url            = "https://github.com/clshortfuse/SPIRV-Tools/releases/download/v$($toolVersions['RENODX_SPIRV_TOOLS_MIN_VERSION'])/SPIRV-Tools-windows-x64.zip"
+    ArchiveName    = "SPIRV-Tools-v$($toolVersions['RENODX_SPIRV_TOOLS_MIN_VERSION'])-windows-x64.zip"
+    ExpectedFiles  = @('spirv-as.exe', 'spirv-val.exe', 'spirv-dis.exe', 'spirv-tools\LICENSE', 'spirv-tools\BUILD-INFO.txt')
+    PrimaryFile    = 'spirv-as.exe'
+    VersionCommand = @('--version')
+    VersionPattern = 'SPIRV-Tools v([0-9]+\.[0-9]+)'
   }
   '3dmigoto' = @{
     ProductName    = '3Dmigoto cmd_Decompiler'
@@ -209,7 +219,7 @@ function Get-ToolDownloadInfo {
   if ($tool.ContainsKey('Url')) {
     return [pscustomobject]@{
       Url = $tool.Url
-      ArchiveName = [System.IO.Path]::GetFileName($tool.Url)
+      ArchiveName = if ($tool.ContainsKey('ArchiveName')) { $tool.ArchiveName } else { [System.IO.Path]::GetFileName($tool.Url) }
     }
   }
 
@@ -435,6 +445,25 @@ function Install-ToolFromArchive {
   $temp = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
 
   try {
+    if ($Name -eq 'spirv-tools') {
+      $tool = Get-ToolDefinition -Name $Name
+      Expand-Archive -LiteralPath $ArchivePath -DestinationPath $temp -ErrorAction Stop
+      foreach ($file in @('spirv-as.exe', 'spirv-val.exe', 'spirv-dis.exe')) {
+        $output = & (Join-Path $temp "package\bin\$file") --version 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0 -or $output -notmatch $tool.VersionPattern -or $Matches[1] -ne $tool.DesiredVersion) {
+          throw "Unexpected SPIRV-Tools executable version: $file ($output)"
+        }
+      }
+      # Preserve notices and upstream identity without installing SDK components.
+      New-Item -ItemType Directory -Path (Join-Path $binDir 'spirv-tools') -Force -ErrorAction Stop | Out-Null
+      foreach ($file in @('LICENSE', 'BUILD-INFO.txt')) {
+        Copy-Item -LiteralPath (Join-Path $temp "package\$file") -Destination (Join-Path $binDir "spirv-tools\$file") -Force -ErrorAction Stop
+      }
+      foreach ($file in @('spirv-as.exe', 'spirv-val.exe', 'spirv-dis.exe')) {
+        Copy-Item -LiteralPath (Join-Path $temp "package\bin\$file") -Destination $binDir -Force -ErrorAction Stop
+      }
+      return $true
+    }
     Expand-Archive -Path $ArchivePath -DestinationPath $temp -Force
 
     if ($Name -eq 'dxc') {

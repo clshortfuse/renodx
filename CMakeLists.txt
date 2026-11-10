@@ -536,6 +536,53 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
+  # SPIR-V assembly sources
+  file(MAKE_DIRECTORY ${EMBED_FOLDER})
+  file(GLOB_RECURSE SHADER_SPVASM_SOURCES CONFIGURE_DEPENDS "${ADDON_PATH}/*.spvasm")
+  list(FILTER SHADER_SPVASM_SOURCES EXCLUDE REGEX "(^|[/\\\\])\\.[^/\\\\]+([/\\\\]|$)")
+  set(SHADER_SPVASM_OUTPUTS "")
+  if(SHADER_SPVASM_SOURCES)
+    set(RENODX_SPIRV_TARGET_ENV "vulkan1.3" CACHE STRING
+      "SPIRV-Tools target environment for textual SPIR-V assembly and validation")
+    set(RENODX_SPIRV_VALIDATOR_FLAGS "" CACHE STRING
+      "Additional spirv-val flags for Vulkan features enabled by the target application")
+    find_program(SPIRV_AS_BIN NAMES spirv-as.exe spirv-as
+      HINTS "${CMAKE_SOURCE_DIR}/bin" "$ENV{VULKAN_SDK}/Bin")
+    find_program(SPIRV_VAL_BIN NAMES spirv-val.exe spirv-val
+      HINTS "${CMAKE_SOURCE_DIR}/bin" "$ENV{VULKAN_SDK}/Bin")
+    if(NOT SPIRV_AS_BIN OR NOT SPIRV_VAL_BIN)
+      message(FATAL_ERROR
+        "SPIR-V assembly requires spirv-as and spirv-val from SPIRV-Tools. Set SPIRV_AS_BIN and SPIRV_VAL_BIN to the installed tools.")
+    endif()
+  endif()
+  foreach(FILE IN LISTS SHADER_SPVASM_SOURCES)
+    cmake_path(GET FILE FILENAME FILENAME)
+    string(REGEX MATCH "^(.+)\\.(frag|vert|comp)\\.spvasm$" _ "${FILENAME}")
+    set(SPVASM_OUTPUT_STEM "${CMAKE_MATCH_1}")
+    if(NOT SPVASM_OUTPUT_STEM)
+      message(FATAL_ERROR "Invalid SPIR-V assembly filename: ${FILE}; expected name.frag.spvasm, name.vert.spvasm, or name.comp.spvasm")
+    endif()
+    string(REGEX MATCH "0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$" SPVASM_HASH "${SPVASM_OUTPUT_STEM}")
+    if(SPVASM_HASH)
+      set(SPVASM_OUTPUT_STEM "${SPVASM_HASH}")
+    endif()
+    set(SPVASM_OUTPUT "${EMBED_FOLDER}/${SPVASM_OUTPUT_STEM}.spv")
+    if(SPVASM_OUTPUT IN_LIST SHADER_BINARIES)
+      message(FATAL_ERROR "Duplicate shader output for ${FILE}: ${SPVASM_OUTPUT}")
+    endif()
+    add_custom_command(
+      OUTPUT "${SPVASM_OUTPUT}"
+      COMMAND "${SPIRV_AS_BIN}" --preserve-numeric-ids --target-env "${RENODX_SPIRV_TARGET_ENV}"
+        "${FILE}" -o "${SPVASM_OUTPUT}.unvalidated"
+      COMMAND "${SPIRV_VAL_BIN}" --target-env "${RENODX_SPIRV_TARGET_ENV}"
+        ${RENODX_SPIRV_VALIDATOR_FLAGS} "${SPVASM_OUTPUT}.unvalidated"
+      COMMAND "${CMAKE_COMMAND}" -E rename "${SPVASM_OUTPUT}.unvalidated" "${SPVASM_OUTPUT}"
+      DEPENDS "${FILE}" "${SPIRV_AS_BIN}" "${SPIRV_VAL_BIN}"
+      VERBATIM)
+    list(APPEND SHADER_BINARIES "${SPVASM_OUTPUT}")
+    list(APPEND SHADER_SPVASM_OUTPUTS "${SPVASM_OUTPUT}")
+  endforeach()
+
   file(GLOB_RECURSE SHADER_SPV_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.spv)
   foreach(FILE ${SHADER_SPV_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
@@ -561,6 +608,9 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
 
     list(FIND SHADER_BINARIES ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv SHADER_BINARY_INDEX)
+    if("${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv" IN_LIST SHADER_SPVASM_OUTPUTS)
+      message(FATAL_ERROR "Precompiled shader conflicts with SPIR-V assembly source: ${FILE}")
+    endif()
     if(NOT SHADER_BINARY_INDEX EQUAL -1)
       continue()
     endif()
