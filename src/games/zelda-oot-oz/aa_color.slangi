@@ -1,0 +1,16 @@
+#ifndef RENODX_ZELDA_AA_COLOR_SLANGI
+#define RENODX_ZELDA_AA_COLOR_SLANGI
+// CUSTOM FILE: Added AA working-space conversion; no original shader body here.
+
+#include "./aa_controls.slangi"
+
+// CUSTOM: Scene/composition remain linear BT.709. Only custom-tonemapper AA
+// and its edge analysis use linear BT.2020 before the native sqrt encoding.
+float3 CustomAaWorkingRgb(float3 color) {
+    if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_VANILLA) {
+        return renodx::color::bt2020::from::BT709(color);
+    }
+    return color;
+}
+
+#endif

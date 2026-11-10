@@ -1,0 +1,174 @@
+#ifndef RENODX_ZELDA_ADAPTATION_SLANGI
+#define RENODX_ZELDA_ADAPTATION_SLANGI
+// CUSTOM FILE: Added FOV/history transport and eye-adaptation controller.
+// Spatial metering: Andrew B. Watson (NASA Ames Research Center), 2014,
+// "A formula for human retinal ganglion cell receptive field density as a
+// function of visual field location", Journal of Vision 14(7):15.
+// https://doi.org/10.1167/14.7.15
+// The retinal-density model supplies spatial weights, not a complete exposure
+// controller. Histogram trimming, temporal constants, pupil/bleaching estimates,
+// reset rules and output bounds are RenoDX implementation choices, not claims
+// that Watson's paper specifies those equations or parameter values.
+
+#include "./shared.h"
+
+// CUSTOM: Separate descriptor constants preserve the native 128-byte push limit.
+layout(set = 1, binding = 0, rgba32f) uniform image2D custom_adaptation_previous;
+layout(set = 1, binding = 1, rgba32f) uniform image2D custom_adaptation_next;
+layout(set = 1, binding = 2, scalar) uniform ZeldaAdaptationConfig {
+    float delta_seconds;
+    float generation;
+    float capture_fov;
+    float meter_draw;
+} custom_adaptation;
+
+// CUSTOM: Match the CPU counter's wrap without accepting negative seed stamps.
+float PreviousAdaptationGeneration() {
+    return custom_adaptation.generation == 0.f
+        ? float(RENODX_ADAPTATION_GENERATION_COUNT - 1u)
+        : custom_adaptation.generation - 1.f;
+}
+
+// The meter consumes the previous frame's captured FOV record.
+float4 ReadFovState() {
+    return imageLoad(custom_adaptation_previous, ivec2(1, 0));
+}
+
+bool IsFovStateValid(float4 custom_fov) {
+    return all(isfinite(custom_fov)) && custom_fov.x > 0.f && custom_fov.y > 0.f
+        && custom_fov.w == PreviousAdaptationGeneration();
+}
+
+// CUSTOM: Pixel 0 is (linear combined anchor, log2 fast, log2 slow, generation).
+// Both the meter and consumer reject stale state; no same-draw read/write alias.
+float4 ReadAdaptationState() {
+    float4 custom_state = imageLoad(custom_adaptation_previous, ivec2(0, 0));
+    if (custom_state.w != PreviousAdaptationGeneration()
+        || !all(isfinite(custom_state)) || custom_state.x <= 0.f) {
+        return float4(0.18f, log2(0.18f), log2(0.18f), -1.f);
+    }
+    return custom_state;
+}
+
+// Used by both scene permutations. Only one fragment performs the bounded meter.
+void UpdateAdaptation(sampler2D custom_scene, sampler2D custom_bloom, float4 custom_row0,
+                      float4 custom_row1, float4 custom_row2, float custom_bloom_power,
+                      float3 custom_native_exposure, float2 custom_pixel) {
+    if (custom_adaptation.meter_draw != 1.f || any(ivec2(custom_pixel) != ivec2(0, 0))
+        || gl_SampleID != 0) return;
+    float4 custom_fov = ReadFovState();
+    if (!IsFovStateValid(custom_fov)) return;
+    // CUSTOM: 64-bin log2 histogram with fixed-point Watson-derived spatial weights.
+    // Keep the coarse sampling grid inside the original draw, without extra passes.
+    uint custom_histogram[64];
+    for (int custom_bin = 0; custom_bin < 64; ++custom_bin) {
+        custom_histogram[custom_bin] = 0u;
+    }
+    uint custom_total_weight = 0u;
+    for (int custom_y = 0; custom_y < 18; ++custom_y) {
+        for (int custom_x = 0; custom_x < 32; ++custom_x) {
+            float2 custom_uv = (float2(custom_x, custom_y) + 0.5f) / float2(32.f, 18.f);
+            float3 custom_rgb = textureLod(custom_scene, custom_uv, 0.f).rgb;
+            float4 custom_source = float4(custom_rgb, 1.f);
+            custom_rgb = clamp(float3(dot(custom_row0, custom_source), dot(custom_row1, custom_source),
+                                      dot(custom_row2, custom_source)), 0.f, 10000.f);
+            float3 custom_bloom_rgb = pow(max(textureLod(custom_bloom, custom_uv, 0.f).rgb, float3(0.f, 0.f, 0.f)), custom_bloom_power);
+            // Meter in the scene domain before the uniform baseline render gain.
+            // Preserve the native extra blue factor as a channel adjustment.
+            custom_rgb = (custom_rgb + custom_bloom_rgb * shader_injection.bloom_strength)
+                * renodx::math::DivideSafe(custom_native_exposure, custom_native_exposure.x);
+            float custom_y709 = dot(custom_rgb, float3(0.2126f, 0.7152f, 0.0722f));
+            if (isfinite(custom_y709)) {
+                // Coarse binocular Watson midget-RGC weighting. The even grid
+                // never samples exactly zero eccentricity.
+                float2 custom_angle = degrees(atan((custom_uv * 2.f - 1.f) * float2(1.f, -1.f)
+                    * clamp(custom_fov.xy, float2(0.008726867f, 0.008726867f),
+                        float2(114.58865f, 114.58865f))));
+                float custom_e = length(custom_angle);
+                float4 custom_density = float4(0.9851f, 0.9935f, 0.9729f, 0.996f)
+                    * pow(1.f + custom_e / float4(1.058f, 1.035f, 1.084f, 0.9932f), -2.f)
+                    + (1.f - float4(0.9851f, 0.9935f, 0.9729f, 0.996f))
+                    * exp(-custom_e / float4(22.14f, 16.35f, 7.633f, 12.13f));
+                custom_density /= 1.f + custom_e / 41.03f;
+                float custom_vertical = custom_angle.y >= 0.f ? custom_density.y : custom_density.w;
+                float2 custom_squared = custom_angle * custom_angle;
+                float custom_right = custom_squared.x / (custom_angle.x >= 0.f ? custom_density.x : custom_density.z);
+                float custom_left = custom_squared.x / (custom_angle.x >= 0.f ? custom_density.z : custom_density.x);
+                float custom_weight = 0.5f * custom_e * custom_e
+                    * (1.f / (custom_right + custom_squared.y / custom_vertical)
+                       + 1.f / (custom_left + custom_squared.y / custom_vertical));
+                uint custom_sample_weight = max(1u, uint(round(custom_weight * 1024.f)));
+                int custom_bin = int(clamp(floor((log2(max(custom_y709, 1e-6f)) + 16.f) * 2.f), 0.f, 63.f));
+                custom_histogram[custom_bin] += custom_sample_weight;
+                custom_total_weight += custom_sample_weight;
+            }
+        }
+    }
+    if (custom_total_weight == 0u) return;
+    // CUSTOM: Discard 5% of the weighted population at each tail, including
+    // partial boundary bins. This trimming policy is a RenoDX metering choice.
+    uint custom_trim = custom_total_weight / 20u;
+    uint custom_bin_begin = 0u;
+    uint custom_retained_weight = 0u;
+    float custom_log_sum = 0.f;
+    for (int custom_bin = 0; custom_bin < 64; ++custom_bin) {
+        uint custom_bin_end = custom_bin_begin + custom_histogram[custom_bin];
+        uint custom_begin = max(custom_bin_begin, custom_trim);
+        uint custom_end = min(custom_bin_end, custom_total_weight - custom_trim);
+        uint custom_retained = custom_end > custom_begin ? custom_end - custom_begin : 0u;
+        custom_log_sum += (-16.f + (float(custom_bin) + 0.5f) * 0.5f) * float(custom_retained);
+        custom_retained_weight += custom_retained;
+        custom_bin_begin = custom_bin_end;
+    }
+    float custom_log = custom_log_sum / float(custom_retained_weight);
+    float4 custom_previous = ReadAdaptationState();
+    float4 custom_history = imageLoad(custom_adaptation_previous, ivec2(2, 0));
+    bool custom_continuity = custom_previous.w >= 0.f
+        && custom_history.w == PreviousAdaptationGeneration()
+        && all(isfinite(custom_history))
+        && custom_history.y >= 0.f && custom_history.y <= 1.f
+        && custom_adaptation.delta_seconds <= 1.f;
+    float custom_dt = custom_adaptation.delta_seconds > 0.f
+        ? min(custom_adaptation.delta_seconds, 1.f) : 1.f / 60.f;
+    float custom_filtered_log = custom_log;
+    // CUSTOM: RenoDX calibration reset and fixed temporal-controller defaults:
+    // 100 ms target smoothing, 1 s fast, 4.3 s slow, 75/25 log combination.
+    float custom_fast_log = log2(0.18f);
+    float custom_slow_log = custom_fast_log;
+    float custom_bleached = 0.f;
+    if (custom_continuity) {
+        // CUSTOM: History is stored in the controller's log2 domain, including
+        // negative values below one. Avoid exp2-on-write/log2-on-read round trips.
+        custom_filtered_log = lerp(custom_history.x, custom_log,
+            1.f - exp(-custom_dt / 0.1f));
+        custom_fast_log = lerp(custom_previous.y, custom_filtered_log,
+            1.f - exp(-custom_dt / 1.f));
+        float custom_long_tau = 4.3f;
+        if (custom_filtered_log < 0.75f * custom_previous.y + 0.25f * custom_previous.z) {
+            custom_long_tau *= 1.f + 3.f * custom_history.y;
+        }
+        custom_slow_log = lerp(custom_previous.z, custom_filtered_log,
+            1.f - exp(-custom_dt / custom_long_tau));
+
+        // CUSTOM: A virtual scene field drives the pupil and bleaching
+        // estimate, not display-white-scaled output. This is not a calibrated
+        // physical scene-luminance measurement.
+        // CUSTOM: Preserve the field floor in log space; log10(2^x) = x*log10(2).
+        float custom_scene_log = max(custom_log, log2(1e-6f));
+        float custom_scene_field = exp2(custom_scene_log);
+        float custom_pupil = clamp(5.f - 3.f * tanh(0.4f * (custom_scene_log * 0.3010299956639812f - 0.5f)), 2.f, 8.f);
+        float custom_retinal = custom_scene_field * 3.14159265f * 0.25f * custom_pupil * custom_pupil;
+        float custom_bleached_target = custom_retinal / (custom_retinal + 20000.f);
+        float custom_bleaching_tau = custom_bleached_target > custom_history.y ? 1.f : 4.3f;
+        custom_bleached = lerp(custom_history.y, custom_bleached_target,
+            1.f - exp(-custom_dt / custom_bleaching_tau));
+    }
+    float custom_combined = exp2(0.75f * custom_fast_log + 0.25f * custom_slow_log);
+    imageStore(custom_adaptation_next, ivec2(0, 0), float4(custom_combined,
+        custom_fast_log, custom_slow_log, custom_adaptation.generation));
+    // CUSTOM: Pixel 2 is (log2 filtered target, bleached fraction, reserved, generation).
+    imageStore(custom_adaptation_next, ivec2(2, 0), float4(custom_filtered_log,
+        custom_bleached, 0.f, custom_adaptation.generation));
+}
+
+#endif
