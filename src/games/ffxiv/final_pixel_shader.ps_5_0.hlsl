@@ -18,9 +18,12 @@ void main(
     color.rgb = sign(color.rgb) * pow(abs(color.rgb), 2.2f);
     color.a = saturate(color.a);
 
+#ifndef FFXIV_FINAL_SCRGB
     if (injectedData.swapChainOutputPreset == renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_HDR10) {
         color.rgb = renodx::draw::SwapChainPass(color.rgb, texcoord.xy);
-    } else {
+    } else
+#endif
+    {
         // Preserve the original linear scRGB presentation path.
         color.rgb *= injectedData.toneMapUINits / 80.f;
     }
