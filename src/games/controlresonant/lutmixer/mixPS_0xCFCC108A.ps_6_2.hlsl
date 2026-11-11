@@ -86,5 +86,7 @@ float4 main(
   SV_Target.y = _88;
   SV_Target.z = _89;
   SV_Target.w = 1.0f;
+  SV_Target.rgb = CompressLUTMixerOutput(SV_Target.rgb);
+  SV_Target.rgb = ApplyLUTStrength(SV_Target.rgb, SV_Position.xy, 32u);
   return SV_Target;
 }

@@ -95,6 +95,11 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                      .code = __0x551A03A4,
                      .on_drawn = &OnToneMapLutBuilderDrawn,
                  }},  // ToneMap LutBuilder
+    {0x10EC2A6C, {
+                     .crc32 = 0x10EC2A6C,
+                     .code = __0x10EC2A6C,
+                     .on_drawn = &OnToneMapLutBuilderDrawn,
+                 }},  // ToneMap LutBuilder variant
     {0x2339C673, {
                      .crc32 = 0x2339C673,
                      .code = __0x2339C673,

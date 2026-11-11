@@ -17,6 +17,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "pipeline_layouts.hpp"
@@ -84,17 +85,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Customized)", "RenoDX (PsychoV)", "SDR"},
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapHighlightCompression",
-        .binding = &shader_injection.tone_map_highlight_compression,
-        .default_value = 100.f,
-        .label = "Highlight Compression",
-        .section = "Tone Mapping",
-        .tooltip = "Controls how strongly bright parts of the image are compressed. Higher values keep upper midtones and highlights more restrained; lower values make them brighter.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return shader_injection.tone_map_type == 1.f || shader_injection.tone_map_type == 2.f || shader_injection.tone_map_type == 3.f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapGamutClip",
         .binding = &shader_injection.tone_map_gamut_clip,
         .default_value = 100.f,
@@ -103,7 +93,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls the strength of Vanilla+ gamut clipping.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return shader_injection.tone_map_type == 1.f; },
+        .is_visible = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 4.f; },
     },
     // new renodx::utils::settings::Setting{
     //     .key = "UIVisibility",
@@ -211,31 +201,32 @@ renodx::utils::settings::Settings settings = {
         .key = "ColorGradeLUTStrength",
         .binding = &shader_injection.color_grade_lut_strength,
         .default_value = 100.f,
-        .label = "Color Grade Strength",
+        .label = "LUT Strength",
         .section = "Color Grading",
+        .tooltip = "Controls the strength of the game's color grading LUTs.",
+        .min = 0.f,
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeLUTScaling",
-    //     .binding = &shader_injection.color_grade_lut_scaling,
-    //     .default_value = 0.f,
-    //     .label = "LUT Scaling",
-    //     .section = "Color Grading",
-    //     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
-    // new renodx::utils::settings::Setting{
-    //     .key = "FxGrainStrength",
-    //     .binding = &shader_injection.custom_grain_strength,
-    //     .default_value = 50.f,
-    //     .label = "Custom Film Grain",
-    //     .section = "Effects",
-    //     .max = 100.f,
-    //     .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-    //     .parse = [](float value) { return value * 0.02f; },
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "FxGrainType",
+        .binding = &shader_injection.custom_grain_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Film Grain Type",
+        .section = "Effects",
+        .labels = {"Vanilla", "Perceptual"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxGrainStrength",
+        .binding = &shader_injection.custom_grain_strength,
+        .default_value = 50.f,
+        .label = "Film Grain",
+        .section = "Effects",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.custom_grain_type != 0.f; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -340,7 +331,6 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"ToneMapType", 0.f},
-      {"ToneMapHighlightCompression", 0.f},
       {"ToneMapGamutClip", 100.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeHighlightContrast", 50.f},
@@ -352,6 +342,8 @@ void OnPresetOff() {
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeLUTStrength", 100.f},
+      {"FxFilmGrainType", 0.f},
+      {"FxGrainStrength", 50.f},
   });
 }
 
@@ -418,6 +410,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 

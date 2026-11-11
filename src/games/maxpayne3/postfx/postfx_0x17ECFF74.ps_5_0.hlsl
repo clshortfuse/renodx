@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 cbuffer _Globals : register(b4) {
   float4 TransColor : packoffset(c206);
@@ -63,6 +63,6 @@ void main(
   r0.xyz = r1.www ? r0.xyz : 0;
   o0.xyz = r0.xyz + r1.xyz;
 
-  o0.rgb = PostFXScale(o0.rgb);
+  o0 = FinalizePostFX(o0);
   return;
 }
