@@ -546,7 +546,7 @@ void main()
     // No same-frame consumer reads this record and no render-pass barrier is needed.
     if (custom_adaptation.capture_fov == 1.f
         && all(equal(ivec2(gl_FragCoord.xy), ivec2(0, 0))) && gl_SampleID == 0) {
-        imageStore(custom_adaptation_next, ivec2(1, 0), float4(
+        StoreNextAdaptation(ivec2(1, 0), float4(
             c3_1.data[68u], c3_1.data[69u], _287 ? 1.f : 0.f, custom_adaptation.generation));
     }
 }

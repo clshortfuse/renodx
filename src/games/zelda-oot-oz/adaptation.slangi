@@ -13,14 +13,30 @@
 #include "./shared.h"
 
 // CUSTOM: Separate descriptor constants preserve the native 128-byte push limit.
-layout(set = 1, binding = 0, rgba32f) uniform image2D custom_adaptation_previous;
-layout(set = 1, binding = 1, rgba32f) uniform image2D custom_adaptation_next;
+layout(set = 1, binding = 0, rgba32f) uniform image2D custom_adaptation_state0;
+layout(set = 1, binding = 1, rgba32f) uniform image2D custom_adaptation_state1;
 layout(set = 1, binding = 2, scalar) uniform ZeldaAdaptationConfig {
     float delta_seconds;
     float generation;
     float capture_fov;
     float meter_draw;
+    float read_index;
 } custom_adaptation;
+
+// CUSTOM: Immutable descriptors; only the per-draw read/write roles change.
+float4 LoadPreviousAdaptation(ivec2 position) {
+    return custom_adaptation.read_index == 0.f
+        ? imageLoad(custom_adaptation_state0, position)
+        : imageLoad(custom_adaptation_state1, position);
+}
+
+void StoreNextAdaptation(ivec2 position, float4 value) {
+    if (custom_adaptation.read_index == 0.f) {
+        imageStore(custom_adaptation_state1, position, value);
+    } else {
+        imageStore(custom_adaptation_state0, position, value);
+    }
+}
 
 // CUSTOM: Match the CPU counter's wrap without accepting negative seed stamps.
 float PreviousAdaptationGeneration() {
@@ -31,7 +47,7 @@ float PreviousAdaptationGeneration() {
 
 // The meter consumes the previous frame's captured FOV record.
 float4 ReadFovState() {
-    return imageLoad(custom_adaptation_previous, ivec2(1, 0));
+    return LoadPreviousAdaptation(ivec2(1, 0));
 }
 
 bool IsFovStateValid(float4 custom_fov) {
@@ -42,7 +58,7 @@ bool IsFovStateValid(float4 custom_fov) {
 // CUSTOM: Pixel 0 is (linear combined anchor, log2 fast, log2 slow, generation).
 // Both the meter and consumer reject stale state; no same-draw read/write alias.
 float4 ReadAdaptationState() {
-    float4 custom_state = imageLoad(custom_adaptation_previous, ivec2(0, 0));
+    float4 custom_state = LoadPreviousAdaptation(ivec2(0, 0));
     if (custom_state.w != PreviousAdaptationGeneration()
         || !all(isfinite(custom_state)) || custom_state.x <= 0.f) {
         return float4(0.18f, log2(0.18f), log2(0.18f), -1.f);
@@ -122,7 +138,7 @@ void UpdateAdaptation(sampler2D custom_scene, sampler2D custom_bloom, float4 cus
     }
     float custom_log = custom_log_sum / float(custom_retained_weight);
     float4 custom_previous = ReadAdaptationState();
-    float4 custom_history = imageLoad(custom_adaptation_previous, ivec2(2, 0));
+    float4 custom_history = LoadPreviousAdaptation(ivec2(2, 0));
     bool custom_continuity = custom_previous.w >= 0.f
         && custom_history.w == PreviousAdaptationGeneration()
         && all(isfinite(custom_history))
@@ -164,10 +180,10 @@ void UpdateAdaptation(sampler2D custom_scene, sampler2D custom_bloom, float4 cus
             1.f - exp(-custom_dt / custom_bleaching_tau));
     }
     float custom_combined = exp2(0.75f * custom_fast_log + 0.25f * custom_slow_log);
-    imageStore(custom_adaptation_next, ivec2(0, 0), float4(custom_combined,
+    StoreNextAdaptation(ivec2(0, 0), float4(custom_combined,
         custom_fast_log, custom_slow_log, custom_adaptation.generation));
     // CUSTOM: Pixel 2 is (log2 filtered target, bleached fraction, reserved, generation).
-    imageStore(custom_adaptation_next, ivec2(2, 0), float4(custom_filtered_log,
+    StoreNextAdaptation(ivec2(2, 0), float4(custom_filtered_log,
         custom_bleached, 0.f, custom_adaptation.generation));
 }
 

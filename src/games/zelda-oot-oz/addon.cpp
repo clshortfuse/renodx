@@ -33,7 +33,7 @@ std::shared_mutex hdr_swapchains_mutex;
 std::unordered_set<reshade::api::swapchain*> hdr_swapchains;
 
 std::array<float, 2> aa_constants = {1.f, 0.f};
-thread_local std::array<float, 4> adaptation_constants = {};
+thread_local std::array<float, 5> adaptation_constants = {};
 
 struct __declspec(uuid("d17bb4b2-bf65-47d9-ae8e-58b00b86f38d")) AdaptationDeviceData {
   std::shared_mutex mutex;
@@ -105,6 +105,7 @@ bool PrepareAdaptationDraw(reshade::api::command_list* cmd_list, bool meter) {
   std::memcpy(&custom_flags, &shader_injection.custom_flags, sizeof(custom_flags));
   adaptation_constants[0] = data->delta_seconds;
   adaptation_constants[1] = static_cast<float>(data->generation);
+  adaptation_constants[4] = static_cast<float>(data->read_index);
   if (meter && (custom_flags & 16u) != 0u
       && !data->draw_claimed && !data->queue_mismatch && data->views[1].handle != 0u) {
     data->draw_claimed = true;
@@ -608,7 +609,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, [[maybe_unused]] LPVOID re
                 auto* data = cmd_list->get_device()->get_private_data<AdaptationDeviceData>();
                 if (data == nullptr) return reshade::api::resource_view{};
                 std::shared_lock lock(data->mutex);
-                return data->views[data->read_index ^ slot];
+                return data->views[slot];
               },
           });
         }
