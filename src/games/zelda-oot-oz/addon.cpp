@@ -22,7 +22,6 @@
 
 #include "../../mods/shader.hpp"
 #include "../../utils/settings.hpp"
-#include "../../utils/state.hpp"
 #include "./shared.h"
 
 namespace {
@@ -70,8 +69,8 @@ void OnAdaptationInitQueue(reshade::api::command_queue* queue) {
   // Pixel 2 is (log2 filtered target, bleached fraction, reserved, generation).
   // log2(0.18); negative generation stamps still invalidate these initial records.
   std::array<float, 12> seed = {0.18f, -2.473931188332412f, -2.473931188332412f, -1.f,
-                              0.f, 0.f, 0.f, -2.f,
-                              -2.473931188332412f, 0.f, 0.f, -2.f};
+                                0.f, 0.f, 0.f, -2.f,
+                                -2.473931188332412f, 0.f, 0.f, -2.f};
   const reshade::api::subresource_data initial = {.data = seed.data(), .row_pitch = 48u, .slice_pitch = 48u};
   const reshade::api::resource_view_desc view_desc(reshade::api::resource_view_type::texture_2d,
                                                    reshade::api::format::r32g32b32a32_float, 0u, 1u, 0u, 1u);
@@ -143,7 +142,7 @@ void OnAdaptationExecute(reshade::api::command_queue* queue, reshade::api::comma
   }
 }
 
-void OnAdaptationPresent(reshade::api::command_queue* queue, [[maybe_unused]] reshade::api::swapchain* swapchain,
+void OnAdaptationPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain,
                          [[maybe_unused]] const reshade::api::rect* source_rect, [[maybe_unused]] const reshade::api::rect* dest_rect,
                          [[maybe_unused]] uint32_t dirty_rect_count, [[maybe_unused]] const reshade::api::rect* dirty_rects) {
   {
@@ -627,15 +626,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, [[maybe_unused]] LPVOID re
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroyOutputSwapchain);
       reshade::register_event<reshade::addon_event::destroy_device>(OnAdaptationDestroyDevice);
       renodx::utils::resource::Use(reason);
-      renodx::utils::state::use_descriptor_tables = true;
-      renodx::utils::descriptor::trace_heap_views = true;
       renodx::utils::settings::Use(reason, &settings, &OnPresetOff);
       renodx::mods::shader::Use(reason, custom_shaders);
       break;
     }
     case DLL_PROCESS_DETACH:
       if (addon_registered) {
-        renodx::mods::shader::Use(reason, custom_shaders, &shader_injection);
+        renodx::mods::shader::Use(reason, custom_shaders);
         reshade::unregister_event<reshade::addon_event::present>(OnAdaptationPresent);
         reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroyOutputSwapchain);
         reshade::unregister_event<reshade::addon_event::execute_command_list>(OnAdaptationExecute);
