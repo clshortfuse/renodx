@@ -544,7 +544,7 @@ function(build_shader_target ADDON ADDON_PATH)
   if(SHADER_SPVASM_SOURCES)
     set(RENODX_SPIRV_TARGET_ENV "vulkan1.3" CACHE STRING
       "SPIRV-Tools target environment for textual SPIR-V assembly and validation")
-    set(RENODX_SPIRV_VALIDATOR_FLAGS "" CACHE STRING
+    set(RENODX_SPIRV_VALIDATOR_FLAGS "--uniform-buffer-standard-layout" CACHE STRING
       "Additional spirv-val flags for Vulkan features enabled by the target application")
     find_program(SPIRV_AS_BIN NAMES spirv-as.exe spirv-as
       HINTS "${CMAKE_SOURCE_DIR}/bin" "$ENV{VULKAN_SDK}/Bin")
