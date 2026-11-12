@@ -211,23 +211,24 @@ void OnDestroyOutputSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused
   hdr_swapchains.erase(swapchain);
 }
 
+// Guest keys below are FNV-1a64 of bounded original Switch 2 instructions.
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xED732BB7),  // Scene ACES fit and native HDR expansion.
-    CustomShaderEntry(0x09EB4538),  // Gameplay variant with local exposure.
-    CustomShaderEntry(0x0CB15954),  // Native SDR scene, fixed 203/203 PsychoV35 reference.
-    CustomShaderEntry(0x92D6F81D),  // Native HDR output encoder.
-    CustomShaderEntry(0x400192C0),  // Capture the ray scales actually consumed by fog.
-    CustomShaderEntry(0x0258153C),  // New fog body, same observed camera ray scales.
-    CustomShaderEntry(0xA141DF7D),  // AA strength and pre-encoding clamp.
-    CustomShaderEntry(0x8B59FC8F),  // Finite edge-analysis inputs; native work metadata.
-    CustomShaderEntry(0xF8FA1F78),  // Skip unused direction generation at AA0.
-    CustomShaderEntry(0x96CFD4A3),  // New native direction body, same AA-off gate.
-    CustomShaderEntry(0x5EBDBDE6),  // Docked: shader-side linear AA-off path.
-    CustomShaderEntry(0x03979DBE),  // Handheld: same paired linear AA-off path.
-    CustomShaderEntry(0x7C5BB2F5),  // Full-resolution paired linear AA-off path.
-    CustomShaderEntry(0xD1303F9F),  // Native cooperative matrices with paired AA-off/store adapters.
-    CustomShaderEntry(0xECF2108C),  // Docked cooperative-matrix body with the same adapters.
-    CustomShaderEntry(0xA38C7C10),  // Handheld cooperative-matrix body with the same adapters.
+  CustomShaderEntry(0xED732BB7),  // Switch 2: 88DE917DF2385E5F. Scene ACES fit and native HDR expansion.
+    CustomShaderEntry(0x09EB4538),  // Switch 2: 047C7173198BA00A. Gameplay variant with local exposure.
+    CustomShaderEntry(0x0CB15954),  // Switch 2: 1D3239DD29FF4F88. Native SDR scene, fixed 203/203 PsychoV35 reference.
+    CustomShaderEntry(0x92D6F81D),  // Switch 2: 756B22AA4E7E5573. Native HDR output encoder.
+    CustomShaderEntry(0x400192C0),  // Switch 2: 4B2ADCC4D5577ED1. Capture the ray scales actually consumed by fog.
+    CustomShaderEntry(0x0258153C),  // Switch 2: 4B2ADCC4D5577ED1. New fog body, same observed camera ray scales.
+    CustomShaderEntry(0xA141DF7D),  // Switch 2: 558BBC45E0F2E10B. AA strength and pre-encoding clamp.
+    CustomShaderEntry(0x8B59FC8F),  // Switch 2: 8475D671E6967428. Finite edge-analysis inputs; native work metadata.
+    CustomShaderEntry(0xF8FA1F78),  // Switch 2: 9387DB798781F081. Skip unused direction generation at AA0.
+    CustomShaderEntry(0x96CFD4A3),  // Switch 2: 9387DB798781F081. New native direction body, same AA-off gate.
+    CustomShaderEntry(0x5EBDBDE6),  // Switch 2: F48DB7481BE856B9. Docked: shader-side linear AA-off path.
+    CustomShaderEntry(0x03979DBE),  // Switch 2: D8EFD9F0C95ABD80. Handheld: same paired linear AA-off path.
+    CustomShaderEntry(0x7C5BB2F5),  // Switch 2: DA6DF3E54C716DF2. Full-resolution paired linear AA-off path.
+    CustomShaderEntry(0xD1303F9F),  // Switch 2: DA6DF3E54C716DF2. Native cooperative matrices with paired AA-off/store adapters.
+    CustomShaderEntry(0xECF2108C),  // Switch 2: F48DB7481BE856B9. Docked cooperative-matrix body with the same adapters.
+    CustomShaderEntry(0xA38C7C10),  // Switch 2: D8EFD9F0C95ABD80. Handheld cooperative-matrix body with the same adapters.
 };
 
 bool IsPsychoVEnabled() {
@@ -563,12 +564,18 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, [[maybe_unused]] LPVOID re
       custom_shaders.at(0x1AA2E33Au).crc32 = 0x1AA2E33Au;
       // Observed variants with matching finite-input math; native NaN min/max
       // semantics differ, so these reuse our existing replacement policy.
-      for (const auto& [variant, original] : std::array<std::pair<uint32_t, uint32_t>, 5>{
+      for (const auto& [variant, original] : std::array<std::pair<uint32_t, uint32_t>, 11>{
                {{0x59090418u, 0x09EB4538u},
                 {0xAFE7D0DFu, 0xED732BB7u},
                 {0xDC0F0504u, 0x0CB15954u},
                 {0x8758A179u, 0x8B59FC8Fu},
-                {0x72093B9Au, 0xA141DF7Du}}}) {
+            {0x72093B9Au, 0xA141DF7Du},
+            {0x4215C2F2u, 0x09EB4538u},
+            {0xFFEC817Au, 0x8B59FC8Fu},
+            {0x4B2CB17Du, 0x0258153Cu},
+            {0x646D3FBEu, 0xA141DF7Du},
+            {0xE43C7048u, 0x96CFD4A3u},
+            {0xFD02B807u, 0xD1303F9Fu}}}) {
         custom_shaders.emplace(variant, custom_shaders.at(original));
         custom_shaders.at(variant).crc32 = variant;
       }
@@ -576,10 +583,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, [[maybe_unused]] LPVOID re
       custom_shaders.at(0xAFE7D0DFu).on_draw = &OnDrawScene;
       custom_shaders.at(0x09EB4538u).on_draw = &OnDrawScene;
       custom_shaders.at(0x59090418u).on_draw = &OnDrawScene;
+      custom_shaders.at(0x4215C2F2u).on_draw = &OnDrawScene;
       custom_shaders.at(0x0CB15954u).on_draw = &OnDrawScene;
       custom_shaders.at(0xDC0F0504u).on_draw = &OnDrawScene;
       custom_shaders.at(0x400192C0u).on_draw = &OnDrawAdaptationFog;
       custom_shaders.at(0x0258153Cu).on_draw = &OnDrawAdaptationFog;
+      custom_shaders.at(0x4B2CB17Du).on_draw = &OnDrawAdaptationFog;
       for (auto& [hash, shader] : custom_shaders) {
         renodx::utils::shader::QueueCompileTimeReplacement(hash, shader.code);
         shader.views.push_back({
@@ -598,7 +607,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, [[maybe_unused]] LPVOID re
         });
         if (hash != 0xED732BB7u && hash != 0x09EB4538u && hash != 0x0CB15954u
             && hash != 0x59090418u && hash != 0xDC0F0504u && hash != 0xAFE7D0DFu
-            && hash != 0x400192C0u && hash != 0x0258153Cu) continue;
+            && hash != 0x400192C0u && hash != 0x0258153Cu
+            && hash != 0x4215C2F2u && hash != 0x4B2CB17Du) continue;
         for (uint32_t slot = 0u; slot < 2u; ++slot) {
           shader.views.push_back({
               .type = reshade::api::descriptor_type::texture_unordered_access_view,
