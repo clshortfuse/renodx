@@ -26,6 +26,10 @@
 namespace renodx::utils::resource {
 
 static bool use_resource_replace = false;
+// RenoDX never clones or upgrades D3D12 buffers, so their views (and acceleration
+// structures) are only needed by binaries that inspect them. Opt out to keep the
+// per-descriptor bookkeeping off engines that rewrite buffer SRVs every batch.
+static bool use_d3d12_buffer_view_tracking = true;
 
 #define ViewUpgrade(usage, source, destination) \
   {{reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination}
@@ -377,6 +381,7 @@ struct __declspec(uuid("b5fdfd6a-cb13-4523-a499-e3b5e4759665")) SharedData {
   VoidCallbackList on_after_destroy_callbacks;
 
   bool use_resource_replace = false;
+  bool use_d3d12_buffer_view_tracking = false;
 };
 
 static cross_addon::Shared<SharedData> shared;
@@ -1224,6 +1229,43 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
   return PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_info->desc);
 }
 
+inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
+  if (view.handle == 0u) return;
+
+  bool should_run_after_destroy_callbacks = false;
+  reshade::api::resource original_resource = {0u};
+  const auto found = UpdateResourceViewInfo(view, [&](ResourceViewInfo* resource_view_info) {
+    if (resource_view_info->destroyed) {
+      log::w("utils::resource::OnDestroyResourceView(Resource view already destroyed: ",
+             log::AsPtr(view.handle), ")");
+      return;
+    }
+
+    if (resource_view_info->device == nullptr) {
+      resource_view_info->device = device;
+    }
+    original_resource = resource_view_info->original_resource;
+    resource_view_info->destroyed = true;
+    DispatchCallbacks<ResourceViewInfo, &SharedData::on_destroy_resource_view_info_callbacks>(resource_view_info);
+    should_run_after_destroy_callbacks = true;
+    assert(resource_view_info->view.handle != 0u);
+  });
+  if (!found) {
+    log::e("utils::resource::OnDestroyResourceView(Resource view not found for handle: ",
+           log::AsPtr(view.handle), ")");
+    assert(found);
+    return;
+  }
+  if (original_resource.handle != 0u) {
+    UpdateResourceInfo(original_resource, [&](ResourceInfo* resource_info) {
+      resource_info->resource_view_handles.erase(view.handle);
+    });
+  }
+  if (should_run_after_destroy_callbacks) {
+    DispatchAfterDestroyCallbacks();
+  }
+}
+
 inline void OnInitResourceView(
     reshade::api::device* device,
     reshade::api::resource resource,
@@ -1231,6 +1273,22 @@ inline void OnInitResourceView(
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
   if (view.handle == 0u) return;
+
+  if (!shared.data->use_d3d12_buffer_view_tracking
+      && device->get_api() == reshade::api::device_api::d3d12) {
+    switch (desc.type) {
+      case reshade::api::resource_view_type::buffer:
+      case reshade::api::resource_view_type::acceleration_structure:
+        // D3D12 rewrites descriptors in place without a destroy event. Retire the
+        // entry of a previously tracked view so this handle stops resolving to it.
+        if (GetLiveResourceViewInfo(view, [](const ResourceViewInfo&) {})) {
+          OnDestroyResourceView(device, view);
+        }
+        return;
+      default:
+        break;
+    }
+  }
 
   ResourceViewInfo new_data = {
       .device = device,
@@ -1243,18 +1301,30 @@ inline void OnInitResourceView(
   bool has_populated_resource_desc = false;
 
   if (resource.handle != 0u) {
-    const auto found = UpdateResourceInfo(resource, [&](ResourceInfo* resource_info) {
-      resource_info->resource_view_handles.insert(view.handle);
+    const auto copy_resource_info = [&](ResourceInfo* resource_info) {
       new_data.resource_info = resource_info;
-      new_data.usage = NormalizeResourceViewUsage(device, new_data.usage, resource_info->desc);
+      new_data.usage = NormalizeResourceViewUsage(device, usage_type, resource_info->desc);
       new_data.clone_target = resource_info->clone_target;
       new_data.clone_enabled = resource_info->clone_enabled;
       new_data.clone_can_deactivate = resource_info->clone_can_deactivate;
       new_data.is_swap_chain = resource_info->is_swap_chain;
       populated_resource_desc = resource_info->desc;
       has_populated_resource_desc = true;
+    };
+    // Views are often recreated at the same descriptor. Read under the shared
+    // lock and only take the exclusive one to record a new handle.
+    shared.data->resource_infos.if_contains(resource.handle, [&](std::pair<const uint64_t, ResourceInfo>& pair) {
+      auto& [handle, resource_info] = pair;
+      if (!resource_info.resource_view_handles.contains(view.handle)) return;
+      copy_resource_info(&resource_info);
     });
-    if (!found || !has_populated_resource_desc) {
+    if (!has_populated_resource_desc) {
+      UpdateResourceInfo(resource, [&](ResourceInfo* resource_info) {
+        resource_info->resource_view_handles.insert(view.handle);
+        copy_resource_info(resource_info);
+      });
+    }
+    if (!has_populated_resource_desc) {
       populated_resource_desc = device->get_resource_desc(resource);
       has_populated_resource_desc = true;
 #ifdef DEBUG_LEVEL_1
@@ -1304,43 +1374,6 @@ inline void OnInitResourceView(
     *info = new_data;
     DispatchCallbacks<ResourceViewInfo, &SharedData::on_init_resource_view_info_callbacks>(info);
   });
-  if (should_run_after_destroy_callbacks) {
-    DispatchAfterDestroyCallbacks();
-  }
-}
-
-inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
-  if (view.handle == 0u) return;
-
-  bool should_run_after_destroy_callbacks = false;
-  reshade::api::resource original_resource = {0u};
-  const auto found = UpdateResourceViewInfo(view, [&](ResourceViewInfo* resource_view_info) {
-    if (resource_view_info->destroyed) {
-      log::w("utils::resource::OnDestroyResourceView(Resource view already destroyed: ",
-             log::AsPtr(view.handle), ")");
-      return;
-    }
-
-    if (resource_view_info->device == nullptr) {
-      resource_view_info->device = device;
-    }
-    original_resource = resource_view_info->original_resource;
-    resource_view_info->destroyed = true;
-    DispatchCallbacks<ResourceViewInfo, &SharedData::on_destroy_resource_view_info_callbacks>(resource_view_info);
-    should_run_after_destroy_callbacks = true;
-    assert(resource_view_info->view.handle != 0u);
-  });
-  if (!found) {
-    log::e("utils::resource::OnDestroyResourceView(Resource view not found for handle: ",
-           log::AsPtr(view.handle), ")");
-    assert(found);
-    return;
-  }
-  if (original_resource.handle != 0u) {
-    UpdateResourceInfo(original_resource, [&](ResourceInfo* resource_info) {
-      resource_info->resource_view_handles.erase(view.handle);
-    });
-  }
   if (should_run_after_destroy_callbacks) {
     DispatchAfterDestroyCallbacks();
   }
@@ -1700,6 +1733,7 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       const bool registered = shared.RegisterModule([](SharedData& data) {
         data.use_resource_replace = data.use_resource_replace || use_resource_replace;
+        data.use_d3d12_buffer_view_tracking = data.use_d3d12_buffer_view_tracking || use_d3d12_buffer_view_tracking;
       });
       shared.RegisterEvent<reshade::addon_event::update_texture_region>(OnUpdateTextureRegion, use_resource_replace);
 

@@ -497,6 +497,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::swapchain::use_resource_cloning = true;
+      // D3D12 clones are applied by descriptor copy at view creation. The generic
+      // descriptor, barrier and render pass hooks return early on D3D12 but still
+      // make ReShade resolve GPU addresses on every root CBV/SRV/UAV bind.
+      renodx::mods::swapchain::use_resource_cloning_dx12_only = true;
+      // The deferred skinning jobs rewrite buffer SRVs on every worker each batch.
+      renodx::utils::resource::use_d3d12_buffer_view_tracking = false;
 
       // renodx::utils::descriptor::trace_descriptor_tables = true;
       renodx::utils::shader::use_shader_cache = true;
