@@ -1,0 +1,217 @@
+!!ARBvp1.0 OPTION ARB_position_invariant ;
+
+# VPROG_INTERACTION
+#
+# input:
+#
+# attrib[8] TEX0	texture coordinates
+# attrib[9] TEX1	normal
+# attrib[10] TEX2	tangent[0]
+# attrib[11] TEX3	tangent[1]
+# COL			vertex color
+#
+# c[4]	localLightOrigin
+# c[5]	localViewOrigin
+# c[6]	lightProjection S
+# c[7]	lightProjection T
+# c[8]	lightProjection Q
+# c[9]	lightFalloff S
+# c[10]	bumpMatrix S
+# c[11]	bumpMatrix T
+# c[12]	diffuseMatrix S
+# c[13]	diffuseMatrix T
+# c[14]	specularMatrix S
+# c[15]	specularMatrix T
+# c[16]	vertex color modulate
+# c[17]	vertex color add
+#
+# output:
+#
+# texture 0 is the cube map
+# texture 1 is the per-surface bump map
+# texture 2 is the light falloff texture
+# texture 3 is the light projection texture
+# texture 4 is the per-surface diffuse map
+# texture 5 is the per-surface specular map
+# texture 6 is the specular lookup table
+
+TEMP	R0, R1, R2;
+
+PARAM	defaultTexCoord = { 0, 0.5, 0, 1 };
+
+
+# calculate vector to light in R0
+SUB		R0, program.env[4], vertex.position;
+
+# put into texture space for TEX0
+DP3		result.texcoord[0].x, vertex.attrib[9], R0;
+DP3		result.texcoord[0].y, vertex.attrib[10], R0;
+DP3		result.texcoord[0].z, vertex.attrib[11], R0;
+
+# textures 1 takes the base coordinates by the texture matrix
+MOV		result.texcoord[1], defaultTexCoord;
+DP4		result.texcoord[1].x, vertex.attrib[8], program.env[10];
+DP4		result.texcoord[1].y, vertex.attrib[8], program.env[11];
+
+# texture 2 has one texgen
+MOV		result.texcoord[2], defaultTexCoord;
+DP4		result.texcoord[2].x, vertex.position, program.env[9];
+
+# texture 3 has three texgens
+DP4		result.texcoord[3].x, vertex.position, program.env[6];
+DP4		result.texcoord[3].y, vertex.position, program.env[7];
+DP4		result.texcoord[3].w, vertex.position, program.env[8];
+
+# textures 4 takes the base coordinates by the texture matrix
+MOV		result.texcoord[4], defaultTexCoord;
+DP4		result.texcoord[4].x, vertex.attrib[8], program.env[12];
+DP4		result.texcoord[4].y, vertex.attrib[8], program.env[13];
+
+# textures 5 takes the base coordinates by the texture matrix
+MOV		result.texcoord[5], defaultTexCoord;
+DP4		result.texcoord[5].x, vertex.attrib[8], program.env[14];
+DP4		result.texcoord[5].y, vertex.attrib[8], program.env[15];
+
+# texture 6's texcoords will be the halfangle in texture space
+
+# calculate normalized vector to light in R0
+SUB		R0, program.env[4], vertex.position;
+DP3		R1, R0, R0;
+RSQ		R1, R1.x;
+MUL		R0, R0, R1.x;
+
+# calculate normalized vector to viewer in R1
+SUB		R1, program.env[5], vertex.position;
+DP3		R2, R1, R1;
+RSQ		R2, R2.x;
+MUL		R1, R1, R2.x;
+
+# add together to become the half angle vector in object space (non-normalized)
+ADD		R0, R0, R1;
+
+# put into texture space
+DP3		result.texcoord[6].x, vertex.attrib[9], R0;
+DP3		result.texcoord[6].y, vertex.attrib[10], R0;
+DP3		result.texcoord[6].z, vertex.attrib[11], R0;
+
+# generate the vertex color, which can be 1.0, color, or 1.0 - color
+# for 1.0 : env[16] = 0, env[17] = 1
+# for color : env[16] = 1, env[17] = 0
+# for 1.0-color : env[16] = -1, env[17] = 1
+MAD		result.color, vertex.color, program.env[16], program.env[17];
+
+END
+
+
+#======================================================================
+
+!!ARBfp1.0
+OPTION ARB_precision_hint_fastest;
+
+# nodhewm3gammahack -- custom gamma tail preserves HDR range
+TEMP renodxResult;
+
+# texture 0 is the cube map
+# texture 1 is the per-surface bump map
+# texture 2 is the light falloff texture
+# texture 3 is the light projection texture
+# texture 4 is the per-surface diffuse map
+# texture 5 is the per-surface specular map
+# texture 6 is the specular lookup table
+
+# env[0] is the diffuse modifier
+# env[1] is the specular modifier
+
+TEMP	light, color, R1, R2, localNormal, specular;
+
+PARAM	subOne = { -1, -1, -1, -1 };
+PARAM	scaleTwo = { 2, 2, 2, 2 };
+
+# load the specular half angle first, because
+# the ATI shader gives a "too many indirections" error
+# if this is done right before the texture indirection
+
+#-----------------
+#TEX	specular, fragment.texcoord[6], texture[0], CUBE;
+#MAD	specular, specular, scaleTwo, subOne;
+
+
+# instead of using the normalization cube map, normalize with math
+DP3		specular, fragment.texcoord[6],fragment.texcoord[6];
+RSQ		specular, specular.x;
+MUL		specular, specular.x, fragment.texcoord[6];
+#-----------------
+
+
+#
+# the amount of light contacting the fragment is the
+# product of the two light projections and the surface
+# bump mapping
+#
+
+# perform the diffuse bump mapping
+
+#-----------------
+TEX	light, fragment.texcoord[0], texture[0], CUBE;
+MAD	light, light, scaleTwo, subOne;
+
+# instead of using the normalization cube map, normalize with math
+#DP3		light, fragment.texcoord[0],fragment.texcoord[0];
+#RSQ		light, light.x;
+#MUL		light, light.x, fragment.texcoord[0];
+#-----------------
+
+TEX	localNormal, fragment.texcoord[1], texture[1], 2D;
+MOV localNormal.x, localNormal.a;
+MAD	localNormal, localNormal, scaleTwo, subOne;
+DP3	light, light, localNormal;
+
+# modulate by the light projection
+TXP	R1, fragment.texcoord[3], texture[3], 2D;
+MUL	light, light, R1;
+
+# modulate by the light falloff
+TXP	R1, fragment.texcoord[2], texture[2], 2D;
+MUL	light, light, R1;
+
+#
+# the light will be modulated by the diffuse and
+# specular surface characteristics
+#
+
+# modulate by the diffuse map and constant diffuse factor
+TEX	R1, fragment.texcoord[4], texture[4], 2D;
+MUL	color, R1, program.env[0];
+
+# perform the specular bump mapping
+DP3	specular, specular, localNormal;
+
+# perform a dependent table read for the specular falloff
+TEX	R1, specular, texture[6], 2D;
+
+# modulate by the constant specular factor
+MUL	R1, R1, program.env[1];
+
+# modulate by the specular map * 2
+TEX	R2, fragment.texcoord[5], texture[5], 2D;
+ADD	R2, R2, R2;
+MAD	color, R1, R2, color;
+
+
+MUL	color, light, color;
+
+# modify by the vertex color
+
+MUL renodxResult, color, fragment.color;
+
+# this should be better on future hardware, but current drivers make it slower
+#MUL renodxResult.xyz, color, fragment.color;
+
+
+MUL renodxResult.xyz, program.env[21], renodxResult;
+MAX renodxResult.xyz, renodxResult, 0.0;
+POW result.color.x, renodxResult.x, program.env[21].w;
+POW result.color.y, renodxResult.y, program.env[21].w;
+POW result.color.z, renodxResult.z, program.env[21].w;
+MOV result.color.w, renodxResult.w;
+END
