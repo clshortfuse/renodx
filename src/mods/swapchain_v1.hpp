@@ -3501,6 +3501,8 @@ inline void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
+  if (utils::swapchain::ShouldSkipVREyeSubmission(swapchain, dest_rect)) return;
+
   auto* device = swapchain->get_device();
 
   if (use_device_proxy && device != proxy_device_reshade) {
