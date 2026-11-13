@@ -9,6 +9,7 @@
 #include "../utils/path.hpp"
 #include "../utils/shader_compiler_directx.hpp"
 #include "../utils/shader_decompiler_dxc.hpp"
+#include "../utils/shader_decompiler/semantic_labels.hpp"
 
 int main(int argc, char** argv) {
   std::span<char*> arguments = {argv, argv + argc};
@@ -20,8 +21,20 @@ int main(int argc, char** argv) {
   }
 
   if (paths.size() < 1) {
-    std::cerr << "USAGE: decomp.exe {cso} [{hlsl}] [--flatten] [-f] [--skip-existing] [-s] [--use-do-while]\n";
+    std::cerr << "USAGE: decomp.exe {cso} [{hlsl}] [options]\n";
     std::cerr << "  Creates {hlsl} from the contents of {cso}\n";
+    std::cerr << "\n";
+    std::cerr << "Options:\n";
+    std::cerr << "  --flatten, -f        Optimize/inline expressions\n";
+    std::cerr << "  --use-do-while       Use do-while convergence wrappers\n";
+    std::cerr << "  --stackify           Recursive if/else nesting with phi_sel\n";
+    std::cerr << "  --structural         ShortFuse structural analysis (RECOMMENDED)\n";
+    std::cerr << "  --mermaid-decompile  Condition-based flat guarded emission\n";
+    std::cerr << "  --mermaid            Output Mermaid flowchart instead of HLSL\n";
+    std::cerr << "  --annotate           Add block boundary and condition comments to output\n";
+    std::cerr << "  --annotate-mermaid   Add full graph IR dump (nodes, edges, phi assignments)\n";
+    std::cerr << "  --semantic-labels    Add semantic labels as inline comments\n";
+    std::cerr << "  --skip-existing, -s  Skip if output file exists\n";
     return EXIT_FAILURE;
   }
 
@@ -49,13 +62,49 @@ int main(int argc, char** argv) {
     bool use_do_while = std::ranges::any_of(arguments, [](const std::string& argument) {
       return (argument == "--use-do-while");
     });
+    bool stackify = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--stackify");
+    });
+    bool structural = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--structural");
+    });
+    bool annotate = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--annotate");
+    });
+    bool annotate_mermaid = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--annotate-mermaid");
+    });
+    bool mermaid = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--mermaid");
+    });
+    bool mermaid_decompile = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--mermaid-decompile");
+    });
+    bool no_single_use_inline = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--no-inline");
+    });
+    bool semantic_labels = std::ranges::any_of(arguments, [](const std::string& argument) {
+      return (argument == "--semantic-labels");
+    });
     std::string decompilation = decompiler.Decompile(disassembly, {
                                                                       .flatten = flatten,
                                                                       .use_do_while = use_do_while,
+                                                                      .stackify = stackify,
+                                                                      .structural = structural,
+                                                                      .mermaid = mermaid,
+                                                                      .annotate = annotate,
+                                                                      .annotate_mermaid = annotate_mermaid,
+                                                                      .mermaid_decompile = mermaid_decompile,
+                                                                      .no_single_use_inline = no_single_use_inline,
                                                                   });
 
     if (decompilation.empty()) {
       return EXIT_FAILURE;
+    }
+
+    // Apply semantic labeling post-pass if requested
+    if (semantic_labels) {
+      decompilation = renodx::utils::shader::decompiler::SemanticLabeler::Label(decompilation);
     }
 
     std::string output;
