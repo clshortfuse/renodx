@@ -1,0 +1,65 @@
+# Dragon Age: The Veilguard
+
+Frostbite (2024), D3D12, Steam app `1845910`, `Dragon Age The Veilguard.exe`.
+
+The game outputs HDR10 natively: with in-game HDR on, the swapchain is `r10g10b10a2_unorm` and the final pass writes BT.2020 PQ. The mod replaces only that final pass (`0x4564BB42`, `ps_5_0`). It needs no swapchain or resource upgrade.
+
+## How it works
+
+The final pass composites the UI layer over the graded scene in linear light, applies Frostbite's display-mapping LUT (t9), and PQ-encodes with a ±1/127 dither.
+
+| Tone Mapper | Behavior |
+|---|---|
+| Vanilla | The original path, including the display-mapping LUT, accessibility and watermark blocks. |
+| None, ACES, RenoDRT | Tone maps the graded scene to Peak Brightness with Game Brightness as paper white, then composites the UI at UI Brightness. |
+
+The default Tone Mapper is RenoDRT (Peak Brightness 1000, Game Brightness 105): it keeps the original look, with Gamma Correction Off the measured midtones and shadows match the original (median 6.5 nits against 6.1 for Vanilla, Minrathous at night, HDR on) while highlights follow Peak Brightness, and saturated glows keep their hue (on a Solas cutscene frame 0.01% of pixels end near white against 1.76% with ACES). **Preset Off restores Vanilla**. **ACES** adds contrast: on a gray ramp it maps 0.18 to the same 18.9 nits as Vanilla, but 0.01 to 0.11 nits (Vanilla 1.12) and 1.0 to 162 nits (Vanilla 104), so dark scenes lose median brightness (median 3.3 nits against 6.3 for RenoDRT, black floor p1 0.004 against 0.18) and strong coloured glows turn whiter.
+
+Settings are injected as `b13` in space 0 (`shared.h`). `addon.cpp` sets `expected_constant_buffer_index = 13` because the shader is SM5.0 DXBC; with the default index RenoDX would inject at the first free slot of each root signature and the shader would read zeros. The game's root signatures already have root constants, hence `allow_multiple_push_constants`.
+
+Keep **Gamma Correction** on Off: the scene is already linear HDR, so 2.2 darkens midtones and shadows.
+
+## Shader variants
+
+The game has several variants of the final output pass (`ps_5_0`). The mod replaces the five that write HDR10 PQ. The Render Scale slider decides whether the scene is read directly (100%) or resampled (below 100%), and DLSS Frame Generation decides whether the pass has one render target or two:
+
+| Hash | When | Scene input |
+|---|---|---|
+| `0x4564BB42` | Render scale 100% (DLSS, FSR, XeSS and no upscaler, seen in the main menu) | `r11g11b10_float`, read directly |
+| `0x3998EA61` | Render scale below 100% (seen with DLSS Ultra Performance at 66%) | `r10g10b10a2` with packed half-float bits, resampled with a 4x4 Lanczos filter |
+| `0x23DC66B2` | Render scale 100% with DLSS Frame Generation on | `r11g11b10_float`, read directly; two render targets, final image with the UI and the same image without it |
+| `0x22E9F0A5` | Render scale other than 100% with DLSS Frame Generation on (seen at 66%, 88% and 113%) | Same as `0x3998EA61`, with two render targets: the final image with the UI, and the same image without the UI (the HUD-less buffer frame generation reads). Both go through the mod's tone mapping |
+| `0xE779DCD3` | Render scale below 100% with DLSS Frame Generation on (seen at 70% and 85%, DLSS Ultra Performance) | Packed `r10g10b10a2` like `0x22E9F0A5`, but read with the bilinear sampler and no Lanczos weights (t2 is not bound); two render targets |
+
+All share the same tail (`common.hlsli`): UI composite, accessibility, display-mapping LUT, BT.2020 PQ and dither. Left untouched: the SDR variants (HDR off: the swapchain stays `r10g10b10a2_unorm` and its colour space becomes `srgb_nonlinear`; the final pass is `0x4E55D462` with frame generation off and `0xC3F9BEE9`, also with two render targets, with it on; the mod stays inert, so the game looks vanilla) and three scRGB variants (`0xA0D84CD4`, `0xAA75CF5D`, `0xD45D81E7`) that were not drawn in any case tested. Seen in a DevKit snapshot of the main menu only; gameplay, photo mode, cinematics and pre-rendered video were not traced. With HDR off or an scRGB swapchain the game stays vanilla.
+
+## Observed pipeline (main menu, HDR on)
+
+| Draw | PS | RTV | Role |
+|---|---|---|---|
+| 1274 | `0x1600E7FD` | `r11g11b10_float` | Scene post and grading: bloom, post-exposure, vignette, grading LUT, film grain. No clamp. |
+| 1280–1288 | `0x405625E7`, `0x681D932B`, `0xBD61BD66` | UI layer `r8g8b8a8_unorm_srgb` | UI, premultiplied alpha. |
+| 1291 | `0x4564BB42` | `r10g10b10a2_unorm` | Final output: scene + UI, display mapping, BT.2020 PQ, dither. Replaced by this mod. |
+| 1292 | — | swapchain | Present copy. |
+
+The scene is HDR before this pass (peaks near 181 linear in the menu). Vanilla display mapping is near-linear at about 100 nits per unit and rolls off above roughly 3000 nits.
+
+## Build
+
+```powershell
+cmake --preset clang-x64
+cmake --build --preset clang-x64-debug --target dragonage_veilguard
+```
+
+Output: `build/Debug/renodx-dragonage_veilguard.addon64`. Copy it next to ReShade (with add-on support) in the game folder.
+
+## Manual verification
+
+- [x] `ReShade.log` loads `RenoDX` and shows `cbvIndex:13` in `OnInitPipelineLayout` (12 layouts).
+- [x] Tone Mapper "Vanilla" matches a vanilla screenshot of the same scene (main menu, three ReShade HDR screenshots each: median 3.48 to 3.50 against 3.46 to 3.50 nits, black p1 0.543 to 0.549 against 0.548 to 0.555; the menu is animated, so peaks vary between frames, 4.0 to 4.8k against 4.4 to 4.9k nits; not bit for bit).
+- [x] None, ACES and RenoDRT change the image; Peak Brightness moves the highlight peak.
+- [x] With Gamma Correction Off, RenoDRT keeps vanilla midtones and shadows.
+- [x] The HUD follows UI Brightness (Minrathous, quest text: p99 171 nits at UI Brightness 203 and 339 at 404, a 1.99 ratio for a 1.99 setting ratio). Subtitles and the ability wheel were not checked.
+- [ ] Pre-rendered video and in-engine cinematics: no clipping.
+- [x] DLSS, FSR, XeSS and no upscaler each use a replaced pass (DevKit snapshots of the main menu; TAA is not an option in the game), and switching the Upsample Method in the game's settings between DLSS, XeSS, None and FSR works with the mod loaded. The mod does not inject into the compute root signatures with descriptor tables of three or more ranges that the game creates at the switch; injecting there ended in a GPU device-removed error.
+- [x] The mod works without the DevKit addon loaded (only `RenoDX` registered in `ReShade.log`; ACES peak 904 to 968 nits against about 4000 to 5000 for Vanilla).
