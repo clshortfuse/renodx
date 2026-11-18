@@ -1,0 +1,9 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "fatalframeII",
+  "title": "Fatal Frame II",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "stable"
+}
