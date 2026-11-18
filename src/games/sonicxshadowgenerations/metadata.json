@@ -1,0 +1,14 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "sonicxshadowgenerations",
+  "title": "Sonic X Shadow Generations",
+  "status": "experimental",
+  "compatibility": "unknown",
+  "summary": "Development scaffold; HDR support has not been established.",
+  "deploy": {
+    "steam_appid": 2513280,
+    "game_exe": "SONIC_X_SHADOW_GENERATIONS.exe",
+    "api": "d3d11",
+    "architecture": ["x64"]
+  }
+}
