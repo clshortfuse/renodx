@@ -1,0 +1,14 @@
+{
+  "dump_shaders": true,
+  "replace_shaders": false,
+  "hdr_proxy": false,
+  "redirect_default_framebuffer": false,
+  "steam_vulkan_workaround": true,
+  "replacements": {},
+  "fixed_function": {
+    "enabled": false,
+    "fragment_shader": "",
+    "unclamp_vertex_color": false,
+    "unclamp_fragment_color": false
+  }
+}

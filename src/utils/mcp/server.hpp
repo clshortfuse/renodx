@@ -34,6 +34,7 @@ struct ServerConfig {
   std::string instructions;
   std::uint32_t transport_max_instances = 4u;
   std::optional<std::wstring> transport_security_descriptor_sddl = std::wstring(utils::ipc::DEFAULT_LOCAL_PIPE_RW_SECURITY_DESCRIPTOR_SDDL);
+  std::function<void(std::string_view)> transport_log_handler;
 };
 
 class Server {
@@ -56,6 +57,7 @@ class Server {
                                       .pipe_name = config.pipe_name,
                                       .max_instances = config.transport_max_instances,
                                       .security_descriptor_sddl = config.transport_security_descriptor_sddl,
+                                      .log_handler = config.transport_log_handler,
                                   },
                                   [this](const utils::ipc::Message& message, utils::ipc::Server& transport) {
                                     HandleTransportMessage(message, transport);

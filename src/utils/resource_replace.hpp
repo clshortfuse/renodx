@@ -158,13 +158,8 @@ inline std::uint32_t GetEffectiveSlicePitch(
     const reshade::api::resource_desc& destination_desc,
     const reshade::api::subresource_data& source_data,
     std::uint32_t subresource) {
-  const auto levels = std::max<std::uint32_t>(destination_desc.texture.levels, 1u);
-  const auto level = subresource % levels;
-  const auto height = std::max<std::uint32_t>(destination_desc.texture.height >> level, 1u);
-  const auto row_pitch = GetEffectiveRowPitch(destination_desc, source_data, subresource);
-  return source_data.slice_pitch != 0u
-             ? source_data.slice_pitch
-             : reshade::api::format_slice_pitch(destination_desc.texture.format, row_pitch, height);
+  const auto layout = texture_upload::GetLayout(destination_desc, source_data, subresource);
+  return layout ? layout->read_extent : 0u;
 }
 
 template <typename T>
@@ -422,13 +417,14 @@ inline std::uint64_t RecordObservation(
     return 0u;
   }
 
-  const auto row_pitch = GetEffectiveRowPitch(destination_desc, source_data, context.dest_subresource);
-  const auto slice_pitch = GetEffectiveSlicePitch(destination_desc, source_data, context.dest_subresource);
-  if (row_pitch == 0u || slice_pitch == 0u) return 0u;
-
+  const auto layout = texture_upload::GetLayout(destination_desc, source_data, context.dest_subresource);
+  if (!layout) return 0u;
+  // Samples and CRCs use packed logical rows; ignore padding and slice_pitch.
+  const auto row_pitch = layout->row_bytes;
+  const auto slice_pitch = layout->packed_size;
   const auto source_size = static_cast<std::uint64_t>(slice_pitch);
   const auto* bytes = static_cast<const std::uint8_t*>(source_data.data);
-  const auto crc32 = renodx::utils::hash::ComputeCRC32(bytes, static_cast<std::size_t>(source_size));
+  const auto crc32 = texture_upload::ComputeCRC32(bytes, *layout);
 
   std::unique_lock lock(device_data->mutex);
   const auto existing = FindObservationIndex(
@@ -476,7 +472,11 @@ inline std::uint64_t RecordObservation(
       .has_sample = false,
   };
   if (source_size <= MAX_CAPTURE_BYTES) {
-    item.sample_bytes.assign(bytes, bytes + static_cast<std::size_t>(source_size));
+    item.sample_bytes.resize(static_cast<std::size_t>(source_size));
+    for (uint32_t row = 0; row < layout->rows; ++row) {
+      std::copy_n(bytes + static_cast<std::size_t>(row) * layout->row_pitch,
+          layout->row_bytes, item.sample_bytes.data() + static_cast<std::size_t>(row) * layout->row_bytes);
+    }
     item.has_sample = true;
   }
   const auto observation_id = item.id;

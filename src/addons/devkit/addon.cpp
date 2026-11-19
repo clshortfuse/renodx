@@ -1609,15 +1609,10 @@ void RenderTextureReplaceabilityCell(
   if (destination_desc.texture.depth_or_layers != 1u) return false;
   if (source_data.data == nullptr) return false;
 
-  const auto source_slice_pitch = renodx::utils::resource::replace::GetEffectiveSlicePitch(
-      destination_desc,
-      source_data,
-      context.dest_subresource);
-  if (source_slice_pitch == 0u) return false;
-
-  const auto crc32 = renodx::utils::hash::ComputeCRC32(
-      static_cast<const std::uint8_t*>(source_data.data),
-      source_slice_pitch);
+  const auto upload_layout = renodx::utils::texture_upload::GetLayout(
+      destination_desc, source_data, context.dest_subresource);
+  if (!upload_layout) return false;
+  const auto crc32 = renodx::utils::texture_upload::ComputeCRC32(source_data.data, *upload_layout);
   const auto format_name = StreamToString(destination_desc.texture.format);
   const auto boot_key = BuildTextureReplacementSuffixKey(
       format_name,
@@ -9327,7 +9322,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      // while (IsDebuggerPresent() == 0) Sleep(100);
+     //while (IsDebuggerPresent() == 0) Sleep(100);
 
       if (!initialized) {
         renodx::utils::shader::use_replace_async = true;

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "CODWAW",
+  "title": "Call of Duty: World at War",
+  "status": "experimental",
+  "deploy": {
+    "architecture": [
+      "x86"
+    ]
+  }
+}

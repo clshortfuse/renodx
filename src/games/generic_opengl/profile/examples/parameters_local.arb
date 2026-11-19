@@ -1,0 +1,6 @@
+!!ARBfp1.0
+# Teaching template: exposure multiplier in local[80].x; preserve alpha.
+# Use program.env[80] instead when arb_mode is "env".
+MUL result.color.xyz, fragment.color, program.local[80].x;
+MOV result.color.w, fragment.color.w;
+END

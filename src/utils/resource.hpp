@@ -21,6 +21,7 @@
 #include "../utils/cross_addon.hpp"
 #include "../utils/format.hpp"
 #include "../utils/hash.hpp"
+#include "./texture_upload.hpp"
 #include "../utils/log.hpp"
 
 namespace renodx::utils::resource {
@@ -910,18 +911,15 @@ inline std::optional<ResourceUploadSignature> BuildUploadSignature(
   const auto width = std::max<uint32_t>(desc.texture.width >> level, 1u);
   const auto height = std::max<uint32_t>(desc.texture.height >> level, 1u);
   const auto depth_or_layers = 1u;
-  const auto row_pitch = data.row_pitch != 0u
-                             ? data.row_pitch
-                             : reshade::api::format_row_pitch(desc.texture.format, width);
-  const auto slice_pitch = data.slice_pitch != 0u
-                               ? data.slice_pitch
-                               : reshade::api::format_slice_pitch(desc.texture.format, row_pitch, height);
-  if (slice_pitch == 0u) return std::nullopt;
+  const auto upload_layout = texture_upload::GetLayout(desc, data, subresource);
+  if (!upload_layout) return std::nullopt;
+  const auto row_pitch = upload_layout->row_pitch;
+  const auto slice_pitch = upload_layout->read_extent;
 
   return ResourceUploadSignature{
       .source = source,
       .subresource = subresource,
-      .crc32 = utils::hash::ComputeCRC32(static_cast<const uint8_t*>(data.data), slice_pitch),
+      .crc32 = texture_upload::ComputeCRC32(data.data, *upload_layout),
       .format = desc.texture.format,
       .width = width,
       .height = height,

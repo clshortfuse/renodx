@@ -56,3 +56,10 @@ __pycache__/
 .test/
 .venv-analysis/
 tmp/*
+
+# Local handover notes and recovery files
+*.lnk
+*.bak
+/AI_HANDOFF.md
+/AI_KICKOFF_PROMPT.md
+/.agents/skills/renodx-context-handoff/
