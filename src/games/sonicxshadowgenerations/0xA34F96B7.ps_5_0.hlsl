@@ -1,5 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Wed Nov 18 12:36:00 2026
 
+#include "./shared.h"
+
 cbuffer cbDynamicFactor : register(b10)
 {
   float4 u_blur_factor[2] : packoffset(c0);
@@ -13,6 +15,25 @@ Texture2D<float4> s_Source : register(t0);
 Texture2D<float4> s_Velocity : register(t1);
 Texture2D<float4> s_TileNeighbourMaxVelocity : register(t2);
 Texture2D<float4> s_DepthBuffer : register(t3);
+Texture2D<float4> s_FullResSource : register(t4);
+
+// Source color at a full-res position. Vanilla: half-res Load. Improved: full-res Load when bound, else bilinear half-res.
+float3 SampleSource(float2 full_pos) {
+  if (shader_injection.fx_motion_blur > 1.5) {
+    if (shader_injection.fx_motion_blur_full_res > 0.5) {
+      return s_FullResSource.Load(int3(int2(full_pos), 0)).xyz;
+    }
+    float2 p = full_pos * 0.5 - 0.5;
+    float2 i = floor(p);
+    float2 f = p - i;
+    int2 t0 = max(int2(i), int2(0, 0));
+    int2 t1 = max(int2(i) + int2(1, 1), int2(0, 0));
+    float3 top = lerp(s_Source.Load(int3(t0, 0)).xyz, s_Source.Load(int3(t1.x, t0.y, 0)).xyz, f.x);
+    float3 bottom = lerp(s_Source.Load(int3(t0.x, t1.y, 0)).xyz, s_Source.Load(int3(t1, 0)).xyz, f.x);
+    return lerp(top, bottom, f.y);
+  }
+  return s_Source.Load(int3(int2(full_pos * 0.5), 0)).xyz;
+}
 
 
 // 3Dmigoto declarations
@@ -28,6 +49,8 @@ void main(
   float4 r0,r1,r2,r3,r4,r5,r6,r7,r8;
   uint4 bitmask, uiDest;
   float4 fDest;
+
+  float sample_count = (shader_injection.fx_motion_blur > 1.5) ? max(4.0, shader_injection.fx_motion_blur_samples) : u_blur_factor[1].y;
 
   r0.xy = float2(0.0500000007,0.0500000007) * v0.xy;
   r0.zw = v0.xy * float2(0.000231481477,0.000231481477) + float2(0.25,0);
@@ -64,7 +87,7 @@ void main(
   r1.zw = float2(0,0);
   r0.xyw = s_TileNeighbourMaxVelocity.Load(r1.xyz).xyz;
   r0.xy = float2(-0.5,-0.5) + r0.xy;
-  r1.xy = float2(40,40) * r0.xy;
+  r1.xy = float2(40,40) * shader_injection.fx_motion_blur_strength * r0.xy;
   r1.z = dot(r1.xy, r1.xy);
   r1.z = sqrt(r1.z);
   r1.w = cmp(0.515625 >= r1.z);
@@ -80,7 +103,7 @@ void main(
     r3.xy = (int2)v0.xy;
     r3.zw = float2(0,0);
     r2.zw = s_Velocity.Load(r3.xyz).xy;
-    r2.zw = u_blur_factor[1].xx * r2.zw;
+    r2.zw = u_blur_factor[1].xx * shader_injection.fx_motion_blur_strength * r2.zw;
     r0.w = dot(r2.zw, r2.zw);
     r0.w = sqrt(r0.w);
     r1.w = min(20, r0.w);
@@ -99,9 +122,9 @@ void main(
     r3.xy = r3.xy + -r2.xy;
     r2.xy = r3.zz * r3.xy + r2.xy;
     r0.w = u_blur_factor[0].x * r0.w;
-    r0.w = u_blur_factor[1].y / r0.w;
-    r3.x = 1 + u_blur_factor[1].y;
-    r3.yz = r0.xy * float2(40,40) + -r2.zw;
+    r0.w = sample_count / r0.w;
+    r3.x = 1 + sample_count;
+    r3.yz = r0.xy * float2(40,40) * shader_injection.fx_motion_blur_strength + -r2.zw;
     r1.w = max(9.99999975e-006, r1.w);
     r4.zw = float2(0,0);
     r5.zw = float2(0,0);
@@ -109,7 +132,7 @@ void main(
     r6.xyzw = float4(0,0,0,0);
     while (true) {
       r7.x = (int)r6.w;
-      r7.y = cmp(r7.x >= u_blur_factor[1].y);
+      r7.y = cmp(r7.x >= sample_count);
       if (r7.y != 0) break;
       r7.x = r0.z * 0.732857168 + r7.x;
       r7.x = 1 + r7.x;
@@ -122,7 +145,7 @@ void main(
       r8.xy = r7.xx * r7.yz + v0.xy;
       r4.xy = (int2)r8.xy;
       r4.xy = s_Velocity.Load(r4.xyz).xy;
-      r4.xy = u_blur_factor[1].xx * r4.xy;
+      r4.xy = u_blur_factor[1].xx * shader_injection.fx_motion_blur_strength * r4.xy;
       r7.x = dot(r4.xy, r4.xy);
       r7.x = sqrt(r7.x);
       r8.z = min(20, r7.x);
@@ -133,9 +156,7 @@ void main(
       r7.x = dot(r4.xy, r4.xy);
       r7.x = sqrt(r7.x);
       r4.xy = r4.xy / r7.xx;
-      r8.xy = float2(0.5,0.5) * r8.xy;
-      r5.xy = (int2)r8.xy;
-      r8.xyz = s_Source.Load(r5.xyz).xyz;
+      r8.xyz = SampleSource(r8.xy);
       r5.x = dot(r2.xy, r7.yz);
       r4.x = dot(r4.xy, r7.yz);
       r4.y = -0.5 + r7.x;
@@ -197,9 +218,9 @@ void main(
     r2.zw = r2.zw + -r1.xy;
     r1.xy = r3.yy * r2.zw + r1.xy;
     r1.w = u_blur_factor[0].x * r1.w;
-    r1.w = u_blur_factor[1].y / r1.w;
-    r2.z = 1 + u_blur_factor[1].y;
-    r0.xy = r0.xy * float2(40,40) + -r2.xy;
+    r1.w = sample_count / r1.w;
+    r2.z = 1 + sample_count;
+    r0.xy = r0.xy * float2(40,40) * shader_injection.fx_motion_blur_strength + -r2.xy;
     r2.w = max(9.99999975e-006, r3.x);
     r3.zw = float2(0,0);
     r4.zw = float2(0,0);
@@ -207,7 +228,7 @@ void main(
     r6.x = 0;
     while (true) {
       r6.y = (int)r6.x;
-      r6.z = cmp(r6.y >= u_blur_factor[1].y);
+      r6.z = cmp(r6.y >= sample_count);
       if (r6.z != 0) break;
       r6.y = r0.z * 0.732857168 + r6.y;
       r6.y = 1 + r6.y;
@@ -220,7 +241,7 @@ void main(
       r7.yz = r6.yy * r6.zw + v0.xy;
       r3.xy = (int2)r7.yz;
       r8.xy = s_Velocity.Load(r3.xyw).xy;
-      r8.xy = u_blur_factor[1].xx * r8.xy;
+      r8.xy = u_blur_factor[1].xx * shader_injection.fx_motion_blur_strength * r8.xy;
       r6.y = dot(r8.xy, r8.xy);
       r6.y = sqrt(r6.y);
       r7.w = min(20, r6.y);
@@ -231,9 +252,7 @@ void main(
       r6.y = dot(r8.xy, r8.xy);
       r6.y = sqrt(r6.y);
       r8.xy = r8.xy / r6.yy;
-      r7.yz = float2(0.5,0.5) * r7.yz;
-      r4.xy = (int2)r7.yz;
-      r7.yzw = s_Source.Load(r4.xyz).xyz;
+      r7.yzw = SampleSource(r7.yz);
       r3.x = s_DepthBuffer.Load(r3.xyz).x;
       r3.x = r3.x * u_view_param.w + -u_view_param.z;
       r3.x = -u_view_param.x / r3.x;

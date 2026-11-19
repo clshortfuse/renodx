@@ -12,7 +12,6 @@ struct ShaderInjectData {
   float tone_map_shadows;
   float tone_map_contrast;
   float tone_map_saturation;
-  float tone_map_hue_correction;
   float tone_map_hue_processor;
   float custom_flip_uv_y;
   float custom_rcas;
@@ -23,14 +22,32 @@ struct ShaderInjectData {
   float bloom_luminance_valid;
   float fx_bloom_haze;
   float bloom_target_level;
-  float tone_map_highlight_saturation;
+  // Preserve offsets for live shader replacement against the existing addon.
+  float reserved_per_channel_hue;
+  float reserved_per_channel_chrominance;
+  float tone_map_scene_hue_influence;
+  float highlight_chroma_rolloff_offset;
+  float fx_motion_blur;
+  float fx_motion_blur_samples;
+  float fx_motion_blur_strength;
+  float fx_motion_blur_full_res;
+  float fx_fog_coverage_reduction;
+  float fx_fog_light_reduction;
+  float sg_bloom_enabled;
+  float sg_bloom_strength;
+  float sg_bloom_threshold;
+  float sg_bloom_hdr;
+  float sg_motion_blur;
+  float sg_motion_blur_strength;
+  float sg_motion_blur_samples;
+  float sg_highlight_rolloff;
 };
 
 #ifndef __cplusplus
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
-cbuffer shader_injection : register(b13, space50) {
+cbuffer shader_injection : register(b9, space50) {
 #elif (__SHADER_TARGET_MAJOR < 5) || ((__SHADER_TARGET_MAJOR == 5) && (__SHADER_TARGET_MINOR < 1))
-cbuffer shader_injection : register(b13) {
+cbuffer shader_injection : register(b9) {
 #endif
   ShaderInjectData shader_injection : packoffset(c0);
 }
@@ -39,12 +56,13 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_DIFFUSE_WHITE_NITS            min(shader_injection.diffuse_white_nits, shader_injection.peak_white_nits)
 #define RENODX_GRAPHICS_WHITE_NITS           renodx::color::bt2408::REFERENCE_WHITE
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
+#define RENODX_TONE_MAP_HUE_CORRECTION       1.f
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
+#define RENODX_TONE_MAP_TYPE                 renodx::draw::TONE_MAP_TYPE_RENO_DRT
 
 #define RENODX_GAMMA_CORRECTION renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_SWAP_CHAIN_ENCODING renodx::draw::ENCODING_PQ

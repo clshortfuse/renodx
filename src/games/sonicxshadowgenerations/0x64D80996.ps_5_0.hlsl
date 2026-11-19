@@ -7,7 +7,6 @@ cbuffer cbBlur : register(b10)
 
 SamplerState s_Source_sampler_s : register(s0);
 Texture2D<float4> s_Source_NedSmpignorenametexture : register(t0);
-Texture2D<float4> adapted_luminance : register(t1);
 
 
 // 3Dmigoto declarations
@@ -45,15 +44,6 @@ void main(
     r2.xyzw = min(float4(65504,65504,65504,65504), r2.xyzw);
     r0.xyzw = r2.xyzw * icb[r1.x+0].zzzz + r0.xyzw;
     r1.x = (int)r1.x + 1;
-  }
-  if (shader_injection.bloom_composite != 0.f && shader_injection.bloom_luminance_valid != 0.f && shader_injection.fx_bloom_threshold > 0.f) {
-    // Soft-knee threshold relative to the game's adapted scene luminance.
-    float threshold = shader_injection.fx_bloom_threshold * (adapted_luminance.Load(int3(0, 0, 0)).x + 0.001f);
-    float knee = 0.5f * threshold;
-    float luma = dot(r0.rgb, float3(0.2126f, 0.7152f, 0.0722f));
-    float soft_excess = clamp(luma - threshold + knee, 0.f, 2.f * knee);
-    soft_excess = soft_excess * soft_excess / (4.f * knee + 1e-5f);
-    r0.rgb *= max(soft_excess, luma - threshold) / max(luma, 1e-5f);
   }
   r0.xyzw = u_param[0].wwww * r0.xyzw;
   if (shader_injection.bloom_composite == 0.f) {
