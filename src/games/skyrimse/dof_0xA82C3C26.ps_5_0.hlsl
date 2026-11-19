@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.3.16 on Wed Mar 04 19:54:23 2026
 Texture2D<float4> t3 : register(t3);
 
@@ -148,9 +150,9 @@ void main(
   r0.x = r0.w ? r0.x : 0;
   r0.yzw = r3.xyz + -r2.xyz;
   o0.xyz = r0.xxx * r0.yzw + r2.xyz;
-  // Replace the original line with just a negative clamp.
-  // Original forced HDR values >1.0 through unblurred (no-op in R8G8B8A8).
-  o0.xyz = max(o0.xyz, 0.0);
+  // Signed BT.709 channels can represent valid colors outside Rec.709.
+  // Preserve them in HDR; only the vanilla path retains the negative clamp.
+  if (RENODX_TONE_MAP_TYPE == 0.f) o0.xyz = max(o0.xyz, 0.f);
   o0.w = 1;
   return;
 }

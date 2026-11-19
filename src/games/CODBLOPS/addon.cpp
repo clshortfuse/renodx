@@ -45,11 +45,16 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-#ifndef RENODX_PSYCHOV24_SLIDER_LAYOUT_VERSION
-#error "CODBLOPS: shared.h is outdated. Replace shared.h with the PsychoV24 slider version from the same package."
+#ifndef RENODX_PSYCHOV30_SLIDER_LAYOUT_VERSION
+#error "CODBLOPS: shared.h is outdated. Replace shared.h with the PsychoV30 slider version from the same package."
 #endif
 
 namespace {
+
+static_assert(sizeof(ShaderInjectData) == 14 * 4 * sizeof(float));
+static_assert(offsetof(ShaderInjectData, psychov30_compression) == 33 * sizeof(float));
+static_assert(offsetof(ShaderInjectData, psychov30_purity) == 40 * sizeof(float));
+static_assert(offsetof(ShaderInjectData, stock_film_curve) == 44 * sizeof(float));
 
 // ============================================================================
 // Black Ops High Polling Mouse Fix
@@ -2310,9 +2315,9 @@ float current_settings_mode = 0;
 float dx9_auto_output_unclamp_mode = 2.f;
 float force_windowed_borderless = 1.f;
 
-constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
-constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
-constexpr float TONE_MAP_TYPE_PSYCHOV24 = 24.f;
+constexpr float TONE_MAP_TYPE_VANILLA = RENODX_TONE_MAP_TYPE_VANILLA;
+constexpr float TONE_MAP_TYPE_RENODRT = RENODX_TONE_MAP_TYPE_RENODRT;
+constexpr float TONE_MAP_TYPE_PSYCHOV30 = RENODX_TONE_MAP_TYPE_PSYCHOV30;
 
 inline bool IsCustomToneMapperEnabled() {
   return shader_injection.tone_map_type != TONE_MAP_TYPE_VANILLA;
@@ -2322,8 +2327,8 @@ inline bool IsRenoDRTEnabled() {
   return shader_injection.tone_map_type == TONE_MAP_TYPE_RENODRT;
 }
 
-inline bool IsPsychoV24Enabled() {
-  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV24;
+inline bool IsPsychoV30Enabled() {
+  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV30;
 }
 
 void ApplySwapChainEncoding(float value) {
@@ -6060,11 +6065,11 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT", "PsychoV24"},
+        .labels = {"Vanilla", "RenoDRT", "PsychoV30"},
         .parse = [](float value) {
           if (value < 0.5f) return TONE_MAP_TYPE_VANILLA;
           if (value < 1.5f) return TONE_MAP_TYPE_RENODRT;
-          return TONE_MAP_TYPE_PSYCHOV24;
+          return TONE_MAP_TYPE_PSYCHOV30;
         },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -6106,7 +6111,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a display EOTF.",
+        .tooltip = "Emulates a display EOTF after tonemapping and color grading. BO1 input decoding is separate.",
         .labels = {"Off", "2.2", "BT.1886"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -6153,7 +6158,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "HDR Boost",
         .section = "Tone Mapping",
-        .tooltip = "Applies the common.hlsl HDRBoost power curve before RenoDRT or PsychoV24. 0 disables it; 20 matches the common.hlsl default power of 0.20. Values above 50 are intentionally unavailable because the original curve can extrapolate above that point.",
+        .tooltip = "Applies the common.hlsl HDRBoost power curve before RenoDRT or PsychoV30. 0 disables it; 20 matches the common.hlsl default power of 0.20. Values above 50 are intentionally unavailable because the original curve can extrapolate above that point.",
         .min = 0.f,
         .max = 50.f,
         .format = "%.0f%%",
@@ -6308,84 +6313,70 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV24Compression",
-        .binding = &shader_injection.psychov24_compression,
+        .binding = &shader_injection.psychov30_compression,
         .default_value = 0.f,
-        .label = "PsychoV24 Compression",
+        .label = "PsychoV30 Compression",
         .section = "Color Grading",
-        .tooltip = "PsychoV24 shoulder curve. 0 = auto compression, 50 = 1.00, 100 = 2.00, 200 = 4.00.",
+        .tooltip = "PsychoV30 shoulder curve. 0 = auto compression, 50 = 1.00, 100 = 2.00, 200 = 4.00.",
         .min = 0.f,
         .max = 400.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_enabled = []() { return IsPsychoV30Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV24ConeResponse",
-        .binding = &shader_injection.psychov24_cone_response,
+        .binding = &shader_injection.psychov30_cone_response,
         .default_value = 50.f,
-        .label = "PsychoV24 Cone Response",
+        .label = "PsychoV30 Cone Response",
         .section = "Color Grading",
-        .tooltip = "Scales PsychoV24 cone response. 50 = 1.00 neutral. Higher values increase PsychoV24 contrast/purity response.",
+        .tooltip = "Scales PsychoV30 cone response. 50 = 1.00 neutral. Higher values increase contrast around the adaptation anchor.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_enabled = []() { return IsPsychoV30Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV24GamutCompression",
-        .binding = &shader_injection.psychov24_gamut_compression,
+        .binding = &shader_injection.psychov30_gamut_compression,
         .default_value = 100.f,
-        .label = "PsychoV24 Gamut Compression",
+        .label = "PsychoV30 Gamut Compression",
         .section = "Color Grading",
-        .tooltip = "PsychoV24 gamut compression strength.",
+        .tooltip = "PsychoV30 gamut compression strength.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_enabled = []() { return IsPsychoV30Enabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV24GamutMode",
-        .binding = &shader_injection.psychov24_gamut_mode,
+        .binding = &shader_injection.psychov30_gamut_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .label = "PsychoV24 Gamut Mode",
+        .label = "PsychoV30 Gamut Mode",
         .section = "Color Grading",
         .labels = {"BT709", "BT2020"},
-        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_enabled = []() { return IsPsychoV30Enabled(); },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-   new renodx::utils::settings::Setting{
-        .key = "PsychoV24HighlightSaturation",
-        .binding = &shader_injection.psychov24_highlight_saturation,
+    new renodx::utils::settings::Setting{
+        .key = "PsychoV30Purity",
+        .binding = &shader_injection.psychov30_purity,
         .default_value = 100.f,
-        .label = "PsychoV24 Highlight Saturation",
+        .label = "PsychoV30 Purity",
         .section = "Color Grading",
-        .tooltip = "Controls PsychoV24 highlight saturation inside the tonemapper. 100% is neutral; lower values reduce highlight color and higher values increase it.",
+        .tooltip = "Controls PsychoV30 adaptation-relative cone purity. 100% is neutral. Use Highlight Saturation for highlight-only grading.",
         .min = 0.f,
         .max = 200.f,
         .format = "%.0f%%",
-        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_enabled = []() { return IsPsychoV30Enabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "PsychoV24GamutHueRestore",
-        .binding = &shader_injection.psychov24_gamut_hue_restore,
-        .default_value = 0.f,
-        .label = "PsychoV24 Gamut Hue Restore",
-        .section = "Color Grading",
-        .tooltip = "Restores the pre-gamut hue direction after PsychoV24 gamut compression. 0% disables it; 100% applies the full hue restoration.",
-        .min = 0.f,
-        .max = 100.f,
-        .format = "%.0f%%",
-        .is_enabled = []() { return IsPsychoV24Enabled(); },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",

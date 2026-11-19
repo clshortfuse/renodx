@@ -5,10 +5,10 @@
 // the display shader's tone mappers:
 //   - RenoDRT: renodx::draw::ToneMapPass with the visible settings (luminance or
 //     per-channel scaling and the grading sliders). Hidden hue correction and
-//     clamp options stay at their neutral defaults.
-//   - PsychoV30: renodx::tonemap::psychov::psychotm_test30 exactly as
-//     ApplyPsychoV30 calls it, plus its OKLab saturation slider.
-// Derived color matrices are precomputed from src/shaders/color/rgb.hlsl. HLSL
+//     options stay neutral, with output bounded to the selected peak.
+//   - PsychoV35: renodx::tonemap::psychov::psychotm_test35 exactly as
+//     ApplyPsychoV35 calls it, plus its OKLab saturation slider.
+// Color matrices are precomputed from the shared RGB and PsychoV35 sources. HLSL
 // row-major matrices are written row by row and applied as `v * M`.
 // The fragment source is split into pieces for glShaderSource (MSVC caps a single
 // string literal at 16 KB).
@@ -25,8 +25,8 @@ uniform sampler2D scene;
 uniform vec4 tone;    // peak / game white, exposure, highlights, shadows
 uniform vec4 grade;   // contrast, flare (RenoDRT), saturation, highlight blowout (RenoDRT)
 uniform vec4 extra;   // dechroma (RenoDRT Blowout), per channel (RenoDRT), game white / UI white
-uniform vec4 psycho;  // PsychoV30 compression, gamut compression, cone response, purity scale
-uniform vec4 modes;   // tone mapper (0 RenoDRT, 1 PsychoV30), PsychoV30 gamut mode, source boundary
+uniform vec4 psycho;  // PsychoV35 compression, gamut compression, cone response, purity scale
+uniform vec4 modes;   // tone mapper (0 RenoDRT, 1 PsychoV35), PsychoV35 gamut mode, source boundary
 
 const float MID_GRAY = 0.18;
 const vec3 BT709_Y = vec3(0.2126390059, 0.7151686788, 0.0721923154);
@@ -50,7 +50,6 @@ float Smootherstep(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); 
 float Contrast(float x, float contrast) { return pow(x / MID_GRAY, contrast) * MID_GRAY; }
 float CopySign(float m, float s) { return s < 0.0 ? -abs(m) : abs(m); }
 vec3 CopySign(vec3 m, vec3 s) { return vec3(CopySign(m.x, s.x), CopySign(m.y, s.y), CopySign(m.z, s.z)); }
-float Max3(vec3 v) { return max(v.x, max(v.y, v.z)); }
 float Min3(vec3 v) { return min(v.x, min(v.y, v.z)); }
 vec3 OkLabFromBT709(vec3 rgb) {
   vec3 lms = rgb * BT709_TO_LMS;
@@ -123,7 +122,7 @@ vec3 RenoDRT(vec3 color) {
     color = min(ReinhardScalable(per_channel, white_max, peak), vec3(peak)) * signs;
   } else {
     if (contrasted) y = Contrast(y, computed_contrast);
-    float y_new = min(ReinhardScalable(vec3(y), white_max, peak).x, white_max);
+    float y_new = min(ReinhardScalable(vec3(y), white_max, peak).x, peak);
     color *= y_original > 0.0 ? y_new / y_original : 1.0;
   }
 
@@ -137,436 +136,166 @@ vec3 RenoDRT(vec3 color) {
     lab.yz *= grade.z;
     color = BT709FromOkLab(lab);
   }
-  return color;
+  return min(color, vec3(peak));
 }
-)",
-    R"(
-// ---------------------------------------------------------------------------
-// PsychoV30 (src/shaders/tonemap/psychov/test30.hlsl)
-// ---------------------------------------------------------------------------
-const float P30_EPSILON = 1e-6;
-const float P30_EPSILON2 = 1e-12;
-const float P30_LARGE_SUPPORT = 1e20;
-const mat3 P30_BT709_TO_LMS = mat3(
-    0.289605781, 0.69724663, 0.0763712847,
-    0.090183753, 0.707349008, 0.112203145,
-    0.0155287402, 0.0536093118, 0.509797841);
-const mat3 P30_LMS_TO_BT709 = mat3(
-    4.96761934, -4.9223793, 0.339199099,
-    -0.619682846, 2.05175061, -0.358743957,
-    -0.0861520007, -0.0658193844, 1.98895448);
-const mat3 P30_LMS_TO_BT2020 = mat3(
-    2.90892126, -2.41556417, 0.180834251,
-    -0.227553233, 1.54579657, -0.283842679,
-    -0.0502712299, 0.0409489497, 1.7552839);
-const mat3 P30_BT2020_TO_LMS = mat3(
-    0.392659192, 0.612045046, 0.058519464,
-    0.0596120639, 0.737074685, 0.113049159,
-    0.0098550494, 0.000333748584, 0.568747118);
-const mat3 P30_AP1_TO_LMS = mat3(
-    0.4011386, 0.605498127, 0.0565869351,
-    0.0589378931, 0.736400802, 0.114397191,
-    0.00725747769, -0.0142459994, 0.585924473);
-const mat3 P30_BT709_TO_BT2020 = mat3(
-    0.627403901, 0.329283032, 0.0433130691,
-    0.0690972852, 0.919540336, 0.0113623187,
-    0.0163914388, 0.0880133151, 0.895595265);
-const mat3 P30_BT709_TO_AP1 = mat3(
+
+float Max3(vec3 v) { return max(v.x, max(v.y, v.z)); }
+
+// PsychoV35 matrices: HLSL rows stored as GLSL columns for v * M.
+const mat3 P35_BT709_TO_LMS = mat3(0.2896057765550949, 0.6972466441767436, 0.07637127861652246,
+    0.09018375761738257, 0.7073490256546452, 0.1122031464307159,
+    0.01552874012260572, 0.05360930730601509, 0.5097978304529558);
+const mat3 P35_LMS_TO_BT709 = mat3(4.967619650489394, -4.92237952939332, 0.3391991812339037,
+    -0.6196828787997994, 2.051750651511519, -0.3587439844047841,
+    -0.08615200402306292, -0.06581938299690304, 1.988954483326219);
+const mat3 P35_LMS_TO_BT2020 = mat3(2.908921353735816, -2.415564244797975, 0.1808342947861866,
+    -0.2275532729619213, 1.545796661336631, -0.2838427126802022,
+    -0.05027123210578335, 0.0409489516665878, 1.755283912080666);
+const vec3 P35_WHITE_LMS = vec3(1.063223699348361, 0.9097359297027436, 0.5789358778815766);
+const vec3 P35_YF = vec3(.68990272, .34832189, 0.0);
+const mat3 P35_BT709_TO_AP1 = mat3(
     0.613097429, 0.339523137, 0.0473794527,
     0.0701937228, 0.916353881, 0.0134523986,
     0.0206155926, 0.109569773, 0.869814634);
-const mat3 P30_AP1_TO_BT709 = mat3(
+const mat3 P35_AP1_TO_BT709 = mat3(
     1.70505095, -0.621792138, -0.0832588747,
     -0.130256414, 1.14080477, -0.0105483187,
     -0.0240033567, -0.128968969, 1.15297234);
-const vec3 P30_YF = vec3(0.689902723, 0.348321885, 0.0);  // Stockman-Sharpe LMS -> Yf row
-const vec3 P30_MB_WEIGHTS = vec3(0.689902723, 0.348321885, 0.0371597074);
-const vec2 P30_NEUTRAL_MB = vec2(0.689902723, 0.0371597074) / (0.689902723 + 0.348321885);
-const vec3 P30_BT709_YF_WEIGHTS = vec3(0.220118417, 0.692513527, 0.0873680565);
-const vec3 P30_BT2020_YF_WEIGHTS = vec3(0.277665954, 0.6464105, 0.0759235463);
-const vec3 P30_AP1_YF_WEIGHTS = vec3(0.283011668, 0.641887047, 0.0751012845);
-const vec3 P30_D65_WHITE_LMS = vec3(1.0632237, 0.909735905, 0.578935893);
-const vec3 P30_BT709_D_RGB = vec3(4.68155381, -1.46103043, -0.2141844);
-const vec3 P30_BT709_T_RGB = vec3(0.0981872668, -0.103844877, 0.575738569);
-const vec3 P30_BT2020_D_RGB = vec3(2.44685564, -1.0224274, -0.243675248);
-const vec3 P30_BT2020_T_RGB = vec3(0.0523457194, -0.0821633574, 0.508098426);
-const float P30_D65_WHITE_YF = 1.05040185;
-const float P30_ALPHA_L = 0.698324098;
-const float P30_ALPHA_M = 0.301675902;
-const float P30_ALPHA_DELTA = 0.396648196;
 
-float P30Yf(vec3 lms) { return dot(P30_YF, lms); }
-float P30Radius6(vec2 dt) { return 3.0 * dt.x * dt.x + dt.y * dt.y; }
-float P30Cost(vec2 delta, float radial_metric) { return 2.0 * delta.x * delta.x + radial_metric * delta.y * delta.y; }
-vec2 P30ScaledA2FromQ(vec3 q) { return vec2(q.x - q.y, 2.0 * q.z - q.x - q.y); }
-float P30Cross2(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
-vec3 P30TargetRGBFromLMS(vec3 lms, int mode) { return mode == 0 ? lms * P30_LMS_TO_BT709 : lms * P30_LMS_TO_BT2020; }
+// PsychoV35 public path: human conditioning off, exact target fit.
+// Port of src/shaders/tonemap/psychov/test35.hlsl (43d58747).
+// Copyright (C) 2026 Carlos Lopez. SPDX-License-Identifier: MIT
+// Legacy source-boundary metadata is unused by Test35, as in its HLSL API.
 
-vec3 P30AnchorSourceBoundaryToYf(vec3 source_rgb, mat3 source_to_lms, vec3 source_yf_weights) {
-  if (all(greaterThanEqual(source_rgb, vec3(0.0)))) return source_rgb * source_to_lms;
-  float source_total = dot(max(source_rgb, 0.0), source_yf_weights);
-  vec3 residual = source_rgb - source_total;
-  vec3 lower_fraction = mix(vec3(P30_LARGE_SUPPORT), source_total / -residual, lessThan(residual, vec3(-P30_EPSILON)));
-  float boundary_fraction = min(1.0, Min3(lower_fraction));
-  vec3 bounded_lms = (source_total + residual * boundary_fraction) * source_to_lms;
-  return bounded_lms * (source_total * P30_D65_WHITE_YF / P30Yf(bounded_lms));
+float P35Mean(vec3 v) {
+  return v.x + ((v.y - v.x) + (v.z - v.x)) / 3.0;
 }
 
-float P30FiniteEndpoint(float x, float anchor, float peak, float h) {
-  if (x <= 0.0) return 0.0;  // limit of the curve; avoids pow(0, negative)
-  bool uniform_response = h == 1.0;
-  float anchor_power = uniform_response ? anchor / peak : pow(anchor / peak, h);
-  float slope_normalization = 1.0 - anchor_power;
-  float response_drive = pow(x / anchor, -h / slope_normalization);
-  float encoded = anchor_power / (anchor_power + slope_normalization * response_drive);
-  return uniform_response ? peak * encoded : peak * pow(encoded, 1.0 / h);
+vec3 P35TargetResidual(vec3 normalized_lms, int target) {
+  vec3 physical_lms = normalized_lms * P35_WHITE_LMS;
+  return target == 0 ? physical_lms * P35_LMS_TO_BT709 : physical_lms * P35_LMS_TO_BT2020;
 }
 
-float P30AutoCompressionPower(float anchor_yf, float peak_yf) {
-  // Half of the 3.7 log10 reference simultaneous range above adaptation.
-  return max(1.85 / (log2(peak_yf / anchor_yf) * 0.30102999566), 1.0);
-}
-
-float P30QuinticRamp(float t) { return Smootherstep(clamp(t, 0.0, 1.0)); }
-
-float P30Highlights(float x, float highlights, float anchor_yf) {
-  if (highlights == 1.0) return x;
-  float ratio = x / anchor_yf;
-  float t = x > anchor_yf ? clamp(log2(ratio) / log2(1.0 / anchor_yf), 0.0, 1.0) : 0.0;
-  t = P30QuinticRamp(t);
-  if (highlights > 1.0) return x * mix(1.0, pow(ratio, highlights - 1.0), t);
-  return x / mix(1.0, pow(ratio, 1.0 - highlights), t);
-}
-
-float P30Shadows(float x, float shadows, float anchor_yf) {
-  if (shadows == 1.0) return x;
-  float ratio = x / anchor_yf;
-  float anchor_squared = anchor_yf * anchor_yf;
-  float anchor_cubed = anchor_squared * anchor_yf;
-  float shadow_floor = anchor_yf * exp2(-4.0);
-  float t = x > shadow_floor ? clamp(log2(ratio) / log2(shadow_floor / anchor_yf), 0.0, 1.0) : 1.0;
-  t = P30QuinticRamp(t);
-  if (shadows > 1.0) return mix(x, x * (1.0 - anchor_squared) + anchor_cubed * pow(ratio, 2.0 - shadows), t);
-  return mix(x, x * (1.0 + anchor_squared) - anchor_cubed * pow(ratio, shadows), t);
-}
-
-vec3 P30ApplyAdaptiveRelativePurity(vec3 source_lms, vec3 anchor_lms, float purity_delta) {
-  vec3 source_q = source_lms / anchor_lms;
-  if (purity_delta == 1.0) return source_q;
-  float relative_yf = P30Yf(source_lms) / P30Yf(anchor_lms);
-  return mix(vec3(relative_yf), source_q, purity_delta);
-}
-
-float P30TargetNeutralYfLimit(float target_rgb_peak, vec3 anchor_lms, int mode) {
-  return target_rgb_peak * P30Yf(anchor_lms) / Max3(P30TargetRGBFromLMS(anchor_lms, mode));
-}
-
-vec2 P30MBFromRelativeLMS(vec3 relative_lms) {
-  float yf = P30Yf(relative_lms);
-  return vec2(relative_lms.x * P30_MB_WEIGHTS.x / yf, relative_lms.z * P30_MB_WEIGHTS.z / yf);
-}
-
-vec3 P30FiniteResponseU(vec3 source_q, vec3 adaptation_peak_ratio, float response_power, float response_h) {
-  bool uniform_response = response_h == 1.0;
-  vec3 anchor_power = uniform_response ? adaptation_peak_ratio : pow(adaptation_peak_ratio, vec3(response_h));
-  vec3 slope_normalization = 1.0 - anchor_power;
-  vec3 response_drive = pow(source_q, -(response_power * response_h / slope_normalization));
-  vec3 encoded = anchor_power / (anchor_power + slope_normalization * response_drive);
-  return uniform_response ? encoded : pow(encoded, vec3(1.0 / response_h));
-}
-
-// Requires all(source_q > 0).
-vec3 P30MeanA2Response(vec3 source_q, vec3 adaptation_peak_ratio, float response_power, float response_h,
-                       out float normalized_response_yf) {
-  vec3 u = P30FiniteResponseU(source_q, adaptation_peak_ratio, response_power, response_h);
-  vec2 source_dt = P30ScaledA2FromQ(source_q);
-  float response_lms_sum = u.x + u.y;
-  vec2 response_dt = vec2(u.x - u.y, 2.0 * u.z - response_lms_sum);
-  vec2 authored_dt = response_dt;
-  float source_radius6 = P30Radius6(source_dt);
-  float response_radius6 = P30Radius6(response_dt);
-  if (source_radius6 > 6.0 * P30_EPSILON2 && response_radius6 > 6.0 * P30_EPSILON2) {
-    float inverse_response_radius = inversesqrt(response_radius6);
-    float response_radius = response_radius6 * inverse_response_radius;
-    vec2 mean_direction = source_dt * inversesqrt(source_radius6) + response_dt * inverse_response_radius;
-    float mean_radius6 = P30Radius6(mean_direction);
-    if (mean_radius6 > P30_EPSILON2) authored_dt = mean_direction * (response_radius * inversesqrt(mean_radius6));
-  }
-  normalized_response_yf = P30_ALPHA_L * u.x + P30_ALPHA_M * u.y;
-  return vec3(authored_dt.x, response_lms_sum + u.z, authored_dt.y);
-}
-
-vec2 P30ClosestPointOnScaleSegment(float desired_c, float radial_metric, vec2 segment_start, vec2 segment_end) {
-  vec2 segment = segment_end - segment_start;
-  float denominator = 2.0 * segment.x * segment.x + radial_metric * segment.y * segment.y;
-  if (denominator <= P30_EPSILON2) return segment_start;
-  float numerator = 2.0 * (desired_c - segment_start.x) * segment.x
-                    + radial_metric * (1.0 - segment_start.y) * segment.y;
-  return segment_start + segment * clamp(numerator / denominator, 0.0, 1.0);
-}
-
-// Exact nearest point for the fixed authored A2 direction inside the target
-// RGB cube with the response-Yf ceiling.
-vec3 P30YfCeilingSolve(vec3 desired_coord, float response_yf, int mode) {
-  float max_a = response_yf;
-  float radial_a_numerator = 3.0 * P30_ALPHA_DELTA * desired_coord.x - desired_coord.z;
-  float desired_a = (2.0 * desired_coord.y + radial_a_numerator) / 6.0;
-  vec3 radial_rgb = mode == 0 ? desired_coord.x * P30_BT709_D_RGB + desired_coord.z * P30_BT709_T_RGB
-                              : desired_coord.x * P30_BT2020_D_RGB + desired_coord.z * P30_BT2020_T_RGB;
-  vec3 desired_target_rgb = desired_a + radial_rgb;
-  if (desired_a >= 0.0 && desired_a <= max_a
-      && all(greaterThanEqual(desired_target_rgb, vec3(-P30_EPSILON)))
-      && all(lessThanEqual(desired_target_rgb, vec3(1.0 + P30_EPSILON)))) {
-    return desired_coord;
-  }
-
-  float radial_metric = P30Radius6(desired_coord.xz);
-  if (radial_metric <= 6.0 * P30_EPSILON2) return vec3(0.0, clamp(desired_coord.y, 0.0, 3.0 * max_a), 0.0);
-
-  float positive_pressure = Max3(radial_rgb);
-  float negative_pressure = -Min3(radial_rgb);
-  float total_pressure = positive_pressure + negative_pressure;
-  bool is_triangle = max_a * total_pressure <= negative_pressure;
-  float max_a_radial_scale;
-  float upper_a;
-  float upper_radial_scale;
-  if (is_triangle) {
-    max_a_radial_scale = max_a / negative_pressure;
-    upper_a = max_a;
-    upper_radial_scale = max_a_radial_scale;
-  } else {
-    max_a_radial_scale = (1.0 - max_a) / positive_pressure;
-    upper_radial_scale = 1.0 / total_pressure;
-    upper_a = negative_pressure * upper_radial_scale;
-  }
-  vec2 vertex0 = vec2(0.0);
-  vec2 vertex1 = vec2(3.0 * max_a, 0.0);
-  vec2 vertex2 = vec2(3.0 * max_a - 0.5 * radial_a_numerator * max_a_radial_scale, max_a_radial_scale);
-  vec2 vertex3 = vec2(3.0 * upper_a - 0.5 * radial_a_numerator * upper_radial_scale, upper_radial_scale);
-  vec2 desired_c_scale = vec2(desired_coord.y, 1.0);
-
-  vec2 best_c_scale = vec2(clamp(desired_coord.y, vertex0.x, vertex1.x), 0.0);
-  float best_cost = P30Cost(best_c_scale - desired_c_scale, radial_metric);
-  vec2 candidate = P30ClosestPointOnScaleSegment(desired_coord.y, radial_metric, vertex1, vertex2);
-  float cost = P30Cost(candidate - desired_c_scale, radial_metric);
-  if (cost < best_cost) {
-    best_c_scale = candidate;
-    best_cost = cost;
-  }
-  if (!is_triangle) {
-    candidate = P30ClosestPointOnScaleSegment(desired_coord.y, radial_metric, vertex2, vertex3);
-    cost = P30Cost(candidate - desired_c_scale, radial_metric);
-    if (cost < best_cost) {
-      best_c_scale = candidate;
-      best_cost = cost;
-    }
-  }
-  candidate = P30ClosestPointOnScaleSegment(desired_coord.y, radial_metric, vertex0, vertex3);
-  cost = P30Cost(candidate - desired_c_scale, radial_metric);
-  if (cost < best_cost) best_c_scale = candidate;
-
-  return vec3(desired_coord.x * best_c_scale.y, best_c_scale.x, desired_coord.z * best_c_scale.y);
-}
-)",
-    R"(
-vec3 P30LMSFromScaledA2(vec2 scaled_a2, float physical_yf, vec3 anchor_lms) {
-  float a_l = P30_YF.x * anchor_lms.x;
-  float a_m = P30_YF.y * anchor_lms.y;
-  float q_m = (physical_yf - a_l * scaled_a2.x) / (a_l + a_m);
-  float q_l = q_m + scaled_a2.x;
-  float q_s = 0.5 * (scaled_a2.y + q_l + q_m);
-  return vec3(q_l, q_m, q_s) * anchor_lms;
-}
-
-float P30ScaledA2TargetSupport(vec2 direction, float clip_magnitude, float physical_yf, vec3 anchor_lms,
-                               int mode, float target_rgb_peak) {
-  if (clip_magnitude <= P30_EPSILON) return 0.0;
-  vec3 neutral_target = P30TargetRGBFromLMS(P30LMSFromScaledA2(vec2(0.0), physical_yf, anchor_lms), mode);
-  vec3 delta_target = P30TargetRGBFromLMS(P30LMSFromScaledA2(direction, physical_yf, anchor_lms), mode) - neutral_target;
-  float support = clip_magnitude;
-  for (int channel = 0; channel < 3; ++channel) {
-    if (delta_target[channel] > P30_EPSILON) {
-      support = min(support, (target_rgb_peak - neutral_target[channel]) / delta_target[channel]);
-    } else if (delta_target[channel] < -P30_EPSILON) {
-      support = min(support, neutral_target[channel] / -delta_target[channel]);
-    }
-  }
-  return max(support, 0.0);
-}
-
-float P30RaySegmentRadius(vec2 origin, vec2 direction, vec2 a, vec2 b) {
-  vec2 edge = b - a;
-  float denominator = P30Cross2(direction, edge);
-  if (abs(denominator) <= P30_EPSILON) return P30_LARGE_SUPPORT;
-  vec2 ao = a - origin;
-  float t = P30Cross2(ao, edge) / denominator;
-  float u = P30Cross2(ao, direction) / denominator;
-  return t >= 0.0 && u >= 0.0 && u <= 1.0 ? t : P30_LARGE_SUPPORT;
-}
-
-float P30TransformedSourceClipScaledA2Magnitude(vec2 source_mb, float response_power, vec3 response_anchor_ratio,
-                                                float physical_yf, vec3 anchor_lms) {
-  vec2 source_offset = source_mb - P30_NEUTRAL_MB;
-  float source_radius2 = dot(source_offset, source_offset);
-  if (source_radius2 <= P30_EPSILON2) return 0.0;
-  // BT.709 primaries (columns of the source matrix) in adaptation-relative MB.
-  vec2 vertex0 = P30MBFromRelativeLMS(vec3(P30_BT709_TO_LMS[0][0], P30_BT709_TO_LMS[1][0], P30_BT709_TO_LMS[2][0]) / anchor_lms);
-  vec2 vertex1 = P30MBFromRelativeLMS(vec3(P30_BT709_TO_LMS[0][1], P30_BT709_TO_LMS[1][1], P30_BT709_TO_LMS[2][1]) / anchor_lms);
-  vec2 vertex2 = P30MBFromRelativeLMS(vec3(P30_BT709_TO_LMS[0][2], P30_BT709_TO_LMS[1][2], P30_BT709_TO_LMS[2][2]) / anchor_lms);
-  vec2 source_direction = source_offset * inversesqrt(source_radius2);
-  float source_boundary_radius = min(
-      P30RaySegmentRadius(P30_NEUTRAL_MB, source_direction, vertex0, vertex1),
-      min(P30RaySegmentRadius(P30_NEUTRAL_MB, source_direction, vertex1, vertex2),
-          P30RaySegmentRadius(P30_NEUTRAL_MB, source_direction, vertex2, vertex0)));
-  if (source_boundary_radius >= P30_LARGE_SUPPORT) return 0.0;
-
-  vec2 boundary_mb = P30_NEUTRAL_MB + source_direction * source_boundary_radius;
-  float m_fraction = 1.0 - boundary_mb.x;
-  if (boundary_mb.x <= P30_EPSILON || m_fraction <= P30_EPSILON || boundary_mb.y <= P30_EPSILON) return 0.0;
-  vec2 response_ratio = vec2(boundary_mb.x * P30_MB_WEIGHTS.y / (m_fraction * P30_MB_WEIGHTS.x),
-                             boundary_mb.y * P30_MB_WEIGHTS.y / (m_fraction * P30_MB_WEIGHTS.z));
-  if (response_power != 1.0) response_ratio = pow(response_ratio, vec2(response_power));
-  response_ratio *= vec2(response_anchor_ratio.x / response_anchor_ratio.y, response_anchor_ratio.z / response_anchor_ratio.y);
-  vec3 boundary_q_direction = vec3(response_ratio.x, 1.0, response_ratio.y);
-  float boundary_q_m = physical_yf / P30Yf(anchor_lms * boundary_q_direction);
-  return sqrt(P30Radius6(P30ScaledA2FromQ(boundary_q_direction * boundary_q_m)));
-}
-
-float P30NeutwoWithClip(float x, float peak, float clip, float h) {
-  if (peak <= P30_EPSILON) return 0.0;
-  if (clip <= peak * (1.0 + P30_EPSILON)) return min(x, peak);
-  float q = clamp(x / clip, 0.0, 1.0);
-  float k = clamp(peak / clip, 0.0, 1.0);
-  if (h == 1.0) return peak * q / (q * (1.0 - k) + k);
-  float qh = pow(q, h);
-  float kh = pow(k, h);
-  return peak * q / pow(qh * (1.0 - kh) + kh, 1.0 / h);
-}
-
-// Signed fallback for adaptation-relative LMS containing a zero or negative cone value.
-vec3 P30LinearA2Fallback(vec3 source_q, vec3 anchor_in_lms, vec3 anchor_out_lms, int mode, float target_rgb_peak,
-                         float response_power, float response_h, float target_compression_strength) {
-  vec3 signed_response = response_power == 1.0
-                             ? source_q
-                             : CopySign(pow(abs(source_q), vec3(response_power)), source_q);
-  vec3 response_lms = anchor_out_lms * signed_response;
-  float response_yf = P30Yf(response_lms);
-
-  vec2 source_scaled_a2 = P30ScaledA2FromQ(source_q);
-  vec2 response_scaled_a2 = P30ScaledA2FromQ(response_lms / anchor_in_lms);
-  float source_radius6 = P30Radius6(source_scaled_a2);
-  float response_radius6 = P30Radius6(response_scaled_a2);
-  vec3 authored_lms = response_lms;
-  if (source_radius6 > 6.0 * P30_EPSILON2 && response_radius6 > 6.0 * P30_EPSILON2) {
-    float inverse_response_radius = inversesqrt(response_radius6);
-    float response_radius = response_radius6 * inverse_response_radius;
-    vec2 midpoint = source_scaled_a2 * inversesqrt(source_radius6) + response_scaled_a2 * inverse_response_radius;
-    float midpoint_radius6 = P30Radius6(midpoint);
-    if (midpoint_radius6 > P30_EPSILON2) {
-      authored_lms = P30LMSFromScaledA2(midpoint * inversesqrt(midpoint_radius6) * response_radius, response_yf, anchor_in_lms);
-    }
-  }
-
-  float neutral_yf_limit = P30TargetNeutralYfLimit(target_rgb_peak, anchor_in_lms, mode);
-  float target_yf = CopySign(P30FiniteEndpoint(abs(response_yf), P30Yf(anchor_out_lms), neutral_yf_limit, response_h), response_yf);
-
-  vec3 desired_lms = (response_yf == 0.0 && target_yf == 0.0) ? vec3(0.0) : authored_lms * (target_yf / response_yf);
-  if (target_compression_strength == 0.0) return desired_lms;
-  if (target_yf <= 0.0) return desired_lms * (1.0 - target_compression_strength);
-
-  vec2 desired_scaled_a2 = P30ScaledA2FromQ(desired_lms / anchor_in_lms);
-  float desired_radius6 = P30Radius6(desired_scaled_a2);
-  if (desired_radius6 <= 6.0 * P30_EPSILON2) return anchor_in_lms * (target_yf / P30Yf(anchor_in_lms));
-
-  float inverse_desired_magnitude = inversesqrt(desired_radius6);
-  float desired_magnitude = desired_radius6 * inverse_desired_magnitude;
-  vec2 direction = desired_scaled_a2 * inverse_desired_magnitude;
-  float source_clip_magnitude = max(
-      P30TransformedSourceClipScaledA2Magnitude(P30MBFromRelativeLMS(source_q), response_power,
-                                                anchor_out_lms / anchor_in_lms, target_yf, anchor_in_lms),
-      desired_magnitude);
-  float target_support = P30ScaledA2TargetSupport(direction, source_clip_magnitude, target_yf, anchor_in_lms,
-                                                  mode, target_rgb_peak);
-  float compressed_magnitude = min(
-      P30NeutwoWithClip(desired_magnitude, target_support, max(source_clip_magnitude, target_support), response_h),
-      target_support);
-  return P30LMSFromScaledA2(direction * mix(desired_magnitude, compressed_magnitude, target_compression_strength),
-                            target_yf, anchor_in_lms);
-}
-
-// psychotm_test30 with ApplyPsychoV30's arguments: 0.18 adaptation and
-// background anchors and the injected PsychoV30 controls.
-vec3 PsychoV30(vec3 bt709) {
-  float peak_value = max(tone.x, 1.0);
+vec3 PsychoV35(vec3 bt709) {
+  float peak = max(tone.x, 1.0);
   float contrast = max(grade.x, 1e-4);
-  float compression = psycho.x;
-  float gamut_compression = psycho.y;
-  float cone_response_exponent = max(psycho.z, 1e-4);
-  float purity_scale = psycho.w;
-  int gamut_mode = int(modes.y);
-  int source_boundary = int(modes.z);
-
-  vec3 exposed_input = bt709 * tone.y;
-  vec3 input_lms;
-  if (source_boundary == 0) {
-    input_lms = exposed_input * P30_BT709_TO_LMS;
-  } else if (source_boundary == 2) {
-    vec3 source_rgb = exposed_input * P30_BT709_TO_BT2020;
-    if (all(lessThanEqual(source_rgb, vec3(0.0))) && !any(isinf(source_rgb))) return vec3(0.0);
-    input_lms = P30AnchorSourceBoundaryToYf(source_rgb, P30_BT2020_TO_LMS, P30_BT2020_YF_WEIGHTS);
-  } else if (source_boundary == 3) {
-    vec3 source_rgb = exposed_input * P30_BT709_TO_AP1;
-    if (all(lessThanEqual(source_rgb, vec3(0.0))) && !any(isinf(source_rgb))) return vec3(0.0);
-    input_lms = P30AnchorSourceBoundaryToYf(source_rgb, P30_AP1_TO_LMS, P30_AP1_YF_WEIGHTS);
-  } else {
-    if (all(lessThanEqual(exposed_input, vec3(0.0))) && !any(isinf(exposed_input))) return vec3(0.0);
-    input_lms = P30AnchorSourceBoundaryToYf(exposed_input, P30_BT709_TO_LMS, P30_BT709_YF_WEIGHTS);
-  }
-
-  vec3 anchor_in_lms = vec3(0.18) * P30_BT709_TO_LMS;
-  vec3 anchor_out_lms = anchor_in_lms;
-
-  vec3 graded_lms = input_lms;
+  vec3 anchor_in = vec3(0.18) * P35_BT709_TO_LMS;
+  vec3 input_lms = (bt709 * tone.y) * P35_BT709_TO_LMS;
   if (tone.z != 1.0 || tone.w != 1.0) {
-    graded_lms = abs(input_lms);
-    float graded_yf = P30Yf(graded_lms);
-    float adapted_anchor_yf = P30Yf(anchor_in_lms);
-    float graded_yf_out = P30Shadows(P30Highlights(graded_yf, tone.z, adapted_anchor_yf), tone.w, adapted_anchor_yf);
-    graded_lms = CopySign(graded_lms * (graded_yf_out / graded_yf), input_lms);
+    float input_yf = dot(P35_YF, input_lms);
+    float anchor_yf = dot(P35_YF, anchor_in);
+    float graded_y = input_yf;
+    if (tone.z != 1.0) {
+      float ratio = graded_y / anchor_yf;
+      float blend = graded_y > anchor_yf ? clamp(log2(ratio) / log2(1.0 / anchor_yf), 0.0, 1.0) : 0.0;
+      blend = Smootherstep(blend);
+      float shaped = pow(ratio, abs(tone.z - 1.0));
+      graded_y = tone.z > 1.0 ? graded_y * mix(1.0, shaped, blend) : graded_y / mix(1.0, shaped, blend);
+    }
+    if (tone.w != 1.0) {
+      float ratio = graded_y / anchor_yf;
+      float blend = graded_y > anchor_yf * exp2(-4.0) ? clamp(log2(ratio) / -4.0, 0.0, 1.0) : 1.0;
+      blend = Smootherstep(blend);
+      float target_y = tone.w > 1.0
+          ? graded_y * (1.0 - anchor_yf * anchor_yf) + anchor_yf * anchor_yf * anchor_yf * pow(ratio, 2.0 - tone.w)
+          : graded_y * (1.0 + anchor_yf * anchor_yf) - anchor_yf * anchor_yf * anchor_yf * pow(ratio, tone.w);
+      graded_y = mix(graded_y, target_y, blend);
+    }
+    if (input_yf != 0.0) input_lms *= graded_y / input_yf;
   }
 
-  float response_power = contrast * cone_response_exponent;
-  vec3 response_input_q = P30ApplyAdaptiveRelativePurity(graded_lms, anchor_in_lms, purity_scale / contrast);
-
-  float response_h = compression == 0.0
-                         ? P30AutoCompressionPower(P30Yf(anchor_out_lms),
-                                                   P30TargetNeutralYfLimit(peak_value, anchor_in_lms, gamut_mode))
-                         : compression;
-
-  if (any(lessThanEqual(response_input_q, vec3(0.0)))) {
-    return P30LinearA2Fallback(response_input_q, anchor_in_lms, anchor_out_lms, gamut_mode, peak_value,
-                               response_power, response_h, gamut_compression)
-           * P30_LMS_TO_BT709;
+  vec3 source_ratio = input_lms / anchor_in;
+  if (psycho.w != contrast) {
+    float neutral_ratio = dot(P35_YF, input_lms) / dot(P35_YF, anchor_in);
+    vec3 purity_direction = source_ratio - neutral_ratio;
+    float purity_amount = psycho.w / contrast;
+    if (all(greaterThanEqual(source_ratio, vec3(0.0))) && neutral_ratio > 0.0 && purity_amount > 1.0) {
+      for (int cone = 0; cone < 3; ++cone) {
+        if (purity_direction[cone] < 0.0) purity_amount = min(purity_amount, neutral_ratio / -purity_direction[cone]);
+      }
+      source_ratio = max(neutral_ratio + purity_amount * purity_direction, 0.0);
+    } else {
+      source_ratio = neutral_ratio + purity_amount * purity_direction;
+    }
   }
-  float response_yf;
-  vec3 desired_coord = P30MeanA2Response(response_input_q, anchor_out_lms / (P30_D65_WHITE_LMS * peak_value),
-                                         response_power, response_h, response_yf);
-  vec3 selected_coord = desired_coord;
-  if (gamut_compression != 0.0) {
-    vec3 solved_coord = P30YfCeilingSolve(desired_coord, response_yf, gamut_mode);
-    selected_coord = gamut_compression == 1.0 ? solved_coord : mix(desired_coord, solved_coord, gamut_compression);
+  if (all(equal(source_ratio, vec3(0.0)))) return vec3(0.0);
+  int target = int(modes.y);
+  vec3 anchor_target = target == 0 ? anchor_in * P35_LMS_TO_BT709 : anchor_in * P35_LMS_TO_BT2020;
+  float neutral_yf_limit = peak * dot(P35_YF, anchor_in) / Max3(anchor_target);
+  float h = psycho.x == 0.0 ? max(1.85 / (log2(neutral_yf_limit / dot(P35_YF, anchor_in)) * 0.30102999566), 1.0) : psycho.x;
+  float response_power = contrast * max(psycho.z, 1e-4);
+  vec3 anchor_power = pow(anchor_in / (P35_WHITE_LMS * peak), vec3(h));
+  vec3 input_exponent = response_power * h / (1.0 - anchor_power);
+
+  // Factor exposure exactly as the HLSL reference. Zero cones retain their
+  // analytic limits; positive-cone tails retain their log-domain deficits.
+  float drive = Max3(abs(source_ratio));
+  source_ratio /= drive;
+  vec3 log_source_ratio;
+  for (int cone = 0; cone < 3; ++cone) log_source_ratio[cone] = log(source_ratio[cone] != 0.0 ? source_ratio[cone] : 1.0);
+  float exposure_stops = log2(drive);
+  vec3 response, deficit;
+  for (int cone = 0; cone < 3; ++cone) {
+    if (source_ratio[cone] == 0.0) {
+      response[cone] = 0.0;
+      deficit[cone] = 1.0;
+    } else {
+      float log_q = log_source_ratio[cone] + exposure_stops * log(2.0);
+      float latent = log(anchor_power[cone]) - log(1.0 - anchor_power[cone]) + input_exponent[cone] * log_q;
+      float correction = log(1.0 + exp(-abs(latent)));
+      float log_u = (min(latent, 0.0) - correction) / h;
+      float log_tail = -max(latent, 0.0) - correction;
+      float log_deficit = latent > 20.0 ? log_tail - log(h)
+          : log(abs(log_u) < 0.01 ? -log_u * (1.0 + log_u * (0.5 + log_u * (1.0 / 6.0 + log_u / 24.0))) : 1.0 - exp(log_u));
+      response[cone] = exp(log_u);
+      deficit[cone] = exp(log_deficit);
+    }
   }
-  float output_a = (2.0 * selected_coord.y + 3.0 * P30_ALPHA_DELTA * selected_coord.x - selected_coord.z) / 6.0;
-  return peak_value * (output_a + selected_coord.x * P30_BT709_D_RGB + selected_coord.z * P30_BT709_T_RGB);
+  float response_mean = P35Mean(response);
+  vec3 response_residual = response_mean > 0.5 ? P35Mean(deficit) - deficit : response - response_mean;
+  float residual_scale = Max3(abs(response_residual));
+  vec3 scaled_residual = residual_scale > 0.0 ? response_residual / residual_scale : vec3(0.0);
+  float scaled_radius = length(scaled_residual);
+  float radius = residual_scale * scaled_radius;
+  vec3 direction = scaled_radius > 0.0 ? scaled_residual / scaled_radius : vec3(0.0);
+  vec3 source = source_ratio - P35Mean(source_ratio);
+  float source_radius = length(source);
+  if (source_radius > 0.0 && radius > 0.0) {
+    vec3 midpoint_direction = source / source_radius + direction;
+    float midpoint_length = length(midpoint_direction);
+)",
+    R"(    if (midpoint_length > 0.0) direction = midpoint_direction / midpoint_length;
+  }
+  float mean = peak * response_mean;
+  float headroom = peak * P35Mean(deficit);
+  vec3 residual = peak * radius * direction;
+  if (psycho.y == 0.0) return mean + P35TargetResidual(residual, 0);
+  if (all(equal(residual, vec3(0.0)))) return vec3(mean);
+  vec3 target_displacement = P35TargetResidual(residual, target);
+  float scale = 1.0;
+  for (int channel = 0; channel < 3; ++channel) {
+    if (target_displacement[channel] > 0.0) {
+      scale = min(scale, headroom / target_displacement[channel]);
+    } else if (target_displacement[channel] < 0.0) {
+      scale = min(scale, mean / -target_displacement[channel]);
+    }
+  }
+  return mean + P35TargetResidual(residual * mix(1.0, scale, psycho.y), 0);
 }
 
-// ApplyPsychoV30 keeps the general saturation slider (renodx::color::grade::Saturation).
-vec3 ApplyPsychoV30(vec3 color) {
-  color = PsychoV30(color);
+const mat3 BT709_TO_BT2020 = mat3(0.627403895993272, 0.3292830383829807, 0.04331306566132904,
+    0.06909728938704494, 0.9195403951018893, 0.01136231562034049,
+    0.01639143883150003, 0.08801330783058922, 0.8955952531541842);
+const mat3 BT2020_TO_BT709 = mat3(1.660491001968074, -0.5876411387421842, -0.07284986323746398,
+    -0.124550474559401, 1.132899897113987, -0.008349422675236091,
+    -0.01815076327606974, -0.1005788979878201, 1.118729661481103);
+
+vec3 ApplyPsychoV35(vec3 color) {
+  color = PsychoV35(color);
   if (grade.z != 1.0) {
     vec3 lab = OkLabFromBT709(color);
     lab.yz *= grade.z;
-    color = max(BT709FromOkLab(lab) * P30_BT709_TO_AP1, 0.0) * P30_AP1_TO_BT709;
+    color = max(BT709FromOkLab(lab) * P35_BT709_TO_AP1, 0.0) * P35_AP1_TO_BT709;
   }
   return color;
 }
@@ -575,7 +304,34 @@ void main() {
   vec4 source = texelFetch(scene, ivec2(gl_FragCoord.xy), 0);
   // Doom 3 writes a legacy gamma-domain signal; decode it like the display shader.
   vec3 color = Sanitize(pow(Sanitize(source.rgb), vec3(2.2)));
-  color = Sanitize(modes.x == 1.0 ? ApplyPsychoV30(color) : RenoDRT(color));
+  // Extend only scene values above game white. The quadratic onset leaves
+  // diffuse white and its slope unchanged; the tone mapper owns peak rolloff.
+  vec3 scene_color = color;
+  float scene_y = dot(color, BT709_Y);
+  float highlight_weight = scene_y > 1.0 ? 1.0 - 1.0 / scene_y : 0.0;
+  if (scene_y > 1.0) {
+    color *= 1.0 + (max(tone.x, 1.0) - 1.0) * highlight_weight * highlight_weight;
+    color = Sanitize(color);
+  }
+  color = Sanitize(modes.x == 1.0 ? ApplyPsychoV35(color) : RenoDRT(color));
+  if (highlight_weight > 0.0 && tone.x > 1.0) {
+    // Preserve the scene's SDR color ratios at the mapped highlight peak.
+    bool wide_target = modes.x == 1.0 && modes.y != 0.0;
+    vec3 reference = scene_color;
+    if (grade.z != 1.0) {
+      vec3 lab = OkLabFromBT709(reference);
+      lab.yz *= grade.z;
+      reference = max(BT709FromOkLab(lab) * P35_BT709_TO_AP1, 0.0) * P35_AP1_TO_BT709;
+    }
+    reference = max(wide_target ? reference * BT709_TO_BT2020 : reference, 0.0);
+    vec3 mapped = max(wide_target ? color * BT709_TO_BT2020 : color, 0.0);
+    float mapped_peak = Max3(mapped);
+    float bounded_peak = min(mapped_peak, tone.x);
+    mapped *= bounded_peak / max(mapped_peak, 1e-6);
+    reference *= bounded_peak / max(Max3(reference), 1e-6);
+    color = mix(mapped, reference, highlight_weight * highlight_weight);
+    if (wide_target) color = color * BT2020_TO_BT709;
+  }
   // Store relative to UI white, re-encoded to Doom 3's gamma domain so the GUI
   // blends over it exactly as it would over the vanilla scene.
   gl_FragColor = vec4(pow(color * extra.z, vec3(1.0 / 2.2)), source.a);

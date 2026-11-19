@@ -27,7 +27,7 @@ enum class FrameStage : uint8_t { START, SCENE, DONE };
 
 // ShaderInjectData::tone_map_type values the pre-UI pass implements.
 inline constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
-inline constexpr float TONE_MAP_TYPE_PSYCHOV30 = 30.f;
+inline constexpr float TONE_MAP_TYPE_PSYCHOV35 = 35.f;
 
 struct Framebuffer {
   resource back_buffer = {};
@@ -315,7 +315,7 @@ inline bool ToneMapScene(command_list* cmd, Framebuffer& state) {
       {data.tone_map_contrast, 0.10f * std::pow(data.tone_map_flare, 10.f), data.tone_map_saturation, 1.f - data.tone_map_highlight_saturation},
       {data.tone_map_blowout, data.tone_map_per_channel, data.diffuse_white_nits / data.graphics_white_nits, 0.f},
       {data.psychov30_compression, data.psychov30_gamut_compression, data.psychov30_cone_response, data.psychov30_purity_scale},
-      {data.tone_map_type == TONE_MAP_TYPE_PSYCHOV30 ? 1.f : 0.f, data.psychov30_gamut_mode, data.psychov30_source_boundary, 0.f},
+      {data.tone_map_type == TONE_MAP_TYPE_PSYCHOV35 ? 1.f : 0.f, data.psychov30_gamut_mode, data.psychov30_source_boundary, 0.f},
   }};
   gl->use_program(state.program);
   for (size_t i = 0; i < values.size(); ++i) {
@@ -383,7 +383,7 @@ inline void BindScene(command_list* cmd) {
   if (state.stage == FrameStage::START) {
     const bool enabled = injection != nullptr && !state.tone_map_failed && injection->custom_tone_map_before_ui != 0.f
                          && (injection->tone_map_type == TONE_MAP_TYPE_RENODRT
-                             || injection->tone_map_type == TONE_MAP_TYPE_PSYCHOV30);
+                             || injection->tone_map_type == TONE_MAP_TYPE_PSYCHOV35);
     if (enabled && state.depth_test) {
       state.stage = FrameStage::SCENE;
       injection->custom_scene_tone_mapped = 0.f;

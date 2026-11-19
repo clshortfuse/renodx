@@ -57,12 +57,13 @@
 #include "./shared.h"
 #include "./hidden_cursor.hpp"
 #include "./opengl_framebuffer.hpp"
+#include "./arb_programs.hpp"
 
 
 
-#ifndef RENODX_PSYCHOV30_SLIDER_LAYOUT_VERSION
+#ifndef RENODX_PSYCHOV35_SLIDER_LAYOUT_VERSION
 
-#error "DOOM3: shared.h is outdated. Replace shared.h with the PsychoV30 slider version from the same package."
+#error "DOOM3: shared.h is outdated. Replace shared.h with the PsychoV35 slider version from the same package."
 
 #endif
 
@@ -98,7 +99,7 @@ constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 
 using doom3::opengl::TONE_MAP_TYPE_RENODRT;
 
-using doom3::opengl::TONE_MAP_TYPE_PSYCHOV30;
+using doom3::opengl::TONE_MAP_TYPE_PSYCHOV35;
 
 
 
@@ -118,9 +119,9 @@ inline bool IsRenoDRTEnabled() {
 
 
 
-inline bool IsPsychoV30Enabled() {
+inline bool IsPsychoV35Enabled() {
 
-  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV30;
+  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV35;
 
 }
 
@@ -164,9 +165,9 @@ renodx::utils::settings::Settings settings = {
 
         .section = "Tone Mapping",
 
-        .tooltip = "Forward HDR mapping of the preserved FP16 scene composite. Bypass skips custom tone mapping; RenoDRT and PsychoV30 operate on the unclamped scene before final scRGB encoding.",
+        .tooltip = "Forward HDR mapping of the preserved FP16 scene composite. Bypass skips custom tone mapping; RenoDRT and PsychoV35 operate on the unclamped scene before final scRGB encoding.",
 
-        .labels = {"Bypass", "RenoDRT", "PsychoV30"},
+        .labels = {"Bypass", "RenoDRT", "PsychoV35"},
 
         .parse = [](float value) {
 
@@ -174,7 +175,7 @@ renodx::utils::settings::Settings settings = {
 
           if (value < 1.5f) return TONE_MAP_TYPE_RENODRT;
 
-          return TONE_MAP_TYPE_PSYCHOV30;
+          return TONE_MAP_TYPE_PSYCHOV35;
 
         },
 
@@ -196,7 +197,7 @@ renodx::utils::settings::Settings settings = {
 
         .section = "Tone Mapping",
 
-        .tooltip = "Sets the value of peak white in nits",
+        .tooltip = "Sets display peak white and the range available to above-white scene highlights before tone mapping. Game and UI brightness remain separate.",
 
         .min = 48.f,
 
@@ -629,13 +630,13 @@ renodx::utils::settings::Settings settings = {
         .key = "PsychoV30Compression",
         .binding = &shader_injection.psychov30_compression,
         .default_value = 0.f,
-        .label = "PsychoV30 Compression",
+        .label = "PsychoV35 Compression",
         .section = "Color Grading",
-        .tooltip = "PsychoV30 response compression. 0 = auto; 50 = 1.00; 100 = 2.00; 200 = 4.00.",
+        .tooltip = "PsychoV35 response compression. 0 = auto; 50 = 1.00; 100 = 2.00; 200 = 4.00.",
         .min = 0.f,
         .max = 400.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV30Enabled(); },
+        .is_enabled = []() { return IsPsychoV35Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -644,13 +645,13 @@ renodx::utils::settings::Settings settings = {
         .key = "PsychoV30ConeResponse",
         .binding = &shader_injection.psychov30_cone_response,
         .default_value = 50.f,
-        .label = "PsychoV30 Cone Response",
+        .label = "PsychoV35 Cone Response",
         .section = "Color Grading",
-        .tooltip = "PsychoV30 cone-response exponent. 50 = 1.00 neutral.",
+        .tooltip = "PsychoV35 cone-response exponent. 50 = 1.00 neutral.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV30Enabled(); },
+        .is_enabled = []() { return IsPsychoV35Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -659,13 +660,13 @@ renodx::utils::settings::Settings settings = {
         .key = "PsychoV30PurityScale",
         .binding = &shader_injection.psychov30_purity_scale,
         .default_value = 100.f,
-        .label = "PsychoV30 Purity",
+        .label = "PsychoV35 Purity",
         .section = "Color Grading",
         .tooltip = "Adaptation-relative LMS purity scale. 100% = neutral.",
         .min = 0.f,
         .max = 200.f,
         .format = "%.0f%%",
-        .is_enabled = []() { return IsPsychoV30Enabled(); },
+        .is_enabled = []() { return IsPsychoV35Enabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -674,13 +675,13 @@ renodx::utils::settings::Settings settings = {
         .key = "PsychoV30GamutCompression",
         .binding = &shader_injection.psychov30_gamut_compression,
         .default_value = 100.f,
-        .label = "PsychoV30 Gamut Compression",
+        .label = "PsychoV35 Gamut Compression",
         .section = "Color Grading",
-        .tooltip = "PsychoV30 target-volume projection strength.",
+        .tooltip = "PsychoV35 target-volume projection strength.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.0f%%",
-        .is_enabled = []() { return IsPsychoV30Enabled(); },
+        .is_enabled = []() { return IsPsychoV35Enabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
@@ -690,10 +691,10 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.psychov30_gamut_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .label = "PsychoV30 Target Gamut",
+        .label = "PsychoV35 Target Gamut",
         .section = "Color Grading",
         .labels = {"BT709", "BT2020"},
-        .is_enabled = []() { return IsPsychoV30Enabled(); },
+        .is_enabled = []() { return IsPsychoV35Enabled(); },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
 
@@ -702,12 +703,12 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.psychov30_source_boundary,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .label = "PsychoV30 Source Boundary",
+        .label = "PsychoV35 Source Boundary",
         .section = "Color Grading",
-        .tooltip = "Selects the source-boundary treatment used by PsychoV30.",
+        .tooltip = "Legacy preset value. PsychoV35 uses extended BT.709 directly.",
         .labels = {"None", "BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return IsPsychoV30Enabled(); },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_enabled = []() { return IsPsychoV35Enabled(); },
+        .is_visible = []() { return false; },
     },
 
     new renodx::utils::settings::Setting{
@@ -1554,6 +1555,7 @@ for (const auto old_format : scene_intermediate_formats) {
 
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   doom3::opengl::Use(fdw_reason, &shader_injection);
+  doom3::arb::Use(fdw_reason);
   doom3::cursor::Use(fdw_reason);
 
 

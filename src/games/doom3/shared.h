@@ -1,7 +1,7 @@
 #ifndef SRC_DOOM3_SHARED_H_
 #define SRC_DOOM3_SHARED_H_
 
-#define RENODX_PSYCHOV30_SLIDER_LAYOUT_VERSION 1
+#define RENODX_PSYCHOV35_SLIDER_LAYOUT_VERSION 1
 
 // #define RENODX_PEAK_WHITE_NITS                 1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS              renodx::color::bt2408::REFERENCE_WHITE
@@ -37,7 +37,7 @@
 // #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
 
 // Must be 32-bit aligned.
-// PsychoV30 controls are appended so all pre-existing injected field offsets
+// PsychoV35 controls are appended so all pre-existing injected field offsets
 // remain stable. The appended block remains 8 floats, matching the old V24 size;
 // its last two former padding slots now carry the pre-UI tone map state.
 struct ShaderInjectData {
@@ -79,7 +79,7 @@ struct ShaderInjectData {
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
 
-  // PsychoV30 Test30 controls.
+  // PsychoV35 controls retain the legacy field names and offsets for presets.
   float psychov30_compression;
   float psychov30_gamut_compression;
   float psychov30_gamut_mode;
@@ -122,38 +122,38 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV30
-#define RENODX_TONE_MAP_TYPE_PSYCHOV30 30.f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV35
+#define RENODX_TONE_MAP_TYPE_PSYCHOV35 35.f
 #endif
 
-#ifndef RENODX_PSYCHOV30_COMPRESSION
-#define RENODX_PSYCHOV30_COMPRESSION shader_injection.psychov30_compression
+#ifndef RENODX_PSYCHOV35_COMPRESSION
+#define RENODX_PSYCHOV35_COMPRESSION shader_injection.psychov30_compression
 #endif
 
-#ifndef RENODX_PSYCHOV30_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV30_GAMUT_COMPRESSION shader_injection.psychov30_gamut_compression
+#ifndef RENODX_PSYCHOV35_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV35_GAMUT_COMPRESSION shader_injection.psychov30_gamut_compression
 #endif
 
-#ifndef RENODX_PSYCHOV30_GAMUT_MODE
-#define RENODX_PSYCHOV30_GAMUT_MODE ((int)shader_injection.psychov30_gamut_mode)
+#ifndef RENODX_PSYCHOV35_GAMUT_MODE
+#define RENODX_PSYCHOV35_GAMUT_MODE ((int)shader_injection.psychov30_gamut_mode)
 #endif
 
-#ifndef RENODX_PSYCHOV30_CONE_RESPONSE
-#define RENODX_PSYCHOV30_CONE_RESPONSE shader_injection.psychov30_cone_response
+#ifndef RENODX_PSYCHOV35_CONE_RESPONSE
+#define RENODX_PSYCHOV35_CONE_RESPONSE shader_injection.psychov30_cone_response
 #endif
 
-#ifndef RENODX_PSYCHOV30_PURITY_SCALE
-#define RENODX_PSYCHOV30_PURITY_SCALE shader_injection.psychov30_purity_scale
+#ifndef RENODX_PSYCHOV35_PURITY_SCALE
+#define RENODX_PSYCHOV35_PURITY_SCALE shader_injection.psychov30_purity_scale
 #endif
 
-#ifndef RENODX_PSYCHOV30_SOURCE_BOUNDARY
-#define RENODX_PSYCHOV30_SOURCE_BOUNDARY ((int)shader_injection.psychov30_source_boundary)
+#ifndef RENODX_PSYCHOV35_SOURCE_BOUNDARY
+#define RENODX_PSYCHOV35_SOURCE_BOUNDARY ((int)shader_injection.psychov30_source_boundary)
 #endif
 
-#define RENODX_PSYCHOV30_SOURCE_BOUNDARY_NONE   0
-#define RENODX_PSYCHOV30_SOURCE_BOUNDARY_BT709  1
-#define RENODX_PSYCHOV30_SOURCE_BOUNDARY_BT2020 2
-#define RENODX_PSYCHOV30_SOURCE_BOUNDARY_AP1    3
+#define RENODX_PSYCHOV35_SOURCE_BOUNDARY_NONE   0
+#define RENODX_PSYCHOV35_SOURCE_BOUNDARY_BT709  1
+#define RENODX_PSYCHOV35_SOURCE_BOUNDARY_BT2020 2
+#define RENODX_PSYCHOV35_SOURCE_BOUNDARY_AP1    3
 
 #define RENODX_COLOR_GRADE_STRENGTH            shader_injection.color_grade_strength
 #define RENODX_INTERMEDIATE_ENCODING           shader_injection.intermediate_encoding

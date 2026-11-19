@@ -3,16 +3,16 @@
 
 
 
-#define RENODX_PSYCHOV24_SLIDER_LAYOUT_VERSION 1
+#define RENODX_PSYCHOV30_SLIDER_LAYOUT_VERSION 1
 // Tone mapper IDs used by Addon.cpp and HLSL.
 #define RENODX_TONE_MAP_TYPE_VANILLA   0.f
 #define RENODX_TONE_MAP_TYPE_RENODRT   3.f
-#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.f
+#define RENODX_TONE_MAP_TYPE_PSYCHOV30 30.f
 
 
 // Must be 32-bit aligned.
 // Keep the original first 32 float layout stable for the DX9/ps_3_0 c50-c57 path.
-// New PsychoV24 controls are appended at c58, not inserted in the middle.
+// PsychoV30 reuses the appended PsychoV24 slots starting at c58.
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
@@ -70,25 +70,25 @@ struct ShaderInjectData {
   float custom_flip_uv_y;
 
 
-  // PsychoV24 controls.
+  // PsychoV30 controls.
   // These remain at the same c58/c59 positions used by the previous build.
-  float psychov24_compression;
-  float psychov24_gamut_compression;
-  float psychov24_gamut_mode;
+  float psychov30_compression;
+  float psychov30_gamut_compression;
+  float psychov30_gamut_mode;
 
 
   // c59
-  float psychov24_cone_response;  // x
-  float bloom_brightness;         // y
-  float bloom_flare_size;         // z
-  float hdr_boost;                // w
+  float psychov30_cone_response;  // x
+  float bloom_brightness;        // y
+  float bloom_flare_size;        // z
+  float hdr_boost;               // w
 
   // c60
   // Appended so the original c50-c59 DX9 layout remains byte-for-byte stable.
-  float psychov24_highlight_saturation;  // x
-  float psychov24_gamut_hue_restore;     // y
+  float psychov30_purity;                // x
+  float psychov30_reserved;              // y: preserve the former V24 hue-restore slot
   float scene_itm;                       // z: scene-only inverse tone mapping
-  float psychov24_padding1;              // w
+  float psychov30_padding1;              // w
 
   // c61-c63: stock composite film coefficients, captured per device/draw.
   float stock_film_curve[12];
@@ -103,9 +103,9 @@ struct ShaderInjectData {
 
 // DX9/SM3 path.
 // c50-c57 preserve the original layout.
-// c58 adds custom_flip_uv_y plus the first PsychoV24 controls.
-// c59 adds PsychoV24 cone response, bloom controls, and HDR Boost.
-// c60 adds PsychoV24 highlight saturation and gamut hue restoration.
+// c58 adds custom_flip_uv_y plus the first PsychoV30 controls.
+// c59 adds PsychoV30 cone response, bloom controls, and HDR Boost.
+// c60 holds PsychoV30 purity, a reserved legacy slot, and scene ITM.
 float4 shader_injection[14] : register(c50);
 
 
@@ -156,10 +156,10 @@ float4 shader_injection[14] : register(c50);
 
 
 #define RENODX_CUSTOM_FLIP_UV_Y                shader_injection[8][0]
-#define RENODX_PSYCHOV24_COMPRESSION           shader_injection[8][1]
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION     shader_injection[8][2]
-#define RENODX_PSYCHOV24_GAMUT_MODE            shader_injection[8][3]
-#define RENODX_PSYCHOV24_CONE_RESPONSE         shader_injection[9][0]
+#define RENODX_PSYCHOV30_COMPRESSION           shader_injection[8][1]
+#define RENODX_PSYCHOV30_GAMUT_COMPRESSION     shader_injection[8][2]
+#define RENODX_PSYCHOV30_GAMUT_MODE            shader_injection[8][3]
+#define RENODX_PSYCHOV30_CONE_RESPONSE         shader_injection[9][0]
 #define RENODX_BLOOM_BRIGHTNESS                shader_injection[9][1]
 #define RENODX_BLOOM_FLARE_SIZE                shader_injection[9][2]
 #define RENODX_HDR_BOOST                       shader_injection[9][3]
@@ -167,8 +167,7 @@ float4 shader_injection[14] : register(c50);
 #define RENODX_STOCK_FILM_1 shader_injection[12]
 #define RENODX_STOCK_FILM_2 shader_injection[13]
 #define RENODX_SCENE_ITM                       shader_injection[10][2]
-#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection[10][0]
-#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE    shader_injection[10][1]
+#define RENODX_PSYCHOV30_PURITY                shader_injection[10][0]
 
 
 #else
@@ -235,12 +234,11 @@ cbuffer shader_injection : register(b13) {
 
 
 #define RENODX_CUSTOM_FLIP_UV_Y                shader_injection.custom_flip_uv_y
-#define RENODX_PSYCHOV24_COMPRESSION           shader_injection.psychov24_compression
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION     shader_injection.psychov24_gamut_compression
-#define RENODX_PSYCHOV24_GAMUT_MODE            shader_injection.psychov24_gamut_mode
-#define RENODX_PSYCHOV24_CONE_RESPONSE         shader_injection.psychov24_cone_response
-#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection.psychov24_highlight_saturation
-#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE    shader_injection.psychov24_gamut_hue_restore
+#define RENODX_PSYCHOV30_COMPRESSION           shader_injection.psychov30_compression
+#define RENODX_PSYCHOV30_GAMUT_COMPRESSION     shader_injection.psychov30_gamut_compression
+#define RENODX_PSYCHOV30_GAMUT_MODE            shader_injection.psychov30_gamut_mode
+#define RENODX_PSYCHOV30_CONE_RESPONSE         shader_injection.psychov30_cone_response
+#define RENODX_PSYCHOV30_PURITY                shader_injection.psychov30_purity
 #define RENODX_BLOOM_BRIGHTNESS                shader_injection.bloom_brightness
 #define RENODX_BLOOM_FLARE_SIZE                shader_injection.bloom_flare_size
 #define RENODX_HDR_BOOST                       shader_injection.hdr_boost

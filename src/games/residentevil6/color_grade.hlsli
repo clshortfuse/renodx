@@ -39,8 +39,11 @@ float3 SampleGameLutLinear(sampler2D table, float3 address) {
   float3 first = floor(texel);
   float3 a = (clamp(first, 0.f, 1023.f) + 0.5f) / 1024.f;
   float3 b = (clamp(first + 1.f, 0.f, 1023.f) + 0.5f) / 1024.f;
-  return lerp(DecodeGameSRGB(SampleGameLutAtMipZero(table, a)),
+  float3 sampled = lerp(DecodeGameSRGB(SampleGameLutAtMipZero(table, a)),
       DecodeGameSRGB(SampleGameLutAtMipZero(table, b)), frac(texel));
+  // The first texel represents x = 0.5/1024, not black. Continue to zero
+  // across the missing half texel instead of holding its positive value.
+  return sampled * saturate(address * 2048.f);
 }
 
 // The nearest FP16 value below one can also be the encoded white plateau.
@@ -89,19 +92,6 @@ float3 ExtendGameLutHighlights(float3 address, float3 graded, sampler2D table, f
   return graded + extended;
 }
 
-float3 GameLutShoulderAddress(float3 address) {
-  float y = renodx::color::y::from::BT709(max(address, 0.f));
-  float3 early_shoulder = smoothstep(0.05f, 0.22f, address - y);
-
-  // A channel can enter the shoulder before the pixel as a whole. Redistribute
-  // that channel's lookup range while keeping both ends of the shoulder fixed.
-  const float shoulder_start = 0.42f;
-  const float shoulder_width = 1.f - shoulder_start;
-  float3 t = saturate((address - shoulder_start) / shoulder_width);
-  float3 bend = t * (1.f - t) * smoothstep(0.f, 0.4f, t) * (1.f - smoothstep(0.8f, 1.f, t));
-  return address - (0.65f * shoulder_width) * early_shoulder * bend;
-}
-
 float3 ApplyGameMidtoneSeparation(float3 graded) {
   // Older add-ons leave this register at zero. Preview the default in that case.
   float setting = RENODX_MIDTONE_SEPARATION;
@@ -123,13 +113,15 @@ float3 ApplyGameColorGrade(float3 color, float4x4 color_matrix, sampler2D table,
   strength *= saturate(RENODX_COLOR_GRADE_STRENGTH);
   if (strength <= 0.f) return color;
 
-  float3 lookup = GameLutShoulderAddress(address);
+  // Continue the authored curve before its flat white endpoint. This is a
+  // linear-input 1D curve, so its measured slope can extend the real scene
+  // directly without a clipped SDR proxy or luminance-delta reconstruction.
+  float white_coordinate = 0.9f * GameLutWhiteCoordinate(table);
+  float3 lookup = min(max(address, 0.f), white_coordinate);
   float3 graded = SampleGameLutLinear(table, lookup);
   [branch]
-  float encoded_white_linear = DecodeGameSRGB(kGameLutEncodedWhite.xxx).r;
-  if (any(lookup > 1.f) || any(graded >= encoded_white_linear)) {
-    float white_coordinate = GameLutWhiteCoordinate(table);
-    graded = ExtendGameLutHighlights(lookup, graded, table, white_coordinate);
+  if (any(address > white_coordinate)) {
+    graded = ExtendGameLutHighlights(address, graded, table, white_coordinate);
   }
   return lerp(color, ApplyGameMidtoneSeparation(graded), strength);
 }

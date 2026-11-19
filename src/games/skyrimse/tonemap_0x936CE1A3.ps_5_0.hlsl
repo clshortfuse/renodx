@@ -1,40 +1,4 @@
-#include "./shared.h"
-
-#ifndef RENODX_USE_PSYCHOV24
-#define RENODX_USE_PSYCHOV24 1
-#endif
-
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
-#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_COMPRESSION
-#define RENODX_PSYCHOV24_COMPRESSION 0.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_GAMUT_MODE
-#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
-#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
-#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
-#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
-#endif
-
-#if RENODX_USE_PSYCHOV24
-#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
-#endif
+#include "./tonemap.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat May 18 02:41:57 2024
 Texture2D t2 : register(t2);  // adaptation
@@ -55,71 +19,6 @@ cbuffer cb12 : register(b12) {
 
 // 3Dmigoto declarations
 #define cmp -
-
-float SafeFinite1(float v)
-{
-  // NaN is the only value where v != v.
-  v = (v == v) ? v : 0.0f;
-  return min(max(v, 0.0f), 65504.0f);
-}
-
-float3 SafePositive(float3 c)
-{
-  return float3(SafeFinite1(c.r), SafeFinite1(c.g), SafeFinite1(c.b));
-}
-
-bool IsRenoDRTMode()
-{
-  return abs(RENODX_TONE_MAP_TYPE - renodx::draw::TONE_MAP_TYPE_RENO_DRT) < 0.5f;
-}
-
-bool IsPsychoV24Mode()
-{
-  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV24) < 0.5f;
-}
-
-bool IsCustomHDRMode()
-{
-  return IsRenoDRTMode() || IsPsychoV24Mode();
-}
-
-float3 ApplyPsychoV24HDRTonemap(float3 hdr_color)
-{
-  hdr_color = SafePositive(hdr_color);
-
-#if RENODX_USE_PSYCHOV24
-  float peak_value = max(
-      RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
-      1.0f);
-
-  int gamut_mode = (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f) ? 1 : 0;
-
-  hdr_color = renodx::tonemap::psychov::psychotm_test24(
-      hdr_color,
-      peak_value,
-      RENODX_TONE_MAP_EXPOSURE,
-      RENODX_TONE_MAP_HIGHLIGHTS,
-      RENODX_TONE_MAP_SHADOWS,
-      RENODX_TONE_MAP_CONTRAST,
-      RENODX_TONE_MAP_SATURATION,
-      1.0f,                                      // bleaching_intensity, reserved
-      100.0f,                                    // clip_point, reserved
-      RENODX_TONE_MAP_HUE_CORRECTION,
-      1.0f,                                      // adaptation_contrast, deprecated
-      0,                                         // white_curve_mode, deprecated
-      RENODX_PSYCHOV24_CONE_RESPONSE,            // cone_response_exponent
-      0.18f.xxx,                                 // current adaptive state / anchor-in
-      0.18f.xxx,                                 // desired background state / anchor-out
-      RENODX_PSYCHOV24_GAMUT_COMPRESSION,
-      gamut_mode,
-      1.0f,                                      // adaptive_normalization, deprecated
-      RENODX_PSYCHOV24_COMPRESSION,              // 0 = auto
-      RENODX_PSYCHOV24_HIGHLIGHT_SATURATION,     // V24 parameter
-      RENODX_PSYCHOV24_GAMUT_HUE_RESTORE);       // V24 parameter
-#endif
-
-  return SafePositive(hdr_color);
-}
 
 void main(
     float4 v0 : SV_POSITION0,
@@ -204,37 +103,16 @@ void main(
     return;
   }
 
-  // ===== HDR PATH (RenoDRT / PsychoV24) =====
+  // ===== HDR PATH (RenoDRT / PsychoV35) =====
   {
     // Apply eye adaptation once, consistently in both HDR variants.
     float exposure = SafeFinite1(r2.y / max(r2.x, 1e-5f));
-    r0.xyz = SafePositive(r0.xyz * exposure);
-
-    // Retain the game's receiver-brightness falloff with a soft knee, so the
-    // quarter-resolution blur does not cover bright surfaces in broad blobs.
-    // Use a shared RGB weight to preserve hue, with no per-channel hard cap.
-    float bloomLimit = saturate(cb2[2].x);
-    float sceneLuma = renodx::color::y::from::BT709(r0.xyz);
-    float knee = max(0.1f * bloomLimit, 1e-5f);
-    float delta = bloomLimit - sceneLuma;
-    float softWeight = delta >= 0.0f
-        ? 0.5f * (delta + sqrt(delta * delta + knee * knee))
-        : 0.5f * knee * knee / (sqrt(delta * delta + knee * knee) - delta);
-    float bloomStrength = 0.35f * min(bloomLimit, softWeight);
-    float3 bloomLinear = renodx::color::gamma::DecodeSafe(SafePositive(r1.xyz));
+    r0.xyz = CompositeSkyrimHDRBloom(r0.xyz, r1.xyz, exposure, cb2[2]);
 
     renodx::draw::Config config = renodx::draw::BuildConfig();
     config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE;
 
-    // Linearize to BT.709 scene-linear for RenoDRT/PsychoV24.
-    r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
-
-    r0.xyz = SafePositive(r0.xyz + bloomLinear * bloomStrength);
-
-    // Apply Skyrim grading before the display tone mapper so its gain
-    // cannot undo the configured highlight roll-off. Grading expects gamma space.
-    r0.xyz = renodx::color::gamma::Encode(SafePositive(r0.xyz));
-
+    // Native bloom composition and grading use the same gamma domain.
     // Color grading (in gamma space)
     r1.x = dot(r0.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
     r0.w = 1;
@@ -266,8 +144,8 @@ void main(
     // after eye adaptation and before either HDR tone mapper.
     r0.xyz = HDRBoost(r0.xyz, CUSTOM_HDR_BOOST);
 
-    if (IsPsychoV24Mode()) {
-      r0.xyz = ApplyPsychoV24HDRTonemap(r0.xyz);
+    if (IsPsychoV35Mode()) {
+      r0.xyz = ApplyPsychoV35HDRTonemap(r0.xyz, cb12[42].x);
     } else {
       r0.xyz = renodx::draw::ToneMapPass(r0.xyz, config);
     }

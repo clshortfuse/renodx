@@ -23,14 +23,37 @@ cbuffer GameGrade : register(b0) {
   float4 cb0[186];
 }
 
-float3 ApplyGameLUTAndGrade(float3 encoded) {
-  // The native shader addresses each 16-entry table independently in gamma space.
-  float3 address = encoded * cb0[128].xyz + cb0[129].xyz;
+// Continue each native 16-entry curve past its endpoint instead of sampling a
+// compressed proxy and trying to restore clipped color afterward. The input
+// and output here are the game's gamma-2.2 values, not linear light.
+float SampleRogueCurve(Texture2D<float4> table, SamplerState table_sampler,
+                       float encoded, float address_scale, float address_offset, bool extend_lut) {
+  float sampled = table.SampleLevel(table_sampler, float2(encoded * address_scale + address_offset, 0.5f), 0.f).r;
+  if (extend_lut && encoded > 1.f) {
+    float edge = table.SampleLevel(table_sampler, float2(address_scale + address_offset, 0.5f), 0.f).r;
+    float inner = table.SampleLevel(table_sampler, float2((14.f / 15.f) * address_scale + address_offset, 0.5f), 0.f).r;
+    float slope = max((edge - inner) * 15.f, 0.f);
+    float excess = encoded - 1.f;
+    // Match the last segment at the join, recovering unit slope gradually if
+    // an authored endpoint is flat. Identity curves remain identity above one.
+    float continuation = excess + (slope - 1.f) * (1.f - exp(-excess));
+    sampled = max(edge + continuation, 0.f);
+  }
+  return sampled;
+}
+
+float3 ApplyGameLUTAndGrade(float3 encoded, bool extend_lut = false) {
+  // Preserve the game's sampler and cbuffer half-texel addressing for all
+  // three independent 1D curves; generic 3D LUT sampling is not equivalent.
   float4 lut = float4(
-      t5.SampleLevel(s5_s, float2(address.r, 0.5f), 0.f).r,
-      t6.SampleLevel(s6_s, float2(address.g, 0.5f), 0.f).r,
-      t7.SampleLevel(s7_s, float2(address.b, 0.5f), 0.f).r,
+      SampleRogueCurve(t5, s5_s, encoded.r, cb0[128].r, cb0[129].r, extend_lut),
+      SampleRogueCurve(t6, s6_s, encoded.g, cb0[128].g, cb0[129].g, extend_lut),
+      SampleRogueCurve(t7, s7_s, encoded.b, cb0[128].b, cb0[129].b, extend_lut),
       1.f);
+  // Like AC1/Liberation's range reconstruction, carry the scale around the
+  // bounded matrix/filter grade so its SDR clamps cannot erase HDR detail.
+  float grade_range = extend_lut ? max(1.f, max(lut.r, max(lut.g, lut.b))) : 1.f;
+  lut.rgb /= grade_range;
   float3 graded = saturate(float3(dot(lut, cb0[183]), dot(lut, cb0[184]), dot(lut, cb0[185])));
 
   if (asuint(cb0[132].x) != 0u) {
@@ -39,17 +62,7 @@ float3 ApplyGameLUTAndGrade(float3 encoded) {
     float3 overlay = graded < 0.5f ? 2.f * tint * graded : 1.f - 2.f * (1.f - tint) * (1.f - graded);
     graded = lerp(graded, overlay, cb0[134].w);
   }
-  return graded;
-}
-
-float3 ReconstructRogueGrade(float3 hdr) {
-  float3 encoded = renodx::color::gamma::EncodeSafe(hdr);
-  // Only the top of the SDR input range needs a shoulder. Apply it per channel
-  // so saturated colors keep their native LUT coordinates through the midtones.
-  float3 lookup = saturate(renodx::tonemap::ExponentialRollOff(encoded, 0.9f, 1.f));
-  float3 neutral_sdr = renodx::color::gamma::DecodeSafe(lookup);
-  float3 graded_sdr = renodx::color::gamma::DecodeSafe(saturate(ApplyGameLUTAndGrade(lookup)));
-  return renodx::draw::ComputeUntonemappedGraded(hdr, graded_sdr, neutral_sdr);
+  return graded * grade_range;
 }
 
 float3 MapRogueDisplay(float3 scene, float mode) {
@@ -92,16 +105,18 @@ void main(float4 position : SV_Position0, float2 uv : TEXCOORD0, out float4 outp
   float3 scene = RogueFinite(t0.Sample(s0_s, uv).rgb);
   float3 bloom = RogueFinite(t4.Sample(s4_s, uv).rgb);
   float mode = RENODX_TONE_MAP_TYPE;
-  if (mode != renodx::draw::TONE_MAP_TYPE_RENO_DRT
-      && mode != RENODX_TONE_MAP_TYPE_PSYCHOV24
-      && mode != RENODX_TONE_MAP_TYPE_PSYCHOV30) {
+  if (RENODX_PEAK_WHITE_NITS <= 0.f
+      || (mode != renodx::draw::TONE_MAP_TYPE_RENO_DRT
+          && mode != RENODX_TONE_MAP_TYPE_PSYCHOV24
+          && mode != RENODX_TONE_MAP_TYPE_PSYCHOV30)) {
     output = float4(ApplyGameLUTAndGrade(saturate(scene + bloom)), 0.f);
     return;
   }
 
   float3 source = min(max(scene, 0.f) + max(bloom, 0.f) * RENODX_BLOOM_STRENGTH, ROGUE_FP16_MAX);
   float3 hdr = max(RogueFinite(PreTonemapSliders(renodx::color::gamma::DecodeSafe(source))), 0.f);
-  float3 graded = max(RogueFinite(ReconstructRogueGrade(hdr)), 0.f);
+  float3 graded = renodx::color::gamma::DecodeSafe(ApplyGameLUTAndGrade(renodx::color::gamma::EncodeSafe(hdr), true));
+  graded = max(RogueFinite(lerp(hdr, graded, saturate(RENODX_COLOR_GRADE_STRENGTH))), 0.f);
   float3 mapped = max(RogueFinite(PostTonemapSliders(MapRogueDisplay(graded, mode))), 0.f);
   output = float4(min(renodx::color::gamma::EncodeSafe(mapped), ROGUE_FP16_MAX), 0.f);
 }

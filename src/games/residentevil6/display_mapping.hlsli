@@ -18,17 +18,7 @@ float3 MapGameTone(float3 scene, float mode) {
   }
   renodx::draw::Config config = renodx::draw::BuildConfig();
   config.tone_map_type = RENODX_TONE_MAP_TYPE_RENODRT;
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE;
-
-  // RenoDRT's Hermite spline ends at its scene white limit. Hold that endpoint
-  // for inputs beyond it so the spline cannot bend back down in extreme highlights.
-  float3 working = renodx::color::convert::ColorSpaces(
-      scene, renodx::color::convert::COLOR_SPACE_BT709, config.tone_map_working_color_space);
-  if (config.tone_map_working_color_space == renodx::color::convert::COLOR_SPACE_AP1) working = max(working, 0.f);
-  float driver = config.tone_map_per_channel == 1.f ? renodx::math::Max(working)
-      : renodx::color::convert::Luminance(working, config.tone_map_working_color_space);
-  float limit = config.reno_drt_white_clip;
-  scene *= limit / max(limit, driver * config.tone_map_exposure);
+  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::REINHARD;
   return renodx::draw::ToneMapPass(scene, config);
 }
 

@@ -34,7 +34,15 @@ inline bool OnCreatePipeline(reshade::api::device* device, reshade::api::pipelin
   if (!original.starts_with("!!ARBfp1.0")) return false;
   const auto hash = renodx::utils::hash::ComputeCRC32(
       static_cast<const uint8_t*>(desc->code), desc->code_size);
-  if (hash != 0xE414AC30u && hash != 0x121690B2u) return false;
+  switch (hash) {
+    case 0xE414AC30u:  // Interaction lighting.
+    case 0x121690B2u:  // Masked heat haze.
+    case 0xAE3E3432u:  // Cube-map reflections.
+    case 0xC0AFD5D0u:  // Unmasked heat haze.
+      break;
+    default:
+      return false;
+  }
   const auto position = original.find(CLAMP);
   if (position == std::string_view::npos
       || original.find(CLAMP, position + CLAMP.size()) != std::string_view::npos) return false;
@@ -46,8 +54,7 @@ inline bool OnCreatePipeline(reshade::api::device* device, reshade::api::pipelin
   desc->code = replacement->second.data();
   desc->code_size = replacement->second.size();
   reshade::log::message(reshade::log::level::info,
-      hash == 0xE414AC30u ? "[Doom3 ARB] Submitting unclamped interaction program."
-                        : "[Doom3 ARB] Submitting unclamped distortion program.");
+      "[Doom3 ARB] Submitting range-preserving lighting/reflection/distortion program.");
   return true;
 }
 
@@ -65,8 +72,7 @@ inline void OnInitPipeline(reshade::api::device* device, reshade::api::pipeline_
         || std::string_view(static_cast<const char*>(desc->code), desc->code_size) != source) continue;
     // ReShade emits init_pipeline for ARB programs only after successful upload.
     reshade::log::message(reshade::log::level::info,
-        hash == 0xE414AC30u ? "[Doom3 ARB] Driver accepted unclamped interaction program."
-                          : "[Doom3 ARB] Driver accepted unclamped distortion program.");
+        "[Doom3 ARB] Driver accepted range-preserving lighting/reflection/distortion program.");
     break;
   }
 }

@@ -1,0 +1,95 @@
+name: Build legoliamneeson mods
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Release (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            msvc-arch: amd64
+            build-dir: build
+            extension: addon64
+            targets: >-
+              CODColdWar CODGHOSTS CODMW3 CODWW2 doom3 gearsofwar4
+              gearsofwarredux gearsreloaded generic_opengl skyrimse
+          - arch: x86
+            msvc-arch: amd64_x86
+            build-dir: build32
+            extension: addon32
+            targets: >-
+              AssassinsCreedLiberation AssassinsCreedRogue CODBLOPS CODBLOPS2
+              CODMW3x86 CODWAW doom3 generic_opengl residentevil6
+
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_CACHE_SIZE: "5G"
+      SCCACHE_C_CUSTOM_CACHE_BUSTER: "${{ github.workflow }}-${{ matrix.arch }}"
+      MOD_TARGETS: ${{ matrix.targets }}
+      MOD_BUILD_DIR: ${{ matrix.build-dir }}
+      MOD_EXTENSION: ${{ matrix.extension }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Set up shader tools
+        run: .\scripts\setup-dev-env.ps1 -Update -Tools dxc,slang,glslang
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: ${{ matrix.arch }}
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc-arch }}
+
+      - name: Configure CMake
+        run: cmake --preset clang-${{ matrix.arch }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Build mods
+        run: |
+          $targets = $env:MOD_TARGETS -split '\s+'
+          cmake --build --preset clang-${{ matrix.arch }}-release --target @targets --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect addons
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          foreach ($target in ($env:MOD_TARGETS -split '\s+')) {
+            Copy-Item -LiteralPath "$env:MOD_BUILD_DIR/Release/renodx-$target.$env:MOD_EXTENSION" -Destination artifacts -ErrorAction Stop
+          }
+
+      - name: Upload addons
+        uses: actions/upload-artifact@v4
+        with:
+          name: renodx-legoliamneeson-${{ matrix.arch }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats

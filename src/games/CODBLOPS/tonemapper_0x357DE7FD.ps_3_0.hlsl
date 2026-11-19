@@ -2,60 +2,59 @@
 
 
 // ============================================================================
-// PsychoV24 configuration
+// PsychoV30 configuration
 // ============================================================================
 
-#ifndef RENODX_USE_PSYCHOV24
-#define RENODX_USE_PSYCHOV24 1
+#ifndef RENODX_USE_PSYCHOV30
+#define RENODX_USE_PSYCHOV30 1
 #endif
 
 #ifndef RENODX_TONE_MAP_TYPE_VANILLA
 #define RENODX_TONE_MAP_TYPE_VANILLA 0.0f
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
-#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV30
+#define RENODX_TONE_MAP_TYPE_PSYCHOV30 30.0f
 #endif
 
 // 0.0 = automatic compression.
-#ifndef RENODX_PSYCHOV24_COMPRESSION
-#define RENODX_PSYCHOV24_COMPRESSION 0.0f
+#ifndef RENODX_PSYCHOV30_COMPRESSION
+#define RENODX_PSYCHOV30_COMPRESSION 0.0f
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV30_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV30_GAMUT_COMPRESSION 1.0f
 #endif
 
-// 0 = disabled.
-// 1 = enabled.
-#ifndef RENODX_PSYCHOV24_GAMUT_MODE
-#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
+// 0 = constrain to BT.709.
+// 1 = constrain to BT.2020.
+#ifndef RENODX_PSYCHOV30_GAMUT_MODE
+#define RENODX_PSYCHOV30_GAMUT_MODE 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
-#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
+#ifndef RENODX_PSYCHOV30_CONE_RESPONSE
+#define RENODX_PSYCHOV30_CONE_RESPONSE 1.0f
 #endif
 
 
-#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
-#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
+#ifndef RENODX_PSYCHOV30_PURITY
+#define RENODX_PSYCHOV30_PURITY 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
-#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
-#endif
-#if RENODX_USE_PSYCHOV24
-#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
+#if RENODX_USE_PSYCHOV30
+#include "../../shaders/tonemap/psychov/test30.hlsl"
 #endif
 
 
 // ============================================================================
-// Gamma decode configuration
+// Game transport decode configuration
 // ============================================================================
 
 // 1 = decode both the Vanilla graded result and the HDR-restored result with
 //     a power-law gamma 2.0 curve.
 // 0 = leave both signals in their existing encoded domain.
+// This decodes BO1's gamma-2 transport into linear light; it is separate from
+// the user-selected display gamma correction applied after tonemapping.
 #ifndef RENODX_GAMMA_DECODE_INPUT
 #define RENODX_GAMMA_DECODE_INPUT 1
 #endif
@@ -105,7 +104,7 @@
 // ============================================================================
 
 // The same hue-preserving white shoulder is applied before both RenoDRT and
-// PsychoV24. It does not affect Vanilla mode.
+// PsychoV30. It does not affect Vanilla mode.
 //
 // Values below START pass through unchanged. Values above START are smoothly
 // compressed toward LIMIT. Lower values create a stronger white clip.
@@ -116,12 +115,6 @@
 #ifndef RENODX_WHITE_CLIP_LIMIT
 #define RENODX_WHITE_CLIP_LIMIT 8.0f
 #endif
-
-// PsychoV24 also has its own internal clip point. Lower is stronger.
-#ifndef RENODX_PSYCHOV24_CLIP_POINT
-#define RENODX_PSYCHOV24_CLIP_POINT 8.0f
-#endif
-
 
 // ============================================================================
 // Controlled HDR highlight restoration
@@ -795,7 +788,7 @@ float3 GammaDecode2(float3 encodedColor)
 }
 
 
-// Hue-preserving soft white clip shared by RenoDRT and PsychoV24.
+// Hue-preserving soft white clip shared by RenoDRT and PsychoV30.
 //
 // The maximum RGB channel is used as the highlight magnitude. All channels
 // are then scaled equally, preserving the original highlight hue.
@@ -865,25 +858,28 @@ bool IsVanillaMode()
 }
 
 
-bool IsPsychoV24Mode()
+bool IsPsychoV30Mode()
 {
     return abs(
         RENODX_TONE_MAP_TYPE
-        - RENODX_TONE_MAP_TYPE_PSYCHOV24
+        - RENODX_TONE_MAP_TYPE_PSYCHOV30
     ) < 0.5f;
 }
 
 
 // ============================================================================
-// PsychoV24 tonemapper
+// PsychoV30 tonemapper
 // ============================================================================
 
-float3 ApplyPsychoV24Tonemap(float3 linearColor)
+float3 ApplyPsychoV30Tonemap(float3 linearColor)
 {
     linearColor =
         SafePositive(linearColor);
 
-#if RENODX_USE_PSYCHOV24
+#if RENODX_USE_PSYCHOV30
+
+    float sourceLuminance =
+        renodx::color::y::from::BT709(linearColor);
 
     float peakValue = max(
         RENODX_PEAK_WHITE_NITS
@@ -895,12 +891,12 @@ float3 ApplyPsychoV24Tonemap(float3 linearColor)
     );
 
     int gamutMode =
-        (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f)
+        (RENODX_PSYCHOV30_GAMUT_MODE > 0.5f)
         ? 1
         : 0;
 
     linearColor =
-        renodx::tonemap::psychov::psychotm_test24(
+        renodx::tonemap::psychov::psychotm_test30(
             linearColor,
 
             // Display peak relative to diffuse white.
@@ -912,34 +908,72 @@ float3 ApplyPsychoV24Tonemap(float3 linearColor)
             1.0f,  // highlights
             1.0f,  // shadows
             1.0f,  // contrast
-            1.0f,  // saturation
+            RENODX_PSYCHOV30_PURITY,
 
-            // PsychoV24 controls.
-            1.0f,                            // bleaching_intensity
-            RENODX_PSYCHOV24_CLIP_POINT,       // stronger clip_point
+            // V30 retains these positional arguments for compatibility.
+            1.0f,                            // bleaching_intensity placeholder
+            100.0f,                          // clip_point placeholder
+            1.0f,                            // hue_restore placeholder
+            1.0f,                            // encoded_response_power placeholder
+            0,                               // white_curve_mode placeholder
 
-            RENODX_TONE_MAP_HUE_CORRECTION,
-
-            1.0f,                            // adaptation_contrast
-            0,                               // white_curve_mode
-
-            RENODX_PSYCHOV24_CONE_RESPONSE,
+            RENODX_PSYCHOV30_CONE_RESPONSE,
 
             0.18f.xxx,                       // current adaptation anchor
             0.18f.xxx,                       // desired adaptation anchor
 
-            RENODX_PSYCHOV24_GAMUT_COMPRESSION,
+            RENODX_PSYCHOV30_GAMUT_COMPRESSION,
             gamutMode,
 
-            1.0f,                            // adaptive_normalization
-            RENODX_PSYCHOV24_COMPRESSION,
-
-            // PsychoV24-only tail controls.
-            // BO1 already applies RenoDX Highlight Saturation in the common
-            // post-tonemap stage, so keep PsychoV24's copy neutral here.
-            RENODX_PSYCHOV24_HIGHLIGHT_SATURATION, // highlight_saturation
-            RENODX_PSYCHOV24_GAMUT_HUE_RESTORE     // gamut_hue_restore
+            1.0f,                            // adaptive_normalization placeholder
+            RENODX_PSYCHOV30_COMPRESSION
         );
+
+    if (sourceLuminance > 1.0f)
+    {
+        // V30's default neutral shoulder approaches peak asymptotically. Match
+        // its highlight gain to BO1's finite-white RenoDRT reference instead of
+        // raising exposure. Calibrate against neutral/default V30 so the live
+        // compression, cone-response, and purity controls retain their effect.
+        float neutralPsychoLuminance =
+            renodx::tonemap::psychov::psycho30_FiniteEndpoint(
+                sourceLuminance,
+                RENODX_COMMON_MID_GRAY,
+                peakValue,
+                renodx::tonemap::psychov::psycho30_AutoCompressionPower(
+                    RENODX_COMMON_MID_GRAY,
+                    peakValue
+                )
+            );
+
+        float neutralRenoLuminance =
+            renodx::tonemap::HermiteSplineLuminanceRolloff(
+                sourceLuminance,
+                peakValue,
+                max(RENODX_COMMON_WHITE_CLIP, peakValue + 0.000001f)
+            );
+
+        // Fade in between one and four times diffuse white. Shadows, midgray,
+        // and diffuse white retain the original PsychoV30 response.
+        float highlightWeight =
+            SmoothCubic01(saturate((sourceLuminance - 1.0f) / 3.0f));
+
+        linearColor *= lerp(
+            1.0f,
+            max(neutralRenoLuminance / max(neutralPsychoLuminance, 0.000001f), 1.0f),
+            highlightWeight
+        );
+
+        // Keep the selected target gamut's brightest channel within the user
+        // peak, including manual compression/cone settings. Uniform RGB scaling
+        // preserves hue; SDR color matching still runs after this mapper.
+        float3 targetColor = linearColor;
+        if (gamutMode != 0)
+        {
+            targetColor = renodx::color::bt2020::from::BT709(linearColor);
+        }
+        linearColor *= min(peakValue / max(MaxRGB(targetColor), 0.000001f), 1.0f);
+    }
 
 #endif
 
@@ -956,11 +990,11 @@ float3 ApplyRenoDXTonemap(float3 linearColor)
     linearColor =
         SafePositive(linearColor);
 
-    if (IsPsychoV24Mode())
+    if (IsPsychoV30Mode())
     {
-        // PsychoV24 retains its own display mapping and gamut model, while the
+        // PsychoV30 retains its own display mapping and gamut model, while the
         // common pre/post grading stages surround it.
-        return ApplyPsychoV24Tonemap(
+        return ApplyPsychoV30Tonemap(
             linearColor
         );
     }
@@ -1257,7 +1291,7 @@ float4 main(PS_INPUT input) : COLOR0
         );
 
     // ------------------------------------------------------------------------
-    // Optional gamma 2.0 decode for both Vanilla and HDR paths
+    // Decode BO1's gamma-2 transport before linear-light processing
     // ------------------------------------------------------------------------
 
     float3 vanillaColor =
@@ -1271,8 +1305,8 @@ float4 main(PS_INPUT input) : COLOR0
     // Decode after the original grading in both paths.
     //
     // Vanilla decodes the original SDR-domain graded result.
-    // RenoDRT/PsychoV24 decode the HDR-restored graded result.
-    // No matching gamma encode is performed later.
+    // RenoDRT/PsychoV30 require the HDR-restored graded result in linear light.
+    // Display gamma correction is applied only after the tonemapping stages.
     vanillaColor =
         GammaDecode2(
             vanillaColor
@@ -1342,9 +1376,12 @@ float4 main(PS_INPUT input) : COLOR0
     }
 
     // ------------------------------------------------------------------------
-    // RenoDX intermediate output
+    // Post-tonemap display gamma correction and RenoDX intermediate output
     // ------------------------------------------------------------------------
 
+    // RenderIntermediatePass applies the Gamma Correction setting here, after
+    // the display mapper, SDR color matching, and post-tonemap grading. It also
+    // handles game/UI white scaling and the selected intermediate encoding.
     float3 intermediateColor =
         renodx::draw::RenderIntermediatePass(
             toneMappedColor
@@ -1364,11 +1401,10 @@ float4 main(PS_INPUT input) : COLOR0
             );
     }
 
-    // Optional gamma 2.0 decode may be applied to both Vanilla and HDR.
-    // No gamma encoding is performed.
-    // No sRGB conversion.
+    // Input transport decoding and output display correction are separate.
+    // Intermediate encoding is handled by RenderIntermediatePass above.
     // No manual BT.709-to-BT.2020 conversion.
-    // No HDR clamp in RenoDRT or PsychoV24 modes.
+    // No HDR clamp in RenoDRT or PsychoV30 modes.
     return float4(
         intermediateColor,
         sourceColor.a

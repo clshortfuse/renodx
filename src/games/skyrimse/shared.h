@@ -83,15 +83,15 @@ struct ShaderInjectData {
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
 
-  // PsychoV24 controls. These replace the old V22 fields and remain appended,
-  // so all existing Skyrim fields retain their original offsets.
+  // PsychoV35 reuses the V24 fields and preset ID to retain saved settings
+  // and compatibility with the currently loaded addon. Field offsets stay fixed.
   float psychov24_compression;
   float psychov24_gamut_compression;
 
   float psychov24_gamut_mode;
   float psychov24_cone_response;
-  float psychov24_highlight_saturation;
-  float psychov24_gamut_hue_restore;
+  float psychov24_highlight_saturation;  // Reserved V24 ABI slot.
+  float psychov24_gamut_hue_restore;     // Reserved V24 ABI slot.
 
   // HDR inverse-tonemap boost. Keep this final row 16-byte aligned for the
   // injected constant buffer; reserved fields are intentionally unused.
@@ -132,32 +132,24 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                   shader_injection.tone_map_flare
 #define CUSTOM_HDR_BOOST                        shader_injection.hdr_boost
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
-#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV35
+#define RENODX_TONE_MAP_TYPE_PSYCHOV35 24.f
 #endif
 
-#ifndef RENODX_PSYCHOV24_COMPRESSION
-#define RENODX_PSYCHOV24_COMPRESSION shader_injection.psychov24_compression
+#ifndef RENODX_PSYCHOV35_COMPRESSION
+#define RENODX_PSYCHOV35_COMPRESSION shader_injection.psychov24_compression
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION shader_injection.psychov24_gamut_compression
+#ifndef RENODX_PSYCHOV35_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV35_GAMUT_COMPRESSION shader_injection.psychov24_gamut_compression
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_MODE
-#define RENODX_PSYCHOV24_GAMUT_MODE shader_injection.psychov24_gamut_mode
+#ifndef RENODX_PSYCHOV35_GAMUT_MODE
+#define RENODX_PSYCHOV35_GAMUT_MODE shader_injection.psychov24_gamut_mode
 #endif
 
-#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
-#define RENODX_PSYCHOV24_CONE_RESPONSE shader_injection.psychov24_cone_response
-#endif
-
-#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
-#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection.psychov24_highlight_saturation
-#endif
-
-#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
-#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE shader_injection.psychov24_gamut_hue_restore
+#ifndef RENODX_PSYCHOV35_CONE_RESPONSE
+#define RENODX_PSYCHOV35_CONE_RESPONSE shader_injection.psychov24_cone_response
 #endif
 
 #define RENODX_COLOR_GRADE_STRENGTH             shader_injection.color_grade_strength
