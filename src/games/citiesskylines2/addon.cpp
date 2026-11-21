@@ -8,8 +8,15 @@
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
+#include <algorithm>
 #include <atomic>
+#include <cmath>
+#include <cstdio>
 #include <sstream>
+
+#include <dxgi1_6.h>
+
+#pragma comment(lib, "dxgi.lib")
 #include <include/reshade.hpp>
 
 #include <embed/shaders.h>
@@ -29,6 +36,59 @@ float current_settings_mode = 0;
 
 // Set by the replacement shaders themselves: the only reliable "did it run" signal.
 std::atomic<bool> g_scene_shader_drawn = false;
+
+enum HealthState : int {
+  HEALTH_PENDING = 0,
+  HEALTH_OK = 1,
+  HEALTH_NO_SCENE_SHADER = 2,
+  HEALTH_NOT_HDR = 3,
+  HEALTH_SIZE_MISMATCH = 4,
+};
+
+std::atomic<int> g_health_state = HEALTH_PENDING;
+std::atomic<uint32_t> g_health_width = 0;
+std::atomic<uint32_t> g_health_height = 0;
+std::atomic<bool> g_peak_auto_done = false;
+
+// Reads the peak luminance of the monitor the game window is on.
+// Returns 0 when the information is unavailable (HDR off, remote session, ...).
+static float DetectDisplayPeakNits(void* hwnd) {
+  const HMONITOR monitor = ::MonitorFromWindow(static_cast<HWND>(hwnd), MONITOR_DEFAULTTOPRIMARY);
+  MONITORINFO monitor_info = {.cbSize = sizeof(MONITORINFO)};
+  if (!::GetMonitorInfo(monitor, &monitor_info)) return 0.f;
+
+  IDXGIFactory1* factory = nullptr;
+  if (FAILED(::CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return 0.f;
+
+  float peak = 0.f;
+  for (UINT adapter_index = 0;; ++adapter_index) {
+    IDXGIAdapter1* adapter = nullptr;
+    if (factory->EnumAdapters1(adapter_index, &adapter) == DXGI_ERROR_NOT_FOUND) break;
+
+    for (UINT output_index = 0;; ++output_index) {
+      IDXGIOutput* output = nullptr;
+      if (adapter->EnumOutputs(output_index, &output) == DXGI_ERROR_NOT_FOUND) break;
+
+      DXGI_OUTPUT_DESC output_desc = {};
+      if (SUCCEEDED(output->GetDesc(&output_desc))
+          && output_desc.DesktopCoordinates.left == monitor_info.rcMonitor.left
+          && output_desc.DesktopCoordinates.top == monitor_info.rcMonitor.top) {
+        IDXGIOutput6* output6 = nullptr;
+        if (SUCCEEDED(output->QueryInterface(IID_PPV_ARGS(&output6)))) {
+          DXGI_OUTPUT_DESC1 desc1 = {};
+          if (SUCCEEDED(output6->GetDesc1(&desc1))) {
+            peak = std::max(peak, desc1.MaxLuminance);
+          }
+          output6->Release();
+        }
+      }
+      output->Release();
+    }
+    adapter->Release();
+  }
+  factory->Release();
+  return peak;
+}
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -54,6 +114,41 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .label = "Status",
+        .section = "Tone Mapping",
+        .tooltip = "Health check result: tells whether HDR output is actually active",
+        .on_draw = []() {
+          static char text[192];
+          ImVec4 color(1.f, 0.78f, 0.25f, 1.f);
+          switch (g_health_state.load()) {
+            case HEALTH_OK:
+              color = ImVec4(0.45f, 1.f, 0.45f, 1.f);
+              snprintf(text, sizeof(text), "HDR active - %ux%u, scene shader replaced",
+                       g_health_width.load(), g_health_height.load());
+              break;
+            case HEALTH_NO_SCENE_SHADER:
+              color = ImVec4(1.f, 0.35f, 0.35f, 1.f);
+              snprintf(text, sizeof(text), "HDR inactive - scene shader was not replaced (game update?)");
+              break;
+            case HEALTH_NOT_HDR:
+              color = ImVec4(1.f, 0.35f, 0.35f, 1.f);
+              snprintf(text, sizeof(text), "HDR inactive - swap chain is not HDR");
+              break;
+            case HEALTH_SIZE_MISMATCH:
+              color = ImVec4(1.f, 0.55f, 0.2f, 1.f);
+              snprintf(text, sizeof(text), "Upgrade may have missed - back buffer size differs from the window");
+              break;
+            default:
+              snprintf(text, sizeof(text), "Checking...");
+              break;
+          }
+          ImGui::PushStyleColor(ImGuiCol_Text, color);
+          ImGui::TextWrapped("%s", text);
+          ImGui::PopStyleColor();
+          return false;
+        },
+    },    new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
@@ -412,19 +507,37 @@ void OnHealthCheckPresent(reshade::api::command_queue* queue,
     }
   }
 
+  g_health_width = back_buffer_desc.texture.width;
+  g_health_height = back_buffer_desc.texture.height;
+
   if (!replaced) {
+    g_health_state = HEALTH_NO_SCENE_SHADER;
     reshade::log::message(reshade::log::level::warning,
                           "[CS2] WARNING: scene shader was never replaced - the game may have been updated. HDR is inactive.");
   } else if (!hdr_output) {
+    g_health_state = HEALTH_NOT_HDR;
     const std::string format_warning = "[CS2] WARNING: swap chain is not HDR (format "
                                        + std::to_string(swapchain_format)
                                        + ") - HDR output is inactive, frame generation will drop HDR too.";
     reshade::log::message(reshade::log::level::warning, format_warning.c_str());
   } else if (!size_matches) {
+    g_health_state = HEALTH_SIZE_MISMATCH;
     reshade::log::message(reshade::log::level::warning,
                           "[CS2] WARNING: back buffer size does not match the window size - the upgraded resource may "
                           "not be the scene target.");
   } else {
+    g_health_state = HEALTH_OK;
+    if (!g_peak_auto_done.exchange(true)) {
+      const float detected = DetectDisplayPeakNits(swapchain->get_hwnd());
+      if (detected >= 1000.f && shader_injection.peak_white_nits == 1000.f) {
+        const float rounded = std::round(detected / 100.f) * 100.f;
+        const float clamped = std::min(rounded, 4000.f);
+        renodx::utils::settings::UpdateSetting("ToneMapPeakNits", clamped);
+        const std::string peak_log = "[CS2] display peak luminance " + std::to_string(static_cast<int>(detected))
+                                     + " nits, peak brightness set to " + std::to_string(static_cast<int>(clamped)) + ".";
+        reshade::log::message(reshade::log::level::info, peak_log.c_str());
+      }
+    }
     const std::string ok = "[CS2] health check passed: scene shader replaced, HDR swap chain "
                            + std::to_string(back_buffer_desc.texture.width) + "x"
                            + std::to_string(back_buffer_desc.texture.height) + ".";
