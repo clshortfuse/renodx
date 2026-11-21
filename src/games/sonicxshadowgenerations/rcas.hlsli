@@ -1,5 +1,5 @@
-#ifndef SONIC_X_SHADOW_GENERATIONS_RCAS_HLSLI_
-#define SONIC_X_SHADOW_GENERATIONS_RCAS_HLSLI_
+#ifndef SONICXSHADOWGENERATIONS_RCAS_HLSLI_
+#define SONICXSHADOWGENERATIONS_RCAS_HLSLI_
 
 #include "./shared.h"
 
@@ -46,4 +46,4 @@ float3 ApplyLiliumRCAS(Texture2D<float4> scene, int2 pixel, int2 scene_max, floa
   return color;
 }
 
-#endif
+#endif  // SONICXSHADOWGENERATIONS_RCAS_HLSLI_

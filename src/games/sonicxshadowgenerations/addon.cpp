@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <string_view>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -17,17 +18,17 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/resource.hpp"
 #include "../../utils/platform.hpp"
+#include "../../utils/resource.hpp"
 #include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/state.hpp"
 #include "./shared.h"
+#include "./ui.hpp"
 
 namespace {
 
 constexpr float HDR_SCENE_COLOR_TAG = 1.f;
-float hide_ui = 0.f;
 float force_anisotropic_filtering = 1.f;
 
 bool OnDrawActivateRenderTargetHotSwap(reshade::api::command_list* cmd_list) {
@@ -110,13 +111,6 @@ bool OnCopyTextureRegion(reshade::api::command_list*,
   return false;
 }
 
-#define UpgradeRTVActivateShader(value) {value, {.crc32 = value, .on_draw = OnDrawActivateRenderTargetHotSwap}}
-
-bool OnUIDraw(reshade::api::command_list* cmd_list) {
-  if (hide_ui != 0.f) return false;
-  return OnDrawActivateRenderTargetHotSwap(cmd_list);
-}
-
 // Adapted scene luminance (texel 0,0 of a 2x1 typeless target), read by the bloom composite as t1.
 reshade::api::resource adapted_luminance_resource = {0u};
 reshade::api::resource_view adapted_luminance_srv = {0u};
@@ -137,7 +131,9 @@ bool OnDrawAdaptedLuminance(reshade::api::command_list* cmd_list) {
   if (luminance.handle == 0u || luminance.handle == adapted_luminance_resource.handle) return true;
 
   auto* device = cmd_list->get_device();
-  if (adapted_luminance_srv.handle != 0u) device->destroy_resource_view(adapted_luminance_srv);
+  if (adapted_luminance_srv.handle != 0u) {
+    device->destroy_resource_view(adapted_luminance_srv);
+  }
   adapted_luminance_srv = {0u};
   adapted_luminance_resource = luminance;
   device->create_resource_view(luminance, reshade::api::resource_usage::shader_resource,
@@ -147,7 +143,9 @@ bool OnDrawAdaptedLuminance(reshade::api::command_list* cmd_list) {
 
 void OnDestroyAdaptedLuminance(reshade::api::device* device, reshade::api::resource resource) {
   if (resource.handle == 0u || resource.handle != adapted_luminance_resource.handle) return;
-  if (adapted_luminance_srv.handle != 0u) device->destroy_resource_view(adapted_luminance_srv);
+  if (adapted_luminance_srv.handle != 0u) {
+    device->destroy_resource_view(adapted_luminance_srv);
+  }
   adapted_luminance_srv = {0u};
   adapted_luminance_resource = {0u};
 }
@@ -159,24 +157,78 @@ reshade::api::resource_desc motion_blur_source_copy_desc = {};
 float motion_blur_full_res = 1.f;
 
 void OnDestroyMotionBlurSourceCopy(reshade::api::device* device) {
-  if (motion_blur_source_copy_srv.handle != 0u) device->destroy_resource_view(motion_blur_source_copy_srv);
-  if (motion_blur_source_copy.handle != 0u) device->destroy_resource(motion_blur_source_copy);
+  if (motion_blur_source_copy_srv.handle != 0u) {
+    device->destroy_resource_view(motion_blur_source_copy_srv);
+  }
+  if (motion_blur_source_copy.handle != 0u) {
+    device->destroy_resource(motion_blur_source_copy);
+  }
   motion_blur_source_copy_srv = {0u};
   motion_blur_source_copy = {0u};
   motion_blur_source_copy_desc = {};
 }
 
-ShaderInjectData shader_injection = {
-    .fx_bloom = 1.f,
-    .fx_bloom_haze = 0.5f,
-    .fx_motion_blur = 2.f,
-    .fx_motion_blur_samples = 16.f,
-    .fx_motion_blur_strength = 1.f,
-    .fx_motion_blur_full_res = 0.f,
-};
+ShaderInjectData shader_injection = {};
 
-bool ShouldReplaceFog(reshade::api::command_list*) {
-  return shader_injection.fx_fog_coverage_reduction > 0.f || shader_injection.fx_fog_light_reduction > 0.f;
+void UnbindPixelShaderResource(reshade::api::command_list* cmd_list, uint32_t binding) {
+  const reshade::api::resource_view null_view = {0u};
+  cmd_list->push_descriptors(
+      reshade::api::shader_stage::pixel, {0u}, 0u,
+      {
+          .binding = binding,
+          .count = 1u,
+          .type = reshade::api::descriptor_type::shader_resource_view,
+          .descriptors = &null_view,
+      });
+}
+
+bool OnMotionBlurDraw(reshade::api::command_list* cmd_list) {
+  shader_injection.fx_motion_blur_full_res = 0.f;
+  // Motion blur is alpha-blended, so skipping the draw removes it.
+  if (shader_injection.fx_motion_blur == 0.f) return false;
+  if (shader_injection.fx_motion_blur == 2.f && motion_blur_full_res != 0.f) {
+    const auto& rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+    if (rtvs.empty()) return true;
+    auto* device = cmd_list->get_device();
+    // The game's RGBA8 target is cloned to float; the clone holds the rendered frame.
+    auto source = device->get_resource_from_view(rtvs[0]);
+    renodx::utils::resource::GetResourceViewInfo(rtvs[0], [&source](const renodx::utils::resource::ResourceViewInfo& view_info) {
+      if (view_info.clone_enabled && view_info.clone_resource.handle != 0u) {
+        source = view_info.clone_resource;
+      }
+    });
+    const auto desc = device->get_resource_desc(source);
+    const bool is_copy_stale = motion_blur_source_copy.handle == 0u
+                               || desc.texture.width != motion_blur_source_copy_desc.texture.width
+                               || desc.texture.height != motion_blur_source_copy_desc.texture.height
+                               || desc.texture.format != motion_blur_source_copy_desc.texture.format;
+    if (is_copy_stale) {
+      OnDestroyMotionBlurSourceCopy(device);
+      reshade::api::resource_desc copy_desc = {};
+      copy_desc.type = reshade::api::resource_type::texture_2d;
+      copy_desc.texture = {desc.texture.width, desc.texture.height, 1, 1, desc.texture.format, 1};
+      copy_desc.heap = reshade::api::memory_heap::gpu_only;
+      copy_desc.usage = reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource;
+      copy_desc.flags = reshade::api::resource_flags::none;
+      device->create_resource(copy_desc, nullptr, reshade::api::resource_usage::shader_resource, &motion_blur_source_copy);
+      device->create_resource_view(
+          motion_blur_source_copy, reshade::api::resource_usage::shader_resource,
+          reshade::api::resource_view_desc(reshade::api::format_to_default_typed(desc.texture.format)),
+          &motion_blur_source_copy_srv);
+      motion_blur_source_copy_desc = copy_desc;
+    }
+    cmd_list->copy_resource(source, motion_blur_source_copy);
+    cmd_list->push_descriptors(
+        reshade::api::shader_stage::pixel, {0u}, 0u,
+        {
+            .binding = 4u,
+            .count = 1u,
+            .type = reshade::api::descriptor_type::shader_resource_view,
+            .descriptors = &motion_blur_source_copy_srv,
+        });
+    shader_injection.fx_motion_blur_full_res = 1.f;
+  }
+  return true;
 }
 
 renodx::mods::shader::CustomShaders sonic_generations_shaders = {
@@ -192,6 +244,8 @@ renodx::mods::shader::CustomShaders sonic_generations_shaders = {
     CustomShaderEntry(0x5F91F19E),  // motion blur: Improved writes the velocity map for the composites
 };
 
+#define UpgradeRTVActivateShader(value) {value, {.crc32 = value, .on_draw = OnDrawActivateRenderTargetHotSwap}}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     {0x9B0FFAEA, {.crc32 = 0x9B0FFAEA, .code = __0x9B0FFAEA, .on_draw = OnSceneColorDraw}},
     {0x66D4C51B, {.crc32 = 0x66D4C51B, .code = __0x66D4C51B, .on_draw = OnSceneColorDraw}},
@@ -199,72 +253,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // Shared tonemap VS: tags the scene for any tonemap PS variant.
     {0x8D7AD5BC, {.crc32 = 0x8D7AD5BC, .on_draw = OnSceneColorDraw}},
     {0x52056D48, {.crc32 = 0x52056D48, .code = __0x52056D48}},
-    {0xBE4BB0CF, {.crc32 = 0xBE4BB0CF, .code = __0xBE4BB0CF, .on_replace = ShouldReplaceFog}},
-    {0x4D38C3EC, {.crc32 = 0x4D38C3EC, .code = __0x4D38C3EC, .on_replace = ShouldReplaceFog}},
-    {0xAA56C63D, {.crc32 = 0xAA56C63D, .code = __0xAA56C63D, .on_replace = ShouldReplaceFog}},
-    {0xDD8552DF, {.crc32 = 0xDD8552DF, .code = __0xDD8552DF, .on_replace = ShouldReplaceFog}},
     {0xA34F96B7,
      {
          .crc32 = 0xA34F96B7,
          .code = __0xA34F96B7,
-         .on_draw = [](reshade::api::command_list* cmd_list) {
-           shader_injection.fx_motion_blur_full_res = 0.f;
-           // Motion blur is alpha-blended, so skipping the draw removes it.
-           if (shader_injection.fx_motion_blur == 0.f) return false;
-           if (shader_injection.fx_motion_blur == 2.f && motion_blur_full_res != 0.f) {
-             const auto& rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
-             if (rtvs.empty()) return true;
-             auto* device = cmd_list->get_device();
-             // The game's RGBA8 target is cloned to float; the clone holds the rendered frame.
-             auto source = device->get_resource_from_view(rtvs[0]);
-             renodx::utils::resource::GetResourceViewInfo(rtvs[0], [&source](const renodx::utils::resource::ResourceViewInfo& view_info) {
-               if (view_info.clone_enabled && view_info.clone_resource.handle != 0u) source = view_info.clone_resource;
-             });
-             const auto desc = device->get_resource_desc(source);
-             const bool is_copy_stale = motion_blur_source_copy.handle == 0u
-                                        || desc.texture.width != motion_blur_source_copy_desc.texture.width
-                                        || desc.texture.height != motion_blur_source_copy_desc.texture.height
-                                        || desc.texture.format != motion_blur_source_copy_desc.texture.format;
-             if (is_copy_stale) {
-               if (motion_blur_source_copy_srv.handle != 0u) device->destroy_resource_view(motion_blur_source_copy_srv);
-               if (motion_blur_source_copy.handle != 0u) device->destroy_resource(motion_blur_source_copy);
-               reshade::api::resource_desc copy_desc = {};
-               copy_desc.type = reshade::api::resource_type::texture_2d;
-               copy_desc.texture = {desc.texture.width, desc.texture.height, 1, 1, desc.texture.format, 1};
-               copy_desc.heap = reshade::api::memory_heap::gpu_only;
-               copy_desc.usage = reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource;
-               copy_desc.flags = reshade::api::resource_flags::none;
-               device->create_resource(copy_desc, nullptr, reshade::api::resource_usage::shader_resource, &motion_blur_source_copy);
-               device->create_resource_view(
-                   motion_blur_source_copy, reshade::api::resource_usage::shader_resource,
-                   reshade::api::resource_view_desc(reshade::api::format_to_default_typed(desc.texture.format)),
-                   &motion_blur_source_copy_srv);
-               motion_blur_source_copy_desc = copy_desc;
-             }
-             cmd_list->copy_resource(source, motion_blur_source_copy);
-             cmd_list->push_descriptors(
-                 reshade::api::shader_stage::pixel, {0u}, 0u,
-                 {
-                     .binding = 4u,
-                     .count = 1u,
-                     .type = reshade::api::descriptor_type::shader_resource_view,
-                     .descriptors = &motion_blur_source_copy_srv,
-                 });
-             shader_injection.fx_motion_blur_full_res = 1.f;
-           }
-           return true;
-         },
+         .on_draw = OnMotionBlurDraw,
          .on_drawn = [](reshade::api::command_list* cmd_list) {
            if (shader_injection.fx_motion_blur_full_res == 0.f) return;
-           const reshade::api::resource_view null_view = {0u};
-           cmd_list->push_descriptors(
-               reshade::api::shader_stage::pixel, {0u}, 0u,
-               {
-                   .binding = 4u,
-                   .count = 1u,
-                   .type = reshade::api::descriptor_type::shader_resource_view,
-                   .descriptors = &null_view,
-               });
+           UnbindPixelShaderResource(cmd_list, 4u);
          },
      }},
     CustomShaderEntry(0xABCF725C),
@@ -300,7 +296,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                is_scene = info.resource_tag == HDR_SCENE_COLOR_TAG;
              });
            });
-           return is_scene ? OnSceneColorDraw(cmd_list) : true;
+           if (is_scene) return OnSceneColorDraw(cmd_list);
+           return true;
          },
      }},
     {0x9C942ECA,
@@ -325,15 +322,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
          },
          .on_drawn = [](reshade::api::command_list* cmd_list) {
            if (shader_injection.bloom_luminance_valid == 0.f) return;
-           const reshade::api::resource_view null_view = {0u};
-           cmd_list->push_descriptors(
-               reshade::api::shader_stage::pixel, {0u}, 0u,
-               {
-                   .binding = 1u,
-                   .count = 1u,
-                   .type = reshade::api::descriptor_type::shader_resource_view,
-                   .descriptors = &null_view,
-               });
+           UnbindPixelShaderResource(cmd_list, 1u);
          },
      }},
     {0x64D80996,
@@ -348,7 +337,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
            if (rtvs.empty()) return true;
            renodx::utils::resource::GetResourceViewInfo(rtvs[0], [](const renodx::utils::resource::ResourceViewInfo& view_info) {
              renodx::utils::resource::GetResourceInfo(view_info.original_resource, [](const renodx::utils::resource::ResourceInfo& info) {
-               shader_injection.bloom_composite = (info.desc.texture.format != reshade::api::format::r11g11b10_float) ? 1.f : 0.f;
+               shader_injection.bloom_composite = ((info.desc.texture.format != reshade::api::format::r11g11b10_float) ? 1.f : 0.f);
              });
            });
            if (shader_injection.bloom_composite == 0.f) {
@@ -387,74 +376,169 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     {0x206A75B8, {.crc32 = 0x206A75B8, .code = __0x206A75B8, .on_draw = OnSceneColorDraw}},
     UpgradeRTVActivateShader(0xB2662150),
     UpgradeRTVActivateShader(0x41E7813C),
-    {0x45485E16, {.crc32 = 0x45485E16, .code = __0x45485E16, .on_draw = OnUIDraw}},
-    {0xBBCF2D91, {.crc32 = 0xBBCF2D91, .code = __0xBBCF2D91, .on_draw = OnUIDraw}},
-    {0xD644D2E2, {.crc32 = 0xD644D2E2, .code = __0xD644D2E2, .on_draw = OnUIDraw}},
-    // CustomSwapchainShader(0x00000000),
+    {0x45485E16, {.crc32 = 0x45485E16, .code = __0x45485E16, .on_draw = OnDrawActivateRenderTargetHotSwap}},
+    {0xBBCF2D91, {.crc32 = 0xBBCF2D91, .code = __0xBBCF2D91, .on_draw = OnDrawActivateRenderTargetHotSwap}},
+    {0xD644D2E2, {.crc32 = 0xD644D2E2, .code = __0xD644D2E2, .on_draw = OnDrawActivateRenderTargetHotSwap}},
 };
-
-// Shadow palette: crimson primary, deeper blood red for secondary sections, ember for effects.
-constexpr uint32_t TINT_CRIMSON = 0xE0101A;
-constexpr uint32_t TINT_BLOOD = 0xB00C16;
-constexpr uint32_t TINT_ASH = 0x8A8A8A;
-
-// Sonic Generations palette: blue primary, deeper blue for secondary sections, small red accent, white for neutral.
-constexpr uint32_t TINT_SONIC_BLUE = 0x1E5BFF;
-constexpr uint32_t TINT_SONIC_DEEP = 0x0B3A9E;
-constexpr uint32_t TINT_SONIC_WHITE = 0xDCE6FF;
 
 namespace settings_ui = renodx::utils::settings;
 
+// Panel palette: Shadow by default, switched to Sonic in DllMain.
+const sonic_ui::Palette* palette = &sonic_ui::SHADOW;
+
+// Sonic Generations is set in DllMain before the settings are used.
+bool is_sonic_generations = false;
+
+// Section titles, in panel order.
+constexpr const char* STATUS_SECTION = "Status";
+constexpr const char* TONE_MAPPING_SECTION = "Tone Mapping";
+constexpr const char* COLOR_GRADING_SECTION = "Color Grading";
+constexpr const char* BLOOM_SECTION = "Bloom";
+constexpr const char* MOTION_BLUR_SECTION = "Motion Blur";
+constexpr const char* LENS_SHARPENING_SECTION = "Lens & Sharpening";
+constexpr const char* TEXTURE_FILTERING_SECTION = "Texture Filtering";
+constexpr const char* ABOUT_SECTION = "About";
+
 renodx::utils::settings::Settings settings = {
+    // Status
     new settings_ui::Setting{
         .value_type = settings_ui::SettingValueType::CUSTOM,
-        .label = "Shadow Banner",
-        .section = "SHADOW",
-        .tooltip = "RenoDX HDR for Sonic X Shadow Generations. Peak Brightness is set under Display.",
+        .label = "Status",
+        .section = STATUS_SECTION,
+        .tint = sonic_ui::SHADOW.tint,
         .on_draw = []() {
-          auto* draw_list = ImGui::GetWindowDrawList();
-          const ImVec2 min = ImGui::GetCursorScreenPos();
-          const float width = ImGui::GetContentRegionAvail().x;
-          const float height = ImGui::GetFrameHeight() * 2.4f;
-          const ImVec2 max = {min.x + width, min.y + height};
-          draw_list->AddRectFilledMultiColor(min, max, IM_COL32(6, 6, 8, 255), IM_COL32(150, 8, 16, 255),
-                                             IM_COL32(224, 16, 26, 255), IM_COL32(12, 6, 8, 255));
-          draw_list->AddRectFilled(min, {min.x + 6.f, max.y}, IM_COL32(224, 16, 26, 255));
-          draw_list->AddRect(min, max, IM_COL32(224, 16, 26, 255));
-          const float title_size = ImGui::GetFontSize() * 1.5f;
-          draw_list->AddText(ImGui::GetFont(), title_size, {min.x + 16.f, min.y + 6.f}, IM_COL32(255, 255, 255, 255),
-                             "SONIC X SHADOW GENERATIONS");
-          draw_list->AddText({min.x + 16.f, min.y + 10.f + title_size}, IM_COL32(255, 120, 120, 255),
-                             "RenoDX HDR  //  ULTIMATE LIFE FORM");
-          ImGui::Dummy({width, height});
+          struct Item {
+            const char* text;
+            bool active;
+          };
+          const float motion_blur = is_sonic_generations ? shader_injection.sg_motion_blur : shader_injection.fx_motion_blur;
+          Item motion_blur_item = {"Motion Blur Off", false};
+          if (motion_blur == 2.f) {
+            motion_blur_item = {"Improved Motion Blur", true};
+          } else if (motion_blur == 1.f) {
+            motion_blur_item = {"Vanilla Motion Blur", false};
+          }
+
+          const bool rcas_on = shader_injection.custom_rcas > 0.f;
+          const bool af_on = force_anisotropic_filtering != 0.f;
+          const Item shadow_items[] = {
+              {"HDR10", true},
+              motion_blur_item,
+              {rcas_on ? "RCAS" : "RCAS Off", rcas_on},
+              {af_on ? "16x AF" : "Game AF", af_on},
+          };
+          const bool bloom_on = shader_injection.sg_bloom_enabled != 0.f;
+          const bool hdr_bloom_on = shader_injection.sg_bloom_hdr > 0.f;
+          const Item sonic_items[] = {
+              {"HDR10", true},
+              motion_blur_item,
+              {bloom_on ? "Bloom" : "Bloom Off", bloom_on},
+              {hdr_bloom_on ? "HDR Bloom" : "SDR Bloom", hdr_bloom_on},
+          };
+          const auto& items = (is_sonic_generations ? sonic_items : shadow_items);
+
+          const float font_size = ImGui::GetFontSize();
+          const float dot_radius = font_size * 0.2f;
+          const float dot_gap = font_size * 0.4f;
+          const float item_gap = font_size * 0.9f;
+          const float line_height = ImGui::GetTextLineHeight();
+          bool first = true;
+          for (const auto& [text, active] : items) {
+            if (!first) {
+              ImGui::SameLine(0.f, item_gap);
+            }
+            first = false;
+            const ImVec2 origin = ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddCircleFilled(
+                {origin.x + dot_radius, origin.y + (line_height * 0.5f)}, dot_radius,
+                active ? palette->glow : sonic_ui::WithAlpha(palette->off_white, 0.35f), 12);
+            ImGui::Dummy({(dot_radius * 2.f) + dot_gap, line_height});
+            ImGui::SameLine(0.f, 0.f);
+            ImGui::PushStyleColor(ImGuiCol_Text, active ? palette->off_white : sonic_ui::WithAlpha(palette->off_white, 0.5f));
+            ImGui::TextUnformatted(text);
+            ImGui::PopStyleColor();
+          }
           return false;
         },
+        .is_sticky = true,
     },
     new settings_ui::Setting{
         .value_type = settings_ui::SettingValueType::BUTTON,
-        .label = "Reset All To Defaults",
-        .section = "SHADOW",
-        .tooltip = "Restores every setting to its default value.",
-        .tint = TINT_CRIMSON,
+        .label = "Reset All",
+        .section = STATUS_SECTION,
+        .tooltip = "Restores every setting in this panel to its default value.",
+        .tint = sonic_ui::SHADOW.tint,
         .on_change = []() { settings_ui::ResetSettings(); },
     },
-
-    // Display
     new settings_ui::Setting{
         .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "Output levels for your HDR display.",
-        .section = "Display",
-        .tint = TINT_CRIMSON,
+        .label = "RenoDX for Sonic X Shadow Generations Made By Ostad Gaming",
+        .section = STATUS_SECTION,
+        .tint = sonic_ui::SHADOW.tint,
     },
+    new settings_ui::Setting{
+        .value_type = settings_ui::SettingValueType::CUSTOM,
+        .label = "Ko-fi",
+        .section = STATUS_SECTION,
+        .on_draw = []() {
+          constexpr ImU32 kofi_red = IM_COL32(255, 94, 91, 255);
+          constexpr ImU32 kofi_red_hover = IM_COL32(255, 120, 117, 255);
+          constexpr ImU32 kofi_white = IM_COL32_WHITE;
+          constexpr const char* kofi_text = "Buy Ostad a coffee";
+
+          const float height = ImGui::GetFrameHeight() * 1.4f;
+          const bool clicked = ImGui::InvisibleButton("##kofi", ImVec2(ImGui::GetContentRegionAvail().x, height));
+          const bool hovered = ImGui::IsItemHovered();
+          if (hovered) {
+            ImGui::SetTooltip("Opens ko-fi.com/ostadgaming");
+          }
+
+          const ImVec2 min = ImGui::GetItemRectMin();
+          const ImVec2 max = ImGui::GetItemRectMax();
+          ImDrawList* draw_list = ImGui::GetWindowDrawList();
+          draw_list->AddRectFilled(min, max, hovered ? kofi_red_hover : kofi_red, height * 0.5f);
+
+          // Logo: white cup with a ring handle on the right and a red heart inside the cup.
+          const float logo_size = height * 0.5f;
+          const float logo_width = logo_size * 1.0f;
+          const float logo_gap = logo_size * 0.5f;
+          const ImVec2 text_size = ImGui::CalcTextSize(kofi_text);
+          const float content_width = logo_width + logo_gap + text_size.x;
+          const float logo_x = min.x + ((max.x - min.x) - content_width) * 0.5f;
+          const float center_y = (min.y + max.y) * 0.5f;
+
+          const float cup_right = logo_x + logo_size * 0.75f;
+          draw_list->AddRectFilled({logo_x, center_y - logo_size * 0.4f}, {cup_right, center_y + logo_size * 0.4f}, kofi_white,
+                                   logo_size * 0.12f);
+          draw_list->AddCircle({cup_right, center_y}, logo_size * 0.22f, kofi_white, 16, logo_size * 0.1f);
+          const float heart_x = logo_x + logo_size * 0.375f;
+          const float heart_y = center_y + logo_size * 0.02f;
+          draw_list->AddCircleFilled({heart_x - logo_size * 0.09f, heart_y - logo_size * 0.05f}, logo_size * 0.1f, kofi_red, 12);
+          draw_list->AddCircleFilled({heart_x + logo_size * 0.09f, heart_y - logo_size * 0.05f}, logo_size * 0.1f, kofi_red, 12);
+          draw_list->AddTriangleFilled({heart_x - logo_size * 0.18f, heart_y - logo_size * 0.01f},
+                                       {heart_x + logo_size * 0.18f, heart_y - logo_size * 0.01f}, {heart_x, heart_y + logo_size * 0.18f},
+                                       kofi_red);
+
+          const ImVec2 text_pos = {logo_x + logo_width + logo_gap, center_y - text_size.y * 0.5f};
+          draw_list->AddText(text_pos, kofi_white, kofi_text);
+
+          if (clicked) {
+            renodx::utils::platform::LaunchURL("https://ko-fi.com/ostadgaming");
+          }
+          return false;
+        },
+    },
+
+    // Tone Mapping
     new settings_ui::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
         .can_reset = false,
         .label = "Peak Brightness",
-        .section = "Display",
+        .section = TONE_MAPPING_SECTION,
         .tooltip = "Sets the value of peak white in nits",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .min = 48.f,
         .max = 4000.f,
     },
@@ -463,9 +547,9 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.diffuse_white_nits,
         .default_value = 203.f,
         .label = "Game Brightness",
-        .section = "Display",
+        .section = TONE_MAPPING_SECTION,
         .tooltip = "Sets the value of 100% white in nits",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .min = 48.f,
         .max = 500.f,
     },
@@ -474,19 +558,11 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.graphics_white_nits,
         .default_value = 203.f,
         .label = "UI Brightness",
-        .section = "Display",
+        .section = TONE_MAPPING_SECTION,
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .min = 48.f,
         .max = 500.f,
-    },
-
-    // Tone Mapping
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "How scene brightness and color are mapped to HDR.",
-        .section = "Tone Mapping",
-        .tint = TINT_BLOOD,
     },
     new settings_ui::Setting{
         .key = "ToneMapHueProcessor",
@@ -494,52 +570,46 @@ renodx::utils::settings::Settings settings = {
         .value_type = settings_ui::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Hue Processor",
-        .section = "Tone Mapping",
+        .section = TONE_MAPPING_SECTION,
         .tooltip = "Selects hue processor",
         .labels = {"OKLab", "ICtCp", "darkTable UCS"},
         .style = settings_ui::SettingStyle::SEGMENTED,
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
     },
     new settings_ui::Setting{
         .key = "ToneMapVanillaHueInfluence",
-        .binding = &shader_injection.tone_map_scene_hue_influence,
+        .binding = &shader_injection.tone_map_vanilla_hue_influence,
         .default_value = 100.f,
         .label = "Vanilla Hue Influence",
-        .section = "Tone Mapping",
+        .section = TONE_MAPPING_SECTION,
         .tooltip = "Matches the game's SDR hue where it retains color. Fades toward scene hue in washed-out highlights.",
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return (100.f - value) * 0.01f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new settings_ui::Setting{
         .key = "ToneMapHighlightChromaRollOff",
-        .binding = &shader_injection.highlight_chroma_rolloff_offset,
+        .binding = &shader_injection.tone_map_highlight_chroma_rolloff,
         .default_value = 10.f,
         .label = "Highlight Chroma Roll-off",
-        .section = "Tone Mapping",
+        .section = TONE_MAPPING_SECTION,
         .tooltip = "Controls how color rolls off in the brightest highlights.",
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f - 0.1f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
 
     // Color Grading
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "Neutral is the default of each slider.",
-        .section = "Color Grading",
-        .tint = TINT_CRIMSON,
-    },
     new settings_ui::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
         .label = "Exposure",
-        .section = "Color Grading",
+        .section = COLOR_GRADING_SECTION,
         .tooltip = "Scales overall scene brightness. 1.00 is neutral.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 2.f,
         .format = "%.2f",
     },
@@ -548,9 +618,9 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_highlights,
         .default_value = 50.f,
         .label = "Highlights",
-        .section = "Color Grading",
+        .section = COLOR_GRADING_SECTION,
         .tooltip = "Adjusts the brightest tones. 50 is neutral.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
@@ -559,9 +629,9 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_shadows,
         .default_value = 50.f,
         .label = "Shadows",
-        .section = "Color Grading",
+        .section = COLOR_GRADING_SECTION,
         .tooltip = "Adjusts the darkest tones. 50 is neutral.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
@@ -570,9 +640,9 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_contrast,
         .default_value = 50.f,
         .label = "Contrast",
-        .section = "Color Grading",
+        .section = COLOR_GRADING_SECTION,
         .tooltip = "Adjusts tonal contrast. 50 is neutral.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
@@ -581,28 +651,22 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.tone_map_saturation,
         .default_value = 50.f,
         .label = "Saturation",
-        .section = "Color Grading",
+        .section = COLOR_GRADING_SECTION,
         .tooltip = "Adjusts color intensity. 50 is neutral.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
 
-    // Bloom & Fog
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "Glow and atmosphere.",
-        .section = "Bloom & Fog",
-        .tint = TINT_CRIMSON,
-    },
+    // Bloom, motion blur, lens/sharpening, texture filtering
     new settings_ui::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.fx_bloom,
         .default_value = 100.f,
         .label = "Bloom",
-        .section = "Bloom & Fog",
+        .section = BLOOM_SECTION,
         .tooltip = "Scales bloom intensity. 100% uses the game's strength.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 200.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -611,9 +675,9 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.fx_bloom_threshold,
         .default_value = 0.f,
         .label = "Bloom Threshold",
-        .section = "Bloom & Fog",
+        .section = BLOOM_SECTION,
         .tooltip = "Filters dim bloom sources before blur, relative to adapted scene luminance.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.fx_bloom != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
@@ -623,44 +687,12 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.fx_bloom_haze,
         .default_value = 50.f,
         .label = "Bloom Haze",
-        .section = "Bloom & Fog",
+        .section = BLOOM_SECTION,
         .tooltip = "Fades the widest bloom levels that veil the whole screen and raise blacks. Lower = less haze; local glow stays.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .is_enabled = []() { return shader_injection.fx_bloom != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
-    },
-    new settings_ui::Setting{
-        .key = "FxFogCoverage",
-        .binding = &shader_injection.fx_fog_coverage_reduction,
-        .default_value = 100.f,
-        .label = "Fog Coverage",
-        .section = "Bloom & Fog",
-        .tooltip = "Controls how much distance and height fog obscures the scene.",
-        .tint = TINT_CRIMSON,
-        .min = 0.f,
-        .max = 100.f,
-        .parse = [](float value) { return (100.f - value) * 0.01f; },
-    },
-    new settings_ui::Setting{
-        .key = "FxFogLight",
-        .binding = &shader_injection.fx_fog_light_reduction,
-        .default_value = 100.f,
-        .label = "Fog Light",
-        .section = "Bloom & Fog",
-        .tooltip = "Controls the light added by distance and height fog without changing its coverage.",
-        .tint = TINT_CRIMSON,
-        .min = 0.f,
-        .max = 100.f,
-        .parse = [](float value) { return (100.f - value) * 0.01f; },
-    },
-
-    // Motion Blur
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "Improved replaces the game's blur with a higher quality one.",
-        .section = "Motion Blur",
-        .tint = TINT_BLOOD,
     },
     new settings_ui::Setting{
         .key = "FxMotionBlur",
@@ -668,20 +700,20 @@ renodx::utils::settings::Settings settings = {
         .value_type = settings_ui::SettingValueType::INTEGER,
         .default_value = 2.f,
         .label = "Motion Blur",
-        .section = "Motion Blur",
+        .section = MOTION_BLUR_SECTION,
         .tooltip = "Off removes motion blur, Vanilla keeps the game's, Improved uses RenoDX's.",
         .labels = {"Off", "Vanilla", "Improved"},
         .style = settings_ui::SettingStyle::SEGMENTED,
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
     },
     new settings_ui::Setting{
         .key = "FxMotionBlurStrength",
         .binding = &shader_injection.fx_motion_blur_strength,
         .default_value = 100.f,
         .label = "Strength",
-        .section = "Motion Blur",
+        .section = MOTION_BLUR_SECTION,
         .tooltip = "Scales blur length. Requires motion blur to be on.",
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 200.f,
         .is_enabled = []() { return shader_injection.fx_motion_blur != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
@@ -692,9 +724,9 @@ renodx::utils::settings::Settings settings = {
         .value_type = settings_ui::SettingValueType::INTEGER,
         .default_value = 16.f,
         .label = "Samples",
-        .section = "Motion Blur",
+        .section = MOTION_BLUR_SECTION,
         .tooltip = "Blur quality. More samples are smoother but cost performance. Improved mode only.",
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
         .min = 4.f,
         .max = 32.f,
         .format = "%d",
@@ -706,29 +738,21 @@ renodx::utils::settings::Settings settings = {
         .value_type = settings_ui::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Full-Res Source",
-        .section = "Motion Blur",
+        .section = MOTION_BLUR_SECTION,
         .tooltip = "Samples the full-resolution scene instead of the game's reduced source. Improved mode only.",
         .labels = {"Off", "On"},
         .style = settings_ui::SettingStyle::SEGMENTED,
-        .tint = TINT_BLOOD,
+        .tint = sonic_ui::SHADOW.tint,
         .is_enabled = []() { return shader_injection.fx_motion_blur == 2.f; },
-    },
-
-    // Lens & Sharpening
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "Lens effects and final image sharpness.",
-        .section = "Lens & Sharpening",
-        .tint = TINT_CRIMSON,
     },
     new settings_ui::Setting{
         .key = "FxChromaticAberration",
         .binding = &shader_injection.chromatic_aberration,
         .default_value = 100.f,
         .label = "Chromatic Aberration",
-        .section = "Lens & Sharpening",
+        .section = LENS_SHARPENING_SECTION,
         .tooltip = "Scales the game's contextual RGB separation. 100% uses the game's strength.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -737,30 +761,11 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.custom_rcas,
         .default_value = 50.f,
         .label = "RCAS Sharpening",
-        .section = "Lens & Sharpening",
+        .section = LENS_SHARPENING_SECTION,
         .tooltip = "Controls Lilium's HDR RCAS before HUD compositing.",
-        .tint = TINT_CRIMSON,
+        .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-    },
-
-    // Interface & Advanced
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "Interface toggles and engine overrides.",
-        .section = "Interface & Advanced",
-        .tint = TINT_ASH,
-    },
-    new settings_ui::Setting{
-        .key = "HideUI",
-        .binding = &hide_ui,
-        .value_type = settings_ui::SettingValueType::BOOLEAN,
-        .default_value = 0.f,
-        .label = "Hide UI",
-        .section = "Interface & Advanced",
-        .tooltip = "Hides the game's SurfRide UI, including its background layers.",
-        .style = settings_ui::SettingStyle::SEGMENTED,
-        .tint = TINT_ASH,
     },
     new settings_ui::Setting{
         .key = "ForceAnisotropicFiltering",
@@ -768,56 +773,32 @@ renodx::utils::settings::Settings settings = {
         .value_type = settings_ui::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Anisotropic Filtering",
-        .section = "Interface & Advanced",
+        .section = TEXTURE_FILTERING_SECTION,
         .tooltip = "Forces 16x anisotropic filtering on material textures. Requires game restart.",
         .labels = {"Game Default", "16x"},
         .style = settings_ui::SettingStyle::SEGMENTED,
-        .tint = TINT_ASH,
+        .tint = sonic_ui::SHADOW.tint,
     },
 
-    // Links
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::BUTTON,
-        .label = "Buy Ostad a coffee",
-        .section = "Links",
-        .tint = 0xFF5F5F,
-        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/ostadgaming"); },
-    },
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::BUTTON,
-        .label = "RenoDX Discord",
-        .section = "Links",
-        .group = "links",
-        .tint = TINT_CRIMSON,
-        .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/", "t9v7wx9NTD"); },
-    },
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::BUTTON,
-        .label = "RenoDX GitHub",
-        .section = "Links",
-        .group = "links",
-        .tint = TINT_BLOOD,
-        .on_change = []() { renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx"); },
-    },
-    new settings_ui::Setting{
-        .value_type = settings_ui::SettingValueType::BUTTON,
-        .label = "More Mods",
-        .section = "Links",
-        .group = "links",
-        .tint = TINT_ASH,
-        .on_change = []() { renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods"); },
-    },
+    // About
     new settings_ui::Setting{
         .value_type = settings_ui::SettingValueType::TEXT,
-        .label = "SONIC X SHADOW GENERATIONS RenoDX mod made by Ostad.",
-        .section = "Links",
-        .tint = TINT_ASH,
+        .label = "Unofficial community HDR mod built with RenoDX. Not affiliated with SEGA or Sonic Team.",
+        .section = ABOUT_SECTION,
+        .tint = sonic_ui::SHADOW.tint,
     },
     new settings_ui::Setting{
         .value_type = settings_ui::SettingValueType::TEXT,
         .label = "RenoDX by Carlos Lopez (clshortfuse) and contributors.",
-        .section = "Links",
-        .tint = TINT_ASH,
+        .section = ABOUT_SECTION,
+        .tint = sonic_ui::SHADOW.tint,
+    },
+    new settings_ui::Setting{
+        .value_type = settings_ui::SettingValueType::BUTTON,
+        .label = "RenoDX Discord",
+        .section = ABOUT_SECTION,
+        .tint = sonic_ui::SHADOW.tint,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/", "t9v7wx9NTD"); },
     },
 };
 
@@ -842,20 +823,6 @@ bool OnCreateSampler(reshade::api::device*, reshade::api::sampler_desc& desc) {
   return should_override;
 }
 
-void OnPresent(reshade::api::command_queue* queue,
-               reshade::api::swapchain* swapchain,
-               const reshade::api::rect* source_rect,
-               const reshade::api::rect* dest_rect,
-               uint32_t dirty_rect_count,
-               const reshade::api::rect* dirty_rects) {
-  auto* device = queue->get_device();
-  if (device->get_api() == reshade::api::device_api::opengl) {
-    shader_injection.custom_flip_uv_y = 1.f;
-  }
-}
-
-bool initialized = false;
-bool is_sonic_generations = false;
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
@@ -869,8 +836,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-// Swapchain and Display Output setup shared by both games. Settings it creates are appended to target_settings.
-void SetupSwapChain(settings_ui::Settings* target_settings) {
+// Swapchain and Display Output setup shared by both games.
+void SetupSwapChain() {
   renodx::mods::swapchain::expected_constant_buffer_index = 9;
   renodx::mods::swapchain::expected_constant_buffer_space = 50;
   renodx::mods::swapchain::use_resource_cloning = true;
@@ -882,114 +849,13 @@ void SetupSwapChain(settings_ui::Settings* target_settings) {
               .pixel_shader = __swap_chain_proxy_pixel_shader_dx11,
           },
       },
-      {
-          reshade::api::device_api::d3d12,
-          {
-              .vertex_shader = __swap_chain_proxy_vertex_shader_dx12,
-              .pixel_shader = __swap_chain_proxy_pixel_shader_dx12,
-          },
-      },
   };
 
-  {
-    auto* setting = new renodx::utils::settings::Setting{
-        .key = "SwapChainForceBorderless",
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Force Borderless",
-        .section = "Display Output",
-        .tooltip = "Forces fullscreen to be borderless for proper HDR",
-        .labels = {
-            "Disabled",
-            "Enabled",
-        },
-        .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
-        .is_global = true,
-        .is_visible = []() { return false; },
-    };
-    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-    renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
-    target_settings->push_back(setting);
-  }
-
-  {
-    auto* setting = new renodx::utils::settings::Setting{
-        .key = "SwapChainPreventFullscreen",
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Prevent Fullscreen",
-        .section = "Display Output",
-        .tooltip = "Prevent exclusive fullscreen for proper HDR",
-        .labels = {
-            "Disabled",
-            "Enabled",
-        },
-        .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
-        .is_global = true,
-        .is_visible = []() { return false; },
-    };
-    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-    renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
-    target_settings->push_back(setting);
-  }
-
+  renodx::mods::swapchain::force_borderless = false;
+  renodx::mods::swapchain::prevent_full_screen = false;
+  renodx::mods::swapchain::set_color_space = true;
   renodx::mods::swapchain::SetUseHDR10(true);
   renodx::mods::swapchain::use_resize_buffer = false;
-
-  {
-    auto* setting = new renodx::utils::settings::Setting{
-        .key = "SwapChainDeviceProxy",
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Use Display Proxy",
-        .section = "Display Proxy",
-        .labels = {"Off", "On"},
-        .is_global = true,
-        .is_visible = []() { return false; },
-    };
-    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-    bool use_device_proxy = setting->GetValue() == 1.f;
-    renodx::mods::swapchain::use_device_proxy = use_device_proxy;
-    renodx::mods::swapchain::set_color_space = !use_device_proxy;
-    if (use_device_proxy) {
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
-    } else {
-      shader_injection.custom_flip_uv_y = 0.f;
-    }
-    target_settings->push_back(setting);
-  }
-
-  {
-    auto* setting = new renodx::utils::settings::Setting{
-        .key = "SwapChainDeviceProxyBaseWaitIdle",
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Base Wait Idle",
-        .section = "Display Proxy",
-        .labels = {"Off", "On"},
-        .is_global = true,
-        .is_visible = []() { return false; },
-    };
-    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-    renodx::mods::swapchain::device_proxy_wait_idle_source = (setting->GetValue() == 1.f);
-    target_settings->push_back(setting);
-  }
-
-  {
-    auto* setting = new renodx::utils::settings::Setting{
-        .key = "SwapChainDeviceProxyProxyWaitIdle",
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Proxy Wait Idle",
-        .section = "Display Proxy",
-        .labels = {"Off", "On"},
-        .is_global = true,
-        .is_visible = []() { return false; },
-    };
-    renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-    renodx::mods::swapchain::device_proxy_wait_idle_destination = (setting->GetValue() == 1.f);
-    target_settings->push_back(setting);
-  }
 }
 
 }  // namespace
@@ -1017,15 +883,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (is_sonic_generations) {
         renodx::utils::settings::global_name = "renodx-sonicgenerations";
+        palette = &sonic_ui::SONIC;
 
         // Only one game runs per process, so the copied Shadow settings can take Sonic tints in place.
-        auto copy_shadow_section = [](std::string_view section, uint32_t tint) {
+        auto copy_shadow_section = [](std::string_view section) {
           for (auto* setting : settings) {
+            if (setting->section != section) continue;
             // Vanilla Hue Influence depends on Shadow's Uchimura reference curve, and Sonic has no UI brightness path
             // (graphics white is fixed in shared.h), so both settings are excluded.
-            if (setting->section != section || setting->value_type == settings_ui::SettingValueType::TEXT) continue;
             if (setting->key == "ToneMapVanillaHueInfluence" || setting->key == "ToneMapUINits") continue;
-            setting->tint = tint;
+            setting->tint = sonic_ui::SONIC.tint;
             if (setting->key == "ToneMapHighlightChromaRollOff") {
               setting->default_value = 0.f;
               setting->value = 0.f;
@@ -1034,101 +901,42 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         };
 
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::CUSTOM,
-            .label = "Sonic Banner",
-            .section = "SONIC",
-            .tooltip = "RenoDX HDR for Sonic Generations. Peak Brightness is set under Display.",
-            .on_draw = []() {
-              auto* draw_list = ImGui::GetWindowDrawList();
-              const ImVec2 min = ImGui::GetCursorScreenPos();
-              const float width = ImGui::GetContentRegionAvail().x;
-              const float height = ImGui::GetFrameHeight() * 2.4f;
-              const ImVec2 max = {min.x + width, min.y + height};
-              draw_list->AddRectFilledMultiColor(min, max, IM_COL32(6, 10, 30, 255), IM_COL32(20, 70, 200, 255),
-                                                 IM_COL32(30, 91, 255, 255), IM_COL32(8, 12, 36, 255));
-              draw_list->AddRectFilled(min, {min.x + 6.f, max.y}, IM_COL32(30, 91, 255, 255));
-              draw_list->AddRect(min, max, IM_COL32(30, 91, 255, 255));
-              draw_list->AddRectFilled({min.x, max.y - 3.f}, max, IM_COL32(255, 255, 255, 255));
-              const float title_size = ImGui::GetFontSize() * 1.5f;
-              draw_list->AddText(ImGui::GetFont(), title_size, {min.x + 16.f, min.y + 6.f}, IM_COL32(255, 255, 255, 255),
-                                 "SONIC GENERATIONS");
-              draw_list->AddText({min.x + 16.f, min.y + 10.f + title_size}, IM_COL32(150, 190, 255, 255),
-                                 "RenoDX HDR  //  GOTTA GO FAST");
-              ImGui::Dummy({width, height});
-              return false;
-            },
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::BUTTON,
-            .label = "Reset All To Defaults",
-            .section = "SONIC",
-            .tooltip = "Restores every setting to its default value.",
-            .tint = TINT_SONIC_BLUE,
-            .on_change = []() { settings_ui::ResetSettings(); },
-        });
-
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "Output levels for your HDR display.",
-            .section = "Display",
-            .tint = TINT_SONIC_BLUE,
-        });
-        copy_shadow_section("Display", TINT_SONIC_BLUE);
-
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "How scene brightness and color are mapped to HDR.",
-            .section = "Tone Mapping",
-            .tint = TINT_SONIC_DEEP,
-        });
-        copy_shadow_section("Tone Mapping", TINT_SONIC_DEEP);
+        copy_shadow_section(STATUS_SECTION);
+        copy_shadow_section(TONE_MAPPING_SECTION);
         sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGHighlightRollOff",
             .binding = &shader_injection.sg_highlight_rolloff,
             .default_value = 0.f,
             .label = "Highlight Roll-off",
-            .section = "Tone Mapping",
+            .section = TONE_MAPPING_SECTION,
             .tooltip = "Compresses brightness just above paper white. 0 keeps the game's linear highlights; 100 rolls them off the most.",
-            .tint = TINT_SONIC_DEEP,
+            .tint = sonic_ui::SONIC.tint,
             .max = 100.f,
             .parse = [](float value) { return value * 0.01f; },
         });
 
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "Neutral is the default of each slider.",
-            .section = "Color Grading",
-            .tint = TINT_SONIC_BLUE,
-        });
-        copy_shadow_section("Color Grading", TINT_SONIC_BLUE);
+        copy_shadow_section(COLOR_GRADING_SECTION);
 
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "Glow from the game's bright highlights.",
-            .section = "Bloom",
-            .tint = TINT_SONIC_BLUE,
-        });
         sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGBloom",
             .binding = &shader_injection.sg_bloom_enabled,
             .value_type = settings_ui::SettingValueType::INTEGER,
             .default_value = 1.f,
             .label = "Bloom",
-            .section = "Bloom",
+            .section = BLOOM_SECTION,
             .tooltip = "Turns the game's bloom on or off.",
             .labels = {"Off", "On"},
             .style = settings_ui::SettingStyle::SEGMENTED,
-            .tint = TINT_SONIC_BLUE,
+            .tint = sonic_ui::SONIC.tint,
         });
         sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGBloomStrength",
             .binding = &shader_injection.sg_bloom_strength,
             .default_value = 100.f,
             .label = "Bloom Strength",
-            .section = "Bloom",
+            .section = BLOOM_SECTION,
             .tooltip = "Scales the game's glow strength.",
-            .tint = TINT_SONIC_BLUE,
+            .tint = sonic_ui::SONIC.tint,
             .max = 200.f,
             .is_enabled = []() { return shader_injection.sg_bloom_enabled != 0.f; },
             .parse = [](float value) { return value * 0.01f; },
@@ -1138,9 +946,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .binding = &shader_injection.sg_bloom_threshold,
             .default_value = 100.f,
             .label = "Bloom Threshold",
-            .section = "Bloom",
+            .section = BLOOM_SECTION,
             .tooltip = "Scales the game's bright-pass threshold. Lower = more of the scene blooms.",
-            .tint = TINT_SONIC_BLUE,
+            .tint = sonic_ui::SONIC.tint,
             .min = 25.f,
             .max = 300.f,
             .is_enabled = []() { return shader_injection.sg_bloom_enabled != 0.f; },
@@ -1151,40 +959,34 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .binding = &shader_injection.sg_bloom_hdr,
             .default_value = 0.f,
             .label = "HDR Bloom",
-            .section = "Bloom",
+            .section = BLOOM_SECTION,
             .tooltip = "0% keeps vanilla's bloom limit; higher lets very bright sources glow more.",
-            .tint = TINT_SONIC_BLUE,
+            .tint = sonic_ui::SONIC.tint,
             .max = 100.f,
             .is_enabled = []() { return shader_injection.sg_bloom_enabled != 0.f; },
             .parse = [](float value) { return value * 0.01f; },
         });
 
         sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "Improved replaces the game's blur with a higher quality one.",
-            .section = "Motion Blur",
-            .tint = TINT_SONIC_DEEP,
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGMotionBlur",
             .binding = &shader_injection.sg_motion_blur,
             .value_type = settings_ui::SettingValueType::INTEGER,
             .default_value = 2.f,
             .label = "Motion Blur",
-            .section = "Motion Blur",
+            .section = MOTION_BLUR_SECTION,
             .tooltip = "Off removes motion blur, Vanilla keeps the game's, Improved blurs the full-resolution scene with RenoDX's.",
             .labels = {"Off", "Vanilla", "Improved"},
             .style = settings_ui::SettingStyle::SEGMENTED,
-            .tint = TINT_SONIC_DEEP,
+            .tint = sonic_ui::SONIC.tint,
         });
         sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGMotionBlurStrength",
             .binding = &shader_injection.sg_motion_blur_strength,
             .default_value = 100.f,
             .label = "Strength",
-            .section = "Motion Blur",
+            .section = MOTION_BLUR_SECTION,
             .tooltip = "Scales the blur length. Improved mode only.",
-            .tint = TINT_SONIC_DEEP,
+            .tint = sonic_ui::SONIC.tint,
             .max = 200.f,
             .is_enabled = []() { return shader_injection.sg_motion_blur == 2.f; },
             .parse = [](float value) { return value * 0.01f; },
@@ -1195,62 +997,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .value_type = settings_ui::SettingValueType::INTEGER,
             .default_value = 16.f,
             .label = "Samples",
-            .section = "Motion Blur",
+            .section = MOTION_BLUR_SECTION,
             .tooltip = "Blur quality. More samples are smoother but cost performance. Improved mode only.",
-            .tint = TINT_SONIC_DEEP,
+            .tint = sonic_ui::SONIC.tint,
             .min = 8.f,
             .max = 32.f,
             .format = "%d",
             .is_enabled = []() { return shader_injection.sg_motion_blur == 2.f; },
         });
 
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::BUTTON,
-            .label = "Buy Ostad a coffee",
-            .section = "Links",
-            .tint = TINT_SONIC_WHITE,
-            .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/ostadgaming"); },
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::BUTTON,
-            .label = "RenoDX Discord",
-            .section = "Links",
-            .group = "links",
-            .tint = TINT_SONIC_BLUE,
-            .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/", "t9v7wx9NTD"); },
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::BUTTON,
-            .label = "RenoDX GitHub",
-            .section = "Links",
-            .group = "links",
-            .tint = TINT_SONIC_DEEP,
-            .on_change = []() { renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx"); },
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::BUTTON,
-            .label = "More Mods",
-            .section = "Links",
-            .group = "links",
-            .tint = TINT_SONIC_WHITE,
-            .on_change = []() { renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods"); },
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "SONIC X SHADOW GENERATIONS RenoDX mod made by Ostad.",
-            .section = "Links",
-            .tint = TINT_SONIC_WHITE,
-        });
-        sonic_generations_settings.push_back(new settings_ui::Setting{
-            .value_type = settings_ui::SettingValueType::TEXT,
-            .label = "RenoDX by Carlos Lopez (clshortfuse) and contributors.",
-            .section = "Links",
-            .tint = TINT_SONIC_WHITE,
-        });
+        copy_shadow_section(ABOUT_SECTION);
 
-        SetupSwapChain(&sonic_generations_settings);
+        SetupSwapChain();
         reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .ignore_size = false,
@@ -1260,35 +1020,31 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         break;
       }
 
-      if (!initialized) {
-        SetupSwapChain(&settings);
+      SetupSwapChain();
 
-        for (const auto old_format : {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r10g10b10a2_unorm}) {
-          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-              .old_format = old_format,
-              .new_format = reshade::api::format::r16g16b16a16_float,
-              .ignore_size = false,
-              .use_resource_view_cloning = true,
-              .use_resource_view_hot_swap = true,
-              .aspect_ratio = static_cast<float>((old_format == reshade::api::format::r8g8b8a8_typeless)
-                                                     ? renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER
-                                                     : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-          });
-        }
-
-        reshade::register_event<reshade::addon_event::copy_resource>(OnCopyResource);
-        reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-        reshade::register_event<reshade::addon_event::create_sampler>(OnCreateSampler);
-        reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyAdaptedLuminance);
-        reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyMotionBlurSourceCopy);
-        reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-        initialized = true;
+      for (const auto old_format : {reshade::api::format::r8g8b8a8_typeless, reshade::api::format::r10g10b10a2_unorm}) {
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = old_format,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = false,
+            .use_resource_view_cloning = true,
+            .use_resource_view_hot_swap = true,
+            .aspect_ratio = static_cast<float>((old_format == reshade::api::format::r8g8b8a8_typeless)
+                                                   ? renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER
+                                                   : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
+        });
       }
+
+      reshade::register_event<reshade::addon_event::copy_resource>(OnCopyResource);
+      reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
+      reshade::register_event<reshade::addon_event::create_sampler>(OnCreateSampler);
+      reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyAdaptedLuminance);
+      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyMotionBlurSourceCopy);
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       break;
     case DLL_PROCESS_DETACH:
       if (is_sonic_generations) {
-        reshade::unregister_event<reshade::addon_event::present>(OnPresent);
         reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
         reshade::unregister_addon(h_module);
         break;
@@ -1299,7 +1055,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::create_sampler>(OnCreateSampler);
       reshade::unregister_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
       reshade::unregister_event<reshade::addon_event::copy_resource>(OnCopyResource);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }

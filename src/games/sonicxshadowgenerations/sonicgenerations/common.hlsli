@@ -51,7 +51,7 @@ float3 SGHighlightShoulder(float3 color) {
 renodx::draw::Config SonicToneMapConfig() {
   renodx::draw::Config config = renodx::draw::BuildConfig();
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::NEUTWO;
-  config.tone_map_highlight_saturation = 1.f - saturate(0.1f + shader_injection.highlight_chroma_rolloff_offset);
+  config.tone_map_highlight_saturation = 1.f - saturate(shader_injection.tone_map_highlight_chroma_rolloff);
   return config;
 }
 

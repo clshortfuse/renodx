@@ -1,6 +1,6 @@
 #include "./common.hlsli"
 
-// Decompiled from vanilla 0x5F91F19E (DOF/motion blur pass, 1280x720 RGBA8 cloned to RGBA16F).
+// Decompiled from vanilla 0x5F91F19E (motion blur pass, 1280x720 RGBA8 cloned to RGBA16F).
 // Vanilla: 8-tap blur along velocity, depth-gated, alpha = blur amount.
 // RenoDX: Improved (sg_motion_blur >= 1.5) outputs the velocity map instead: xy = velocity (UV), z = depth, w = vanilla alpha.
 // The composites then blur the full-resolution source with that map (SGFullResMotionBlur).

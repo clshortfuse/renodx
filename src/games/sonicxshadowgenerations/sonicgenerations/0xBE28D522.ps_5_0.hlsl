@@ -83,12 +83,13 @@ void main(
   float4 fDest;
 
   r0.xyzw = g_ViewportSize.zwzw * float4(0,-1,-1,0) + v1.xyxy;
-  r1.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r0.xy, 0).xyz);  // RenoDX: FXAA HDR compress
-  r0.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r0.zw, 0).xyz);  // RenoDX: FXAA HDR compress
-  r2.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, v1.xy, 0).xyz);  // RenoDX: FXAA HDR compress
+  // RenoDX: every FXAA input tap goes through FxaaCompress so FXAA works on an SDR-range signal.
+  r1.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r0.xy, 0).xyz);
+  r0.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r0.zw, 0).xyz);
+  r2.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, v1.xy, 0).xyz);
   r3.xyzw = g_ViewportSize.zwzw * float4(1,0,0,1) + v1.xyxy;
-  r4.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r3.xy, 0).xyz);  // RenoDX: FXAA HDR compress
-  r3.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r3.zw, 0).xyz);  // RenoDX: FXAA HDR compress
+  r4.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r3.xy, 0).xyz);
+  r3.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r3.zw, 0).xyz);
   r0.w = r1.y * 1.9632107 + r1.x;
   r1.w = r0.y * 1.9632107 + r0.x;
   r2.w = r2.y * 1.9632107 + r2.x;
@@ -121,12 +122,12 @@ void main(
     r1.x = 1.33333337 * r1.x;
     r1.x = min(0.75, r1.x);
     r1.yz = -g_ViewportSize.zw + v1.xy;
-    r3.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r1.yz, 0).xyz);  // RenoDX: FXAA HDR compress
+    r3.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r1.yz, 0).xyz);
     r5.xyzw = g_ViewportSize.zwzw * float4(1,-1,-1,1) + v1.xyxy;
-    r4.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r5.xy, 0).xyz);  // RenoDX: FXAA HDR compress
-    r5.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r5.zw, 0).xyz);  // RenoDX: FXAA HDR compress
+    r4.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r5.xy, 0).xyz);
+    r5.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r5.zw, 0).xyz);
     r1.yz = g_ViewportSize.zw + v1.xy;
-    r6.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r1.yz, 0).xyz);  // RenoDX: FXAA HDR compress
+    r6.xyz = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r1.yz, 0).xyz);
     r7.xyz = r4.xyz + r3.xyz;
     r7.xyz = r7.xyz + r5.xyz;
     r7.xyz = r7.xyz + r6.xyz;
@@ -188,13 +189,13 @@ void main(
       r6.w = cmp((int)r6.z >= 16);
       if (r6.w != 0) break;
       if (r6.x == 0) {
-        r7.xy = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r4.zw, 0).xyz).xy;  // RenoDX: FXAA HDR compress
+        r7.xy = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r4.zw, 0).xyz).xy;
         r6.w = r7.y * 1.9632107 + r7.x;
       } else {
         r6.w = r5.z;
       }
       if (r6.y == 0) {
-        r7.xy = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r5.xy, 0).xyz).xy;  // RenoDX: FXAA HDR compress
+        r7.xy = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r5.xy, 0).xyz).xy;
         r7.x = r7.y * 1.9632107 + r7.x;
       } else {
         r7.x = r5.w;
@@ -240,30 +241,11 @@ void main(
     r3.x = v1.x + r1.z;
     r0.w = r1.y ? r0.w : 0;
     r3.y = v1.y + r0.w;
-    r1.yzw = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r3.xy, 0).xyz);  // RenoDX: FXAA HDR compress
+    r1.yzw = FxaaCompress(s0_NedSmpignorenametexture.SampleLevel(s0_sampler_s, r3.xy, 0).xyz);
     r0.xyz = r0.xyz * float3(0.111111112,0.111111112,0.111111112) + r1.yzw;
     r2.xyz = -r1.xxx * r1.yzw + r0.xyz;
   }
-//  r0.x = saturate(u_color_grading_factor.y);
-//  r1.xyzw = saturate(r2.zzxy);
-//  r3.xyw = float3(14.9998999,0.9375,0.05859375) * r1.xwz;
-//  r0.y = floor(r3.x);
-//  r0.z = saturate(r1.y * 15 + -r0.y);
-//  r3.x = r0.y * 0.0625 + r3.w;
-//  r1.xyzw = float4(0.001953125,0.03125,0.064453125,0.03125) + r3.xyxy;
-//  r3.xyz = s_ColorGradingLUT_0_NedSmpignorenametexture.SampleLevel(s_ColorGradingLUT_0_sampler_s, r1.xy, 0).xyz;
-//  r4.xyz = s_ColorGradingLUT_0_NedSmpignorenametexture.SampleLevel(s_ColorGradingLUT_0_sampler_s, r1.zw, 0).xyz;
-//  r4.xyz = r4.xyz + -r3.xyz;
-//  r3.xyz = r0.zzz * r4.xyz + r3.xyz;
-//  r4.xyz = s_ColorGradingLUT_1_NedSmpignorenametexture.SampleLevel(s_ColorGradingLUT_1_sampler_s, r1.xy, 0).xyz;
-//  r1.xyz = s_ColorGradingLUT_1_NedSmpignorenametexture.SampleLevel(s_ColorGradingLUT_1_sampler_s, r1.zw, 0).xyz;
-//  r1.xyz = r1.xyz + -r4.xyz;
-//  r0.yzw = r0.zzz * r1.xyz + r4.xyz;
-//  r0.yzw = r0.yzw + -r3.xyz;
-//  r0.yzw = u_color_grading_factor.xxx * r0.yzw + r3.xyz;
-//  r0.yzw = r0.yzw + -r2.xyz;
-//  o0.xyz = r0.xxx * r0.yzw + r2.xyz;
-  // RenoDX: tonemap bridge. Vanilla LUT grade below is kept commented out.
+  // RenoDX: tonemap bridge replaces the vanilla LUT grade.
   float3 untonemapped = renodx::color::srgb::DecodeSafe(FxaaExpand(r2.xyz));  // RenoDX: FXAA HDR expand
   // Vanilla had no curve (linear until the RGBA8 clip): stay linear below 0.75, then roll off to 1.
   // The roll-off scales by the max channel so hue and chroma survive; per-channel roll-off washed bright colors to white.

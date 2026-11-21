@@ -1,8 +1,7 @@
-#ifndef SRC_TEMPLATE_SHARED_H_
-#define SRC_TEMPLATE_SHARED_H_
+#ifndef SRC_GAMES_SONICXSHADOWGENERATIONS_SHARED_H_
+#define SRC_GAMES_SONICXSHADOWGENERATIONS_SHARED_H_
 
 // Must be 32bit aligned
-// Should be 4x32
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
@@ -13,7 +12,6 @@ struct ShaderInjectData {
   float tone_map_contrast;
   float tone_map_saturation;
   float tone_map_hue_processor;
-  float custom_flip_uv_y;
   float custom_rcas;
   float chromatic_aberration;
   float fx_bloom;
@@ -22,17 +20,12 @@ struct ShaderInjectData {
   float bloom_luminance_valid;
   float fx_bloom_haze;
   float bloom_target_level;
-  // Preserve offsets for live shader replacement against the existing addon.
-  float reserved_per_channel_hue;
-  float reserved_per_channel_chrominance;
-  float tone_map_scene_hue_influence;
-  float highlight_chroma_rolloff_offset;
+  float tone_map_vanilla_hue_influence;
+  float tone_map_highlight_chroma_rolloff;
   float fx_motion_blur;
   float fx_motion_blur_samples;
   float fx_motion_blur_strength;
   float fx_motion_blur_full_res;
-  float fx_fog_coverage_reduction;
-  float fx_fog_light_reduction;
   float sg_bloom_enabled;
   float sg_bloom_strength;
   float sg_bloom_threshold;
@@ -73,4 +66,4 @@ cbuffer shader_injection : register(b9) {
 
 #endif
 
-#endif  // SRC_TEMPLATE_SHARED_H_
+#endif  // SRC_GAMES_SONICXSHADOWGENERATIONS_SHARED_H_

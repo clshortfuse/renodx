@@ -40,7 +40,7 @@ float3 SampleSource(float2 full_pos) {
 #define cmp -
 
 
-// RenoDX: every o0 write is wrapped in saturate() to emulate the original R8G8B8A8_UNORM write clamp (target is upgraded to float; unbounded alpha breaks blending)
+// RenoDX: color is floored at 0 and alpha saturated to emulate the original R8G8B8A8_UNORM write clamp (the target is upgraded to float; unbounded alpha breaks blending)
 void main(
   float4 v0 : SV_POSITION0,
   float2 v1 : TEXCOORD0,
@@ -92,7 +92,7 @@ void main(
   r1.z = sqrt(r1.z);
   r1.w = cmp(0.515625 >= r1.z);
   if (r1.w != 0) {
-    o0.xyz = max(0, float3(0,0,0)); // RenoDX
+    o0.xyz = float3(0,0,0);
     o0.w = saturate(0);
     return;
   }

@@ -46,13 +46,12 @@ void main(
     r1.x = (int)r1.x + 1;
   }
   r0.xyzw = u_param[0].wwww * r0.xyzw;
-  if (shader_injection.bloom_composite == 0.f) {
-    // Upsample source mip is target+1; mip levels 3-5 fade progressively with Bloom Haze.
-    r0.xyz *= lerp(1.f, shader_injection.fx_bloom_haze, saturate((shader_injection.bloom_target_level + 1.f - 2.f) / 3.f));
-  }
   if (shader_injection.bloom_composite != 0.f) {
     r0.xyz *= shader_injection.fx_bloom;
     r0.w = 0.f;  // Additive blend: keep scene alpha untouched.
+  } else {
+    // Upsample source mip is target+1; mip levels 3-5 fade progressively with Bloom Haze.
+    r0.xyz *= lerp(1.f, shader_injection.fx_bloom_haze, saturate((shader_injection.bloom_target_level + 1.f - 2.f) / 3.f));
   }
   o0.xyzw = min(float4(65504,65504,65504,65504), r0.xyzw);
   return;

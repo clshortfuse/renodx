@@ -48,15 +48,14 @@ float3 ApplySceneToneMap(float3 source, renodx::draw::Config config) {
   tone_map.contrast = config.tone_map_contrast;
   tone_map.saturation = config.tone_map_saturation;
   tone_map.reno_drt_dechroma = 0.f;
-  // A zero-initialized injection uses the tuned default, including during live reload.
-  tone_map.reno_drt_blowout = saturate(0.1f + shader_injection.highlight_chroma_rolloff_offset);
+  tone_map.reno_drt_blowout = saturate(shader_injection.tone_map_highlight_chroma_rolloff);
   tone_map.reno_drt_hue_correction_method = config.tone_map_hue_processor;
   tone_map.reno_drt_clamp_color_space = config.tone_map_clamp_color_space;
   // Preserve scene RGB ratios until the downstream BT.2020 peak limit.
   tone_map.reno_drt_clamp_peak = renodx::color::convert::COLOR_SPACE_NONE;
   tone_map.reno_drt_white_clip = config.reno_drt_white_clip;
   tone_map.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::NEUTWO;
-  float vanilla_hue_influence = 1.f - saturate(shader_injection.tone_map_scene_hue_influence);
+  float vanilla_hue_influence = saturate(shader_injection.tone_map_vanilla_hue_influence);
   [branch]
   if (vanilla_hue_influence > 0.f) {
     float3 vanilla_sdr = VanillaToneMap(source);
