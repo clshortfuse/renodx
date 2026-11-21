@@ -250,7 +250,13 @@ void main(
   // Vanilla had no curve (linear until the RGBA8 clip): stay linear below 0.75, then roll off to 1.
   // The roll-off scales by the max channel so hue and chroma survive; per-channel roll-off washed bright colors to white.
   float max_channel = max(untonemapped.r, max(untonemapped.g, untonemapped.b));
-  float3 neutral_sdr = untonemapped * (max_channel > 0.f ? renodx::tonemap::ExponentialRollOff(max_channel, 0.75f) / max_channel : 0.f);
+  float3 neutral_sdr;
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    neutral_sdr = saturate(untonemapped);  // RenoDX: Vanilla RGBA8 clip
+  } else {
+    neutral_sdr = untonemapped * (max_channel > 0.f ? renodx::tonemap::ExponentialRollOff(max_channel, 0.75f) / max_channel : 0.f);
+  }
   float3 neutral_encoded = renodx::color::srgb::EncodeSafe(neutral_sdr);
 
   // Vanilla LUT addressing, fed with the sRGB-encoded neutral SDR.
@@ -273,7 +279,12 @@ void main(
   float3 graded_encoded = lerp(neutral_encoded, lerp(lut0, lut1, u_color_grading_factor.x), saturate(u_color_grading_factor.y));
   float3 graded_sdr = renodx::color::srgb::DecodeSafe(graded_encoded);
   renodx::draw::Config config = SonicToneMapConfig();
-  o0.rgb = renodx::draw::RenderIntermediatePass(renodx::draw::ToneMapPass(SGHighlightShoulder(untonemapped), graded_sdr, neutral_sdr, config), config);
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0.rgb = renodx::draw::RenderIntermediatePass(graded_sdr, config);  // RenoDX: Vanilla, no tonemap
+  } else {
+    o0.rgb = renodx::draw::RenderIntermediatePass(renodx::draw::ToneMapPass(SGHighlightShoulder(untonemapped), graded_sdr, neutral_sdr, config), config);
+  }
   o0.w = 1;
   return;
 }

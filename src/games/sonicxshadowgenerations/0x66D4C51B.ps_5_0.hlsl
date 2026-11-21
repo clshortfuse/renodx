@@ -15,6 +15,11 @@ float4 main(float4 position : SV_POSITION, float3 uv_exposure : TEXCOORD0) : SV_
   float3 graded = renodx::color::srgb::Decode(
       lerp(e, SampleGradingLut(lut_texture, lut_sampler, e), saturate(u_color_grading_factor.y)));
 
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    return float4(renodx::draw::RenderIntermediatePass(graded, config), scene.a);  // RenoDX: Vanilla path
+  }
+
   float3 upgraded = renodx::tonemap::UpgradeToneMap(ApplySceneToneMap(source, config), vanilla, graded, 1.f);
   return float4(renodx::draw::RenderIntermediatePass(upgraded, config), scene.a);
 }

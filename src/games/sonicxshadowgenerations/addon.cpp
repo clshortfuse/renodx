@@ -29,7 +29,7 @@
 namespace {
 
 constexpr float HDR_SCENE_COLOR_TAG = 1.f;
-float force_anisotropic_filtering = 1.f;
+float force_anisotropic_filtering = 0.f;
 
 bool OnDrawActivateRenderTargetHotSwap(reshade::api::command_list* cmd_list) {
   auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
@@ -419,18 +419,21 @@ renodx::utils::settings::Settings settings = {
             motion_blur_item = {"Vanilla Motion Blur", false};
           }
 
-          const bool rcas_on = shader_injection.custom_rcas > 0.f;
+          const bool tone_map_on = shader_injection.tone_map_type != 0.f;
+          const bool rcas_on = shader_injection.fx_sharpening != 0.f;
           const bool af_on = force_anisotropic_filtering != 0.f;
           const Item shadow_items[] = {
               {"HDR10", true},
+              {tone_map_on ? "RenoDRT" : "Vanilla", tone_map_on},
               motion_blur_item,
-              {rcas_on ? "RCAS" : "RCAS Off", rcas_on},
+              {rcas_on ? "RCAS" : "Vanilla Sharpen", rcas_on},
               {af_on ? "16x AF" : "Game AF", af_on},
           };
           const bool bloom_on = shader_injection.sg_bloom_enabled != 0.f;
           const bool hdr_bloom_on = shader_injection.sg_bloom_hdr > 0.f;
           const Item sonic_items[] = {
               {"HDR10", true},
+              {tone_map_on ? "RenoDRT" : "Vanilla", tone_map_on},
               motion_blur_item,
               {bloom_on ? "Bloom" : "Bloom Off", bloom_on},
               {hdr_bloom_on ? "HDR Bloom" : "SDR Bloom", hdr_bloom_on},
@@ -530,6 +533,19 @@ renodx::utils::settings::Settings settings = {
     },
 
     // Tone Mapping
+    new settings_ui::Setting{
+        .key = "ToneMapType",
+        .binding = &shader_injection.tone_map_type,
+        .value_type = settings_ui::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Tone Mapper",
+        .section = TONE_MAPPING_SECTION,
+        .tooltip = "Vanilla keeps the game's SDR tone mapping. RenoDRT extends it to HDR.",
+        .labels = {"Vanilla", "RenoDRT"},
+        .style = settings_ui::SettingStyle::SEGMENTED,
+        .tint = sonic_ui::SHADOW.tint,
+        .parse = [](float value) { return value * 3.f; },
+    },
     new settings_ui::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
@@ -685,7 +701,7 @@ renodx::utils::settings::Settings settings = {
     new settings_ui::Setting{
         .key = "FxBloomHaze",
         .binding = &shader_injection.fx_bloom_haze,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Bloom Haze",
         .section = BLOOM_SECTION,
         .tooltip = "Fades the widest bloom levels that veil the whole screen and raise blacks. Lower = less haze; local glow stays.",
@@ -698,7 +714,7 @@ renodx::utils::settings::Settings settings = {
         .key = "FxMotionBlur",
         .binding = &shader_injection.fx_motion_blur,
         .value_type = settings_ui::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .label = "Motion Blur",
         .section = MOTION_BLUR_SECTION,
         .tooltip = "Off removes motion blur, Vanilla keeps the game's, Improved uses RenoDX's.",
@@ -757,21 +773,34 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new settings_ui::Setting{
+        .key = "FxSharpening",
+        .binding = &shader_injection.fx_sharpening,
+        .value_type = settings_ui::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Sharpening",
+        .section = LENS_SHARPENING_SECTION,
+        .tooltip = "Vanilla keeps the game's sharpen. RCAS replaces it with Lilium's HDR RCAS.",
+        .labels = {"Vanilla", "RCAS"},
+        .style = settings_ui::SettingStyle::SEGMENTED,
+        .tint = sonic_ui::SHADOW.tint,
+    },
+    new settings_ui::Setting{
         .key = "FxRCAS",
         .binding = &shader_injection.custom_rcas,
         .default_value = 50.f,
-        .label = "RCAS Sharpening",
+        .label = "RCAS Strength",
         .section = LENS_SHARPENING_SECTION,
         .tooltip = "Controls Lilium's HDR RCAS before HUD compositing.",
         .tint = sonic_ui::SHADOW.tint,
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.fx_sharpening != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new settings_ui::Setting{
         .key = "ForceAnisotropicFiltering",
         .binding = &force_anisotropic_filtering,
         .value_type = settings_ui::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Anisotropic Filtering",
         .section = TEXTURE_FILTERING_SECTION,
         .tooltip = "Forces 16x anisotropic filtering on material textures. Requires game restart.",
@@ -804,6 +833,36 @@ renodx::utils::settings::Settings settings = {
 
 // Sonic Generations shows the tone map and color grade subset of `settings`, filled in DllMain.
 settings_ui::Settings sonic_generations_settings = {};
+
+// Restores the vanilla look. Keys missing from the active game's list are skipped by UpdateSetting.
+void OnPresetOff() {
+  settings_ui::UpdateSetting("ToneMapType", 0.f);
+  settings_ui::UpdateSetting("ToneMapPeakNits", 203.f);
+  settings_ui::UpdateSetting("ToneMapGameNits", 203.f);
+  settings_ui::UpdateSetting("ColorGradeExposure", 1.f);
+  settings_ui::UpdateSetting("ColorGradeHighlights", 50.f);
+  settings_ui::UpdateSetting("ColorGradeShadows", 50.f);
+  settings_ui::UpdateSetting("ColorGradeContrast", 50.f);
+  settings_ui::UpdateSetting("ColorGradeSaturation", 50.f);
+  if (is_sonic_generations) {
+    settings_ui::UpdateSetting("SGHighlightRollOff", 0.f);
+    settings_ui::UpdateSetting("SGBloom", 1.f);
+    settings_ui::UpdateSetting("SGBloomStrength", 100.f);
+    settings_ui::UpdateSetting("SGBloomThreshold", 100.f);
+    settings_ui::UpdateSetting("SGBloomHDR", 0.f);
+    settings_ui::UpdateSetting("SGMotionBlur", 1.f);
+  } else {
+    settings_ui::UpdateSetting("ToneMapUINits", 203.f);
+    settings_ui::UpdateSetting("FxBloom", 100.f);
+    settings_ui::UpdateSetting("FxBloomThreshold", 0.f);
+    settings_ui::UpdateSetting("FxBloomHaze", 100.f);
+    settings_ui::UpdateSetting("FxMotionBlur", 1.f);
+    settings_ui::UpdateSetting("FxMotionBlurStrength", 100.f);
+    settings_ui::UpdateSetting("FxChromaticAberration", 100.f);
+    settings_ui::UpdateSetting("FxSharpening", 0.f);
+    settings_ui::UpdateSetting("ForceAnisotropicFiltering", 0.f);
+  }
+}
 
 bool OnCreateSampler(reshade::api::device*, reshade::api::sampler_desc& desc) {
   if (force_anisotropic_filtering == 0.f) {
@@ -971,7 +1030,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .key = "SGMotionBlur",
             .binding = &shader_injection.sg_motion_blur,
             .value_type = settings_ui::SettingValueType::INTEGER,
-            .default_value = 2.f,
+            .default_value = 1.f,
             .label = "Motion Blur",
             .section = MOTION_BLUR_SECTION,
             .tooltip = "Off removes motion blur, Vanilla keeps the game's, Improved blurs the full-resolution scene with RenoDX's.",
@@ -1059,14 +1118,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  renodx::utils::settings::use_presets = false;
   if (is_sonic_generations) {
-    renodx::utils::settings::Use(fdw_reason, &sonic_generations_settings);
+    renodx::utils::settings::Use(fdw_reason, &sonic_generations_settings, &OnPresetOff);
     renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
     renodx::mods::shader::Use(fdw_reason, sonic_generations_shaders, &shader_injection);
     return TRUE;
   }
-  renodx::utils::settings::Use(fdw_reason, &settings);
+  renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 

@@ -243,7 +243,13 @@ void main(
   }
   // RenoDX: tonemap bridge. FXAA output (r2) is sRGB-encoded.
   renodx::draw::Config config = SonicToneMapConfig();
-  o0.rgb = renodx::draw::RenderIntermediatePass(renodx::draw::ToneMapPass(SGHighlightShoulder(renodx::color::srgb::DecodeSafe(FxaaExpand(r2.xyz))), config), config);  // RenoDX: FXAA HDR expand
+  float3 untonemapped = renodx::color::srgb::DecodeSafe(FxaaExpand(r2.xyz));  // RenoDX: FXAA HDR expand
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    o0.rgb = renodx::draw::RenderIntermediatePass(saturate(untonemapped), config);  // RenoDX: Vanilla, no tonemap
+  } else {
+    o0.rgb = renodx::draw::RenderIntermediatePass(renodx::draw::ToneMapPass(SGHighlightShoulder(untonemapped), config), config);
+  }
   o0.w = 1;
   return;
 }

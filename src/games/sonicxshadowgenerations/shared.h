@@ -34,6 +34,8 @@ struct ShaderInjectData {
   float sg_motion_blur_strength;
   float sg_motion_blur_samples;
   float sg_highlight_rolloff;
+  float tone_map_type;
+  float fx_sharpening;
 };
 
 #ifndef __cplusplus
@@ -55,7 +57,7 @@ cbuffer shader_injection : register(b9) {
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_TYPE                 renodx::draw::TONE_MAP_TYPE_RENO_DRT
+#define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 
 #define RENODX_GAMMA_CORRECTION renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_SWAP_CHAIN_ENCODING renodx::draw::ENCODING_PQ
