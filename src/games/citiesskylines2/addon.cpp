@@ -8,6 +8,7 @@
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
+#include <atomic>
 #include <sstream>
 #include <include/reshade.hpp>
 
@@ -25,6 +26,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
+
+// Set by the replacement shaders themselves: the only reliable "did it run" signal.
+std::atomic<bool> g_scene_shader_drawn = false;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -382,8 +386,8 @@ const auto UPGRADE_TYPE_ANY = 3.f;
 static uint32_t g_health_frames = 0;
 static bool g_health_checked = false;
 
-void OnHealthCheckPresent(reshade::api::command_queue*,
-                          reshade::api::swapchain*,
+void OnHealthCheckPresent(reshade::api::command_queue* queue,
+                          reshade::api::swapchain* swapchain,
                           const reshade::api::rect*,
                           const reshade::api::rect*,
                           uint32_t,
@@ -391,16 +395,40 @@ void OnHealthCheckPresent(reshade::api::command_queue*,
   if (g_health_checked) return;
   if (++g_health_frames < 300) return;
   g_health_checked = true;
-  const auto& counts = renodx::mods::shader::counted_shaders;
-  const auto native = counts.find(0x73F01A45u);
-  const auto fsr = counts.find(0xDD2F76F2u);
-  const bool replaced = (native != counts.end() && native->second > 0)
-                        || (fsr != counts.end() && fsr->second > 0);
-  if (replaced) {
-    reshade::log::message(reshade::log::level::info, "[CS2] scene shader replacement is active.");
-  } else {
+  const bool replaced = g_scene_shader_drawn.load();
+  auto* device = queue->get_device();
+  const auto back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
+  const auto swapchain_format = static_cast<uint32_t>(back_buffer_desc.texture.format);
+  const bool hdr_output = swapchain_format == static_cast<uint32_t>(reshade::api::format::r10g10b10a2_unorm)
+                          || swapchain_format == static_cast<uint32_t>(reshade::api::format::r16g16b16a16_float);
+
+
+  bool size_matches = true;
+  if (auto hwnd = swapchain->get_hwnd(); hwnd != nullptr) {
+    RECT rect = {};
+    if (::GetClientRect(static_cast<HWND>(hwnd), &rect)) {
+      size_matches = (back_buffer_desc.texture.width == static_cast<uint32_t>(rect.right - rect.left))
+                     && (back_buffer_desc.texture.height == static_cast<uint32_t>(rect.bottom - rect.top));
+    }
+  }
+
+  if (!replaced) {
     reshade::log::message(reshade::log::level::warning,
                           "[CS2] WARNING: scene shader was never replaced - the game may have been updated. HDR is inactive.");
+  } else if (!hdr_output) {
+    const std::string format_warning = "[CS2] WARNING: swap chain is not HDR (format "
+                                       + std::to_string(swapchain_format)
+                                       + ") - HDR output is inactive, frame generation will drop HDR too.";
+    reshade::log::message(reshade::log::level::warning, format_warning.c_str());
+  } else if (!size_matches) {
+    reshade::log::message(reshade::log::level::warning,
+                          "[CS2] WARNING: back buffer size does not match the window size - the upgraded resource may "
+                          "not be the scene target.");
+  } else {
+    const std::string ok = "[CS2] health check passed: scene shader replaced, HDR swap chain "
+                           + std::to_string(back_buffer_desc.texture.width) + "x"
+                           + std::to_string(back_buffer_desc.texture.height) + ".";
+    reshade::log::message(reshade::log::level::info, ok.c_str());
   }
 }
 
@@ -427,6 +455,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      // Flag the shaders when they actually draw, so the health check can tell
+      // "replacement never ran" apart from "replacement ran but the upgrade missed".
+      custom_shaders[0x73F01A45u].on_drawn = [](reshade::api::command_list*) { g_scene_shader_drawn = true; };
+      custom_shaders[0xDD2F76F2u].on_drawn = [](reshade::api::command_list*) { g_scene_shader_drawn = true; };
       reshade::register_event<reshade::addon_event::present>(OnHealthCheckPresent);
 
       if (!initialized) {
@@ -621,9 +654,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               // FSR creates a second RenderTexture-2D; upgrade both plus the UI background.
               base_target.ignore_size = false;
               base_target.aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::ANY;
-              base_target.dimensions.width = 0;
-              base_target.dimensions.height = 0;
-              base_target.min_dimensions.width = 1024;
+              // Match resources that are exactly the size of the back buffer: works for
+              // any resolution and aspect ratio without ever touching smaller intermediates.
+              base_target.dimensions.width = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER;
+              base_target.dimensions.height = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER;
               for (const int index : {0}) {
                 auto target = base_target;
                 target.index = index;
