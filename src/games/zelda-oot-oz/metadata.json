@@ -1,0 +1,11 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "zelda-oot-oz",
+  "title": "The Legend of Zelda: Ocarina of Time for Switch 2",
+  "status": "experimental",
+  "summary": "Native HDR scene mapping with Vanilla and PsychoV35 on Vulkan.",
+  "deploy": {
+    "api": "vulkan",
+    "architecture": ["x64"]
+  }
+}

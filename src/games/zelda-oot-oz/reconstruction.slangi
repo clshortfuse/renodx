@@ -1,0 +1,118 @@
+// CUSTOM FILE: Added shared-memory proxies, AA-off reconstruction and store adapter.
+// CUSTOM: The original 16/32-bit views alias the SAME 5120 bytes. Separate
+// shared arrays are not equivalent. Preserve packed bits in one backing array.
+#ifndef CUSTOM_RECONSTRUCTION_SHARED_WORDS
+#define CUSTOM_RECONSTRUCTION_SHARED_WORDS 1280
+#endif
+groupshared uint custom_shared_words[CUSTOM_RECONSTRUCTION_SHARED_WORDS];
+struct CustomSharedHalfView {
+    __subscript(uint index) -> uint16_t {
+        get { return uint16_t((custom_shared_words[index >> 1u] >> ((index & 1u) * 16u)) & 65535u); }
+        set {
+            uint custom_shift = (index & 1u) * 16u;
+            uint custom_mask = 65535u << custom_shift;
+            uint custom_expected = custom_shared_words[index >> 1u];
+            for (;;) {
+                uint custom_observed;
+                InterlockedCompareExchange(custom_shared_words[index >> 1u], custom_expected,
+                    (custom_expected & ~custom_mask) | (uint(newValue) << custom_shift), custom_observed);
+                if (custom_observed == custom_expected) break;
+                custom_expected = custom_observed;
+            }
+        }
+    }
+};
+struct CustomSharedWordView {
+    __subscript(uint index) -> uint {
+        get { return custom_shared_words[index]; }
+        set { custom_shared_words[index] = newValue; }
+    }
+};
+struct _33 { CustomSharedHalfView _m0; };
+struct _39 { CustomSharedWordView _m0; };
+struct _45 { uvec2 _m0[640]; };
+struct _51 { uvec4 _m0[320]; };
+
+#include "./aa_controls.slangi"
+
+// CUSTOM: Existing dispatch writes the whole destination without native tile
+// assumptions. Identical extents use exact loads; resizing interpolates RGBA
+// in the original linear RGB basis, preserving negative channels and headroom.
+void CustomLinearReconstruction() {
+    // Native loads clamp to c0[6..7], which can exclude allocation padding.
+    ivec2 custom_source_size = min(textureSize(cs_tex0_c0, 0), ivec2(c0.data[6u], c0.data[7u]) + ivec2(1));
+    ivec2 custom_output_size = imageSize(cs_img0_d0);
+    uint custom_group = gl_WorkGroupID.x + gl_NumWorkGroups.x
+        * (gl_WorkGroupID.y + gl_NumWorkGroups.y * gl_WorkGroupID.z);
+    uint custom_stride = gl_NumWorkGroups.x * gl_NumWorkGroups.y * gl_NumWorkGroups.z * 128u;
+    uint custom_pixel_count = uint(custom_output_size.x) * uint(custom_output_size.y);
+    for (uint custom_index = custom_group * 128u + gl_LocalInvocationID.x;
+         custom_index < custom_pixel_count; custom_index += custom_stride) {
+        ivec2 custom_pixel = ivec2(custom_index % uint(custom_output_size.x), custom_index / uint(custom_output_size.x));
+        vec4 custom_color;
+        if (all(custom_source_size == custom_output_size)) {
+            custom_color = texelFetch(cs_tex0_c0, custom_pixel, 0);
+        } else {
+            vec2 custom_position = (vec2(custom_pixel) + vec2(0.5))
+                * vec2(custom_source_size) / vec2(custom_output_size) - vec2(0.5);
+            ivec2 custom_base = ivec2(floor(custom_position));
+            vec2 custom_fraction = fract(custom_position);
+            custom_color = lerp(
+                lerp(texelFetch(cs_tex0_c0, clamp(custom_base, ivec2(0), custom_source_size - ivec2(1)), 0),
+                    texelFetch(cs_tex0_c0, clamp(custom_base + ivec2(1, 0), ivec2(0), custom_source_size - ivec2(1)), 0), custom_fraction.x),
+                lerp(texelFetch(cs_tex0_c0, clamp(custom_base + ivec2(0, 1), ivec2(0), custom_source_size - ivec2(1)), 0),
+                    texelFetch(cs_tex0_c0, clamp(custom_base + ivec2(1, 1), ivec2(0), custom_source_size - ivec2(1)), 0), custom_fraction.x),
+                custom_fraction.y);
+        }
+        if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_VANILLA) {
+            custom_color.rgb = max(custom_color.rgb, vec3(0.0));
+        }
+        imageStore(cs_img0_d0, custom_pixel, custom_color);
+    }
+}
+
+// CUSTOM: All native stores pass here, including the packed-output branches.
+// Alternate modes use encoded-input bilinear or nearest reconstruction.
+// Native mode never samples this extra path.
+void CustomReconstructionStore(ivec2 position, vec4 color) {
+    if (custom_aa.reconstruction_mode != 0.f) {
+        vec2 custom_uv = (vec2(position) + vec2(0.5)) / vec2(imageSize(cs_img0_d0));
+        vec3 custom_encoded;
+        if (custom_aa.reconstruction_mode == 2.f) {
+            ivec2 custom_size = textureSize(cs_tex0_c0, 0);
+            custom_encoded = texelFetch(cs_tex0_c0,
+                clamp(ivec2(custom_uv * vec2(custom_size)), ivec2(0), custom_size - ivec2(1)), 0).rgb;
+        } else {
+            ivec2 custom_size = textureSize(cs_tex0_c0, 0);
+            vec2 custom_position = custom_uv * vec2(custom_size) - vec2(0.5);
+            ivec2 custom_base = ivec2(floor(custom_position));
+            vec2 custom_fraction = fract(custom_position);
+            custom_encoded = lerp(
+                lerp(texelFetch(cs_tex0_c0, clamp(custom_base, ivec2(0), custom_size - ivec2(1)), 0).rgb,
+                    texelFetch(cs_tex0_c0, clamp(custom_base + ivec2(1, 0), ivec2(0), custom_size - ivec2(1)), 0).rgb,
+                    custom_fraction.x),
+                lerp(texelFetch(cs_tex0_c0, clamp(custom_base + ivec2(0, 1), ivec2(0), custom_size - ivec2(1)), 0).rgb,
+                    texelFetch(cs_tex0_c0, clamp(custom_base + ivec2(1, 1), ivec2(0), custom_size - ivec2(1)), 0).rgb,
+                    custom_fraction.x), custom_fraction.y);
+        }
+        color.rgb = custom_encoded * abs(custom_encoded);
+    }
+    // CUSTOM: Native and selectable reconstruction modes operate on AA's BT.2020
+    // encoding for custom tonemappers. Restore signed BT.709 for composition.
+    // AA0 uses CustomLinearReconstruction instead and needs no conversion.
+    if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_VANILLA) {
+        color.rgb = renodx::color::bt709::from::BT2020(color.rgb);
+    }
+    // CUSTOM: Vanilla retains the original unsigned write boundary; custom
+    // tonemappers are not clipped to nonnegative BT.709 here.
+    if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_VANILLA) {
+        color.rgb = max(color.rgb, vec3(0.0));
+    }
+    imageStore(cs_img0_d0, position, color);
+}
+
+// Preserve each original store and coordinate expression in the decompile.
+// CUSTOM: Every imageStore(cs_img0_d0, position, color) in the including
+// decompile is redirected here; its unchanged text is the original store.
+// Undefining this macro restores those calls, not the separate AA-off branch.
+#define imageStore(image, position, color) CustomReconstructionStore(position, color)

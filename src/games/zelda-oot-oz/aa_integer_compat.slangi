@@ -1,0 +1,14 @@
+#ifndef RENODX_ZELDA_AA_INTEGER_COMPAT_SLANGI
+#define RENODX_ZELDA_AA_INTEGER_COMPAT_SLANGI
+// CUSTOM FILE: Slang implementations of the decompile's integer packing builtins.
+
+// CUSTOM: Preserve SPIRV-Cross's low/high uint ordering in both AA prep shaders.
+uint64_t packUint2x32(uvec2 value) {
+    return uint64_t(value.x) | (uint64_t(value.y) << 32u);
+}
+
+uvec2 unpackUint2x32(uint64_t value) {
+    return uvec2(uint(value), uint(value >> 32u));
+}
+
+#endif

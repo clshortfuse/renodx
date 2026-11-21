@@ -1,0 +1,17 @@
+#ifndef RENODX_ZELDA_OOT_OZ_AA_CONTROLS_SLANGI
+#define RENODX_ZELDA_OOT_OZ_AA_CONTROLS_SLANGI
+// CUSTOM FILE: Added controls/Slang compatibility; no original shader body here.
+
+#include "./shared.h"
+
+// CUSTOM: Slang accepts discard rather than standalone GLSL demote. The native
+// zero-alpha branch subsequently returns zero; retain its visible discard.
+#define demote discard
+
+// CUSTOM: Keep AA controls outside the native push-constant range.
+layout(set = 1, binding = 3, scalar) uniform ZeldaAAControls {
+    float aa_strength;
+    float reconstruction_mode;
+} custom_aa;
+
+#endif

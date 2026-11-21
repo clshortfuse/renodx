@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -49,6 +50,9 @@ inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return fa
 }  // namespace internal
 
 struct ViewBinding {
+  // On Vulkan, getter results must identify fixed views/buffer ranges for this
+  // device's lifetime. Use separate bindings for alternative resources.
+  // Resource contents may change with caller-owned GPU synchronization.
   reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
   uint32_t slot = 0u;
   // Maps directly to the register space on DirectX and descriptor set on Vulkan.
@@ -71,6 +75,8 @@ struct CustomShader {
   std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
   std::unordered_map<reshade::api::device_api, std::span<const uint8_t>> code_by_device;
   std::vector<ViewBinding> views = {};
+  // Assigned once when registering; indexes this shader's device-owned binding cache.
+  size_t binding_slot = 0u;
   // A zero handle uses the usual shader replacement path.
   std::function<reshade::api::pipeline(reshade::api::command_list*)> get_replacement_pipeline = nullptr;
 };
@@ -191,7 +197,7 @@ static thread_local std::unordered_map<uint64_t, std::vector<std::vector<reshade
 
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
-static bool use_pipeline_layout_cloning = false;
+[[deprecated]] static bool use_pipeline_layout_cloning = false; // Not working
 static bool manual_shader_scheduling = false;
 static bool force_pipeline_cloning = false;
 [[deprecated]] static bool trace_unmodified_shaders = false;  // Deprecated/dead no-op.
@@ -220,7 +226,7 @@ static bool using_custom_replace = false;
 static bool using_custom_inject = false;
 static bool using_counted_shaders = false;
 
-struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
+struct __declspec(uuid("2766d895-47f9-46fa-b956-fd306399f90a")) DeviceData {
   bool use_pipeline_layout_cloning = false;
   // bool force_pipeline_cloning = false;
   int32_t expected_constant_buffer_index = -1;
@@ -229,7 +235,24 @@ struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
   std::vector<reshade::api::pipeline_layout_param> injected_descriptor_params;
   reshade::api::resource shared_buffer_range_resource = {0u};
   reshade::api::buffer_range root_signature_buffer_range = {};
-  std::shared_ptr<std::shared_mutex> root_signature_buffer_mutex = std::make_shared<std::shared_mutex>();
+  struct RootSignatureBufferState {
+    std::shared_mutex mutex;
+    std::once_flag init;
+    std::atomic_bool ready = false;
+  } root_signature_buffer_state;
+  struct VulkanBindingPlan {
+    std::once_flag init;
+    bool initialized = false;
+    struct Binding {
+      uint32_t view_index = 0u;
+      uint32_t layout_param = 0u;
+      uint32_t binding = 0u;
+    };
+    renodx::utils::cross_addon::vector<Binding> bindings;
+    renodx::utils::cross_addon::vector<reshade::api::descriptor_table> tables;
+    std::function<bool(reshade::api::command_list*, reshade::api::pipeline_layout, reshade::api::shader_stage)> bind;
+  };
+  renodx::utils::cross_addon::vector<std::shared_ptr<VulkanBindingPlan>> vulkan_binding_slots;
 };
 
 static void OnInitDevice(reshade::api::device* device) {
@@ -304,12 +327,17 @@ static void OnInitDevice(reshade::api::device* device) {
                 .offset = initial_range.offset,
                 .size = initial_range.size,
             };
-            initial_range.view_binding->get_constants_range = [get_constants = initial_range.view_binding->get_constants,
-                                                               range,
-                                                               buffer_mutex = std::make_shared<std::shared_mutex>()](reshade::api::command_list* cmd_list) {
+            initial_range.view_binding->get_constants_range =
+              [get_constants = initial_range.view_binding->get_constants,
+               range,
+               buffer_mutex = std::make_shared<std::shared_mutex>()](
+                reshade::api::command_list* cmd_list) -> reshade::api::buffer_range {
               const std::unique_lock lock(*buffer_mutex);
               const auto constants = get_constants();
-              if (constants.empty() || constants.size_bytes() > range.size) return reshade::api::buffer_range{};
+              if (constants.empty() || constants.size_bytes() > range.size) {
+                reshade::log::message(reshade::log::level::error, "mods::shader(constants upload size invalid)");
+                return {};
+              }
 
               void* mapped_data = nullptr;
               auto* device = cmd_list->get_device();
@@ -319,7 +347,8 @@ static void OnInitDevice(reshade::api::device* device) {
                       constants.size_bytes(),
                       reshade::api::map_access::write_only,
                       &mapped_data)) {
-                return reshade::api::buffer_range{};
+                reshade::log::message(reshade::log::level::error, "mods::shader(constants upload mapping failed)");
+                return {};
               }
               std::memcpy(mapped_data, constants.data(), constants.size_bytes());
               device->unmap_buffer_region(range.buffer);
@@ -347,44 +376,6 @@ static void OnInitDevice(reshade::api::device* device) {
     if (use_root_signature_cbv && shader_injection != nullptr && shader_injection_size != 0u) {
       assert(expected_constant_buffer_index >= 0);
       const uint64_t size = ((shader_injection_size * sizeof(float)) + alignment - 1u) & ~(alignment - 1u);
-      reshade::api::resource buffer = {0u};
-      const reshade::api::resource_desc desc(
-          size,
-          reshade::api::memory_heap::cpu_to_gpu,
-          reshade::api::resource_usage::constant_buffer);
-      if (device->create_resource(
-              desc,
-              nullptr,
-              reshade::api::resource_usage::constant_buffer,
-              &buffer)) {
-        void* mapped_data = nullptr;
-        if (device->map_buffer_region(
-                buffer,
-                0u,
-                size,
-                reshade::api::map_access::write_only,
-                &mapped_data)) {
-          std::memcpy(
-              mapped_data,
-              shader_injection,
-              shader_injection_size * sizeof(float));
-          device->unmap_buffer_region(buffer);
-          data->root_signature_buffer_range = {
-              .buffer = buffer,
-              .offset = 0u,
-              .size = size,
-          };
-        } else {
-          reshade::log::message(
-              reshade::log::level::error,
-              "mods::shader::OnInitDevice(failed to map root-signature constants buffer)");
-          device->destroy_resource(buffer);
-        }
-      } else {
-        reshade::log::message(
-            reshade::log::level::error,
-            "mods::shader::OnInitDevice(failed to create root-signature constants buffer)");
-      }
       for (auto& [shader_hash, custom_shader] : custom_shaders) {
         (void)shader_hash;
         const auto existing_binding = std::ranges::find_if(
@@ -399,10 +390,44 @@ static void OnInitDevice(reshade::api::device* device) {
               .type = reshade::api::descriptor_type::constant_buffer,
               .slot = static_cast<uint32_t>(expected_constant_buffer_index),
               .space = expected_constant_buffer_space,
-              .get_constants_range = [range = data->root_signature_buffer_range,
-                                      buffer_mutex = data->root_signature_buffer_mutex](reshade::api::command_list*) {
-                const std::shared_lock lock(*buffer_mutex);
-                return range;
+              .get_constants_range = [data, size](reshade::api::command_list* cmd_list) {
+                std::call_once(data->root_signature_buffer_state.init, [data, size, cmd_list]() {
+                  // init_device runs inside ReShade's device-creation lock. Allocate only at first use.
+                  auto* device = cmd_list->get_device();
+                  reshade::api::resource buffer = {0u};
+                  if (!device->create_resource(
+                          reshade::api::resource_desc(
+                              size,
+                              reshade::api::memory_heap::cpu_to_gpu,
+                              reshade::api::resource_usage::constant_buffer),
+                          nullptr,
+                          reshade::api::resource_usage::constant_buffer,
+                          &buffer)) {
+                    reshade::log::message(reshade::log::level::error,
+                                          "mods::shader(failed to create root-signature constants buffer)");
+                    assert(false && "root-signature constants buffer creation failed");
+                    return;
+                  }
+                  void* mapped_data = nullptr;
+                  if (!device->map_buffer_region(
+                          buffer, 0u, size, reshade::api::map_access::write_only, &mapped_data)) {
+                    reshade::log::message(reshade::log::level::error,
+                                          "mods::shader(failed to map root-signature constants buffer)");
+                    device->destroy_resource(buffer);
+                    assert(false && "root-signature constants buffer mapping failed");
+                    return;
+                  }
+                  std::memcpy(mapped_data, shader_injection, shader_injection_size * sizeof(float));
+                  device->unmap_buffer_region(buffer);
+                  data->root_signature_buffer_range = {
+                      .buffer = buffer,
+                      .offset = 0u,
+                      .size = size,
+                  };
+                  // Present observes the immutable range only after the initial upload completes.
+                  data->root_signature_buffer_state.ready.store(true, std::memory_order_release);
+                });
+                return data->root_signature_buffer_range;
               },
           });
         }
@@ -412,9 +437,91 @@ static void OnInitDevice(reshade::api::device* device) {
   if (device_api == reshade::api::device_api::vulkan) {
     std::map<std::pair<uint32_t, uint32_t>, reshade::api::descriptor_range> descriptor_ranges_by_binding;
     uint32_t max_space = 0u;
+    data->vulkan_binding_slots.resize(custom_shaders.size());
 
     for (const auto& [shader_hash, custom_shader] : custom_shaders) {
       (void)shader_hash;
+      if (!custom_shader.views.empty()) {
+        auto& slot = data->vulkan_binding_slots[custom_shader.binding_slot];
+        slot = std::allocate_shared<DeviceData::VulkanBindingPlan>(
+            utils::cross_addon::allocator<DeviceData::VulkanBindingPlan>{});
+        auto& plan = *slot;
+        for (uint32_t index = 0u; index < custom_shader.views.size(); ++index) {
+          plan.bindings.push_back({
+              .view_index = index,
+              .layout_param = custom_shader.views[index].space,
+              .binding = custom_shader.views[index].slot,
+          });
+        }
+        std::ranges::sort(plan.bindings, [&custom_shader](const auto& lhs, const auto& rhs) {
+          const auto& first = custom_shader.views[lhs.view_index];
+          const auto& second = custom_shader.views[rhs.view_index];
+          if (first.space != second.space) return first.space < second.space;
+          if (first.type != second.type) return first.type < second.type;
+          return first.slot < second.slot;
+        });
+        plan.tables.resize(plan.bindings.back().layout_param + 1u);
+        plan.bind = [prepared = slot.get(), shader = &custom_shader](
+                        reshade::api::command_list* cmd_list,
+                        reshade::api::pipeline_layout layout,
+                        reshade::api::shader_stage stages) {
+          static thread_local std::vector<reshade::api::resource_view> views;
+          static thread_local std::vector<reshade::api::buffer_range> constants;
+          views.resize(prepared->bindings.size());
+          constants.resize(prepared->bindings.size());
+          for (size_t index = 0u; index < prepared->bindings.size(); ++index) {
+            const auto& binding = shader->views[prepared->bindings[index].view_index];
+            if (binding.type == reshade::api::descriptor_type::constant_buffer) {
+              constants[index] = binding.get_constants_range(cmd_list);
+              if (constants[index].buffer.handle != 0u) continue;
+            } else {
+              views[index] = binding.get_view(cmd_list);
+              if (views[index].handle != 0u) continue;
+            }
+            reshade::log::message(reshade::log::level::error, "mods::shader(custom binding returned null)");
+            assert(false && "custom binding returned null");
+            return false;
+          }
+          std::call_once(prepared->init, [&]() {
+            auto* device = cmd_list->get_device();
+            std::vector<reshade::api::descriptor_table_update> updates(prepared->bindings.size());
+            size_t first = 0u;
+            while (first < prepared->bindings.size()) {
+              const auto layout_param = prepared->bindings[first].layout_param;
+              auto& table = prepared->tables[layout_param];
+              if (!device->allocate_descriptor_table(layout, layout_param, &table)) {
+                reshade::log::message(reshade::log::level::error, "mods::shader(descriptor table allocation failed)");
+                assert(false && "custom shader descriptor table allocation failed");
+                return;
+              }
+              size_t end = first;
+              while (end < prepared->bindings.size() && prepared->bindings[end].layout_param == layout_param) {
+                const auto& packed = prepared->bindings[end];
+                const auto type = shader->views[packed.view_index].type;
+                updates[end - first] = {
+                    .table = table,
+                    .binding = packed.binding,
+                    .count = 1u,
+                    .type = type,
+                    .descriptors = (type == reshade::api::descriptor_type::constant_buffer
+                                        ? static_cast<const void*>(&constants[end])
+                                        : static_cast<const void*>(&views[end])),
+                };
+                ++end;
+              }
+              device->update_descriptor_tables(static_cast<uint32_t>(end - first), updates.data());
+              first = end;
+            }
+            prepared->initialized = true;
+          });
+          if (!prepared->initialized) return false;
+          for (uint32_t index = 0u; index < prepared->tables.size(); ++index) {
+            if (prepared->tables[index].handle == 0u) continue;
+            cmd_list->bind_descriptor_tables(stages, layout, index, 1u, &prepared->tables[index]);
+          }
+          return true;
+        };
+      }
       for (const auto& view_binding : custom_shader.views) {
         const bool is_constant_buffer = view_binding.type == reshade::api::descriptor_type::constant_buffer;
         assert(is_constant_buffer == (view_binding.get_constants != nullptr || view_binding.get_constants_range != nullptr));
@@ -566,6 +673,13 @@ static void OnDestroyDevice(reshade::api::device* device) {
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   if (auto* data = renodx::utils::data::Get<DeviceData>(device); data != nullptr) {
+    for (const auto& slot : data->vulkan_binding_slots) {
+      if (slot == nullptr) continue;
+      for (const auto& table : slot->tables) {
+        if (table.handle == 0u) continue;
+        device->free_descriptor_tables(1u, &table);
+      }
+    }
     if (data->shared_buffer_range_resource.handle != 0u) {
       device->destroy_resource(data->shared_buffer_range_resource);
     }
@@ -889,8 +1003,10 @@ static bool OnCreatePipelineLayout(
   }
 
   const bool expand_vulkan_push_constants = is_vulkan && vk_expand_pc_index != -1 && found_full_stage_pc_match;
+  const bool has_push_constant_injection = shader_injection_size != 0u
+                                           && (!use_root_signature_cbv || device_api != reshade::api::device_api::d3d12);
 
-  if (pc_count != 0 && !allow_multiple_push_constants && !expand_vulkan_push_constants) {
+  if (has_push_constant_injection && pc_count != 0 && !allow_multiple_push_constants && !expand_vulkan_push_constants) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
     s << "Pipeline layout already has push constants: " << pc_count;
@@ -923,8 +1039,6 @@ static bool OnCreatePipelineLayout(
   const auto* injected_descriptor_param = has_descriptor_injection && !is_vulkan ? data->injected_descriptor_params.data() : nullptr;
   assert(!has_descriptor_injection || injected_descriptor_param != nullptr || (is_vulkan && has_descriptor_injection));
 
-  const bool has_push_constant_injection = shader_injection_size != 0u
-                                           && (!use_root_signature_cbv || device_api != reshade::api::device_api::d3d12);
   uint32_t existing_set_count = 0u;
   if (is_vulkan && has_descriptor_injection) {
     for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
@@ -2153,6 +2267,20 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
           reshade::api::buffer_range constants = {};
         };
 
+        auto* device = context.cmd_list->get_device();
+        const auto descriptor_stages =
+          (shader_stage == reshade::api::pipeline_stage::compute_shader
+             ? reshade::api::shader_stage::all_compute
+             : reshade::api::shader_stage::all_graphics);
+        const bool is_vulkan = device->get_api() == reshade::api::device_api::vulkan;
+        if (is_vulkan) {
+          auto* device_data = utils::data::Get<DeviceData>(device);
+          const auto& slot = device_data->vulkan_binding_slots[custom_shader_info->binding_slot];
+          response.bypass_draw = !slot->bind(
+            context.cmd_list, state.pipeline_details->injection_layout, descriptor_stages);
+          return response;
+        }
+
         static thread_local std::vector<PendingDescriptorPush> pending_descriptor_pushes;
         if (pending_descriptor_pushes.size() < custom_shader_info->views.size()) {
           pending_descriptor_pushes.resize(custom_shader_info->views.size());
@@ -2161,8 +2289,8 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
 
         bool has_missing_view = false;
         for (const auto& view_binding : custom_shader_info->views) {
-          const auto location_it = state.pipeline_details->descriptor_push_locations
-                                       .find({view_binding.type, view_binding.slot, view_binding.space});
+          const auto location_it = state.pipeline_details->descriptor_push_locations.find(
+              {view_binding.type, view_binding.slot, view_binding.space});
           if (location_it == state.pipeline_details->descriptor_push_locations.end()) {
             assert(false && "custom shader view binding location is missing");
 #ifdef DEBUG_LEVEL_0
@@ -2218,13 +2346,9 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
         }
 
         if (has_missing_view) {
+          response.bypass_draw = true;
           return response;
         }
-
-        const auto descriptor_stages =
-            shader_stage == reshade::api::pipeline_stage::compute_shader
-                ? reshade::api::shader_stage::all_compute
-                : reshade::api::shader_stage::all_graphics;
 
         std::sort(
             pending_descriptor_pushes.begin(),
@@ -2234,8 +2358,6 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
               if (lhs.type != rhs.type) return lhs.type < rhs.type;
               return lhs.binding < rhs.binding;
             });
-
-        const bool use_descriptor_tables = context.cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
 
         static thread_local std::vector<reshade::api::resource_view> descriptor_views;
         static thread_local std::vector<reshade::api::buffer_range> descriptor_constants;
@@ -2265,42 +2387,7 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
             ++span_end;
           }
 
-          reshade::api::descriptor_table table = {};
-          if (use_descriptor_tables) {
-            if (first_view_push.layout_param < state.pipeline_details->descriptor_tables.size()) {
-              table = state.pipeline_details->descriptor_tables[first_view_push.layout_param];
-            }
-
-            if (table.handle == 0u) {
-              if (!renodx::utils::descriptor::GetOrAllocateDescriptorTable(
-                      context.cmd_list->get_device(),
-                      pipeline_layout,
-                      state.pipeline_details->injection_layout,
-                      first_view_push.layout_param,
-                      &table)) {
-#ifdef DEBUG_LEVEL_0
-                std::stringstream s;
-                s << "mods::shader::OnCommandAction(";
-                s << "descriptor table allocation failed for shader ";
-                s << PRINT_CRC32(custom_shader_info->crc32);
-                s << ": set=" << first_view_push.layout_param;
-                s << ", pipeline: " << PRINT_PTR(state.pipeline.handle);
-                s << ", injection layout: " << PRINT_PTR(state.pipeline_details->injection_layout.handle);
-                s << ")";
-                reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-                return response;
-              }
-            }
-
-            if (state.pipeline_details->descriptor_tables.size() <= first_view_push.layout_param) {
-              state.pipeline_details->descriptor_tables.resize(first_view_push.layout_param + 1u);
-            }
-            state.pipeline_details->descriptor_tables[first_view_push.layout_param] = table;
-          }
-
           const reshade::api::descriptor_table_update update{
-              .table = table,
               .binding = first_view_push.binding,
               .array_offset = 0,
               .count = descriptor_view_count,
@@ -2310,15 +2397,7 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
                                  : static_cast<const void*>(descriptor_views.data()),
           };
 
-          if (use_descriptor_tables) {
-            context.cmd_list->get_device()->update_descriptor_tables(1u, &update);
-            context.cmd_list->bind_descriptor_tables(
-                descriptor_stages,
-                state.pipeline_details->injection_layout,
-                first_view_push.layout_param,
-                1u,
-                &table);
-          } else if (descriptor_stages == reshade::api::shader_stage::all_graphics
+          if (descriptor_stages == reshade::api::shader_stage::all_graphics
                      && context.cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12
                      && first_view_push.type == reshade::api::descriptor_type::buffer_unordered_access_view
                      && first_view_push.binding == 0u
@@ -2413,11 +2492,12 @@ inline void OnPresent(
   }
 
   if (use_root_signature_cbv
-      && swapchain->get_device()->get_api() == reshade::api::device_api::d3d12) {
+      && swapchain->get_device()->get_api() == reshade::api::device_api::d3d12
+      && data->root_signature_buffer_state.ready.load(std::memory_order_acquire)) {
     auto* device = swapchain->get_device();
+    const std::unique_lock lock(data->root_signature_buffer_state.mutex);
     const auto& range = data->root_signature_buffer_range;
     if (range.buffer.handle != 0u) {
-      const std::unique_lock lock(*data->root_signature_buffer_mutex);
       void* mapped_data = nullptr;
       if (!device->map_buffer_region(
               range.buffer,
@@ -2425,6 +2505,9 @@ inline void OnPresent(
               shader_injection_size * sizeof(float),
               reshade::api::map_access::write_only,
               &mapped_data)) {
+              reshade::log::message(reshade::log::level::error,
+                    "mods::shader::OnPresent(failed to map root-signature constants buffer)");
+              assert(false && "root-signature constants buffer update failed");
         return;
       }
       std::memcpy(mapped_data, shader_injection, shader_injection_size * sizeof(float));
@@ -2510,7 +2593,11 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
       custom_shaders.clear();
       custom_shaders.reserve(new_custom_shaders.size());
       for (const auto& custom_shader : new_custom_shaders) {
-        custom_shaders.emplace(custom_shader.crc32, custom_shader);
+        const auto slot = custom_shaders.size();
+        auto [entry, inserted] = custom_shaders.emplace(custom_shader.crc32, custom_shader);
+        if (inserted) {
+          entry->second.binding_slot = slot;
+        }
       }
 
       custom_shaders.rehash(custom_shaders.size());
@@ -2574,7 +2661,10 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
         reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 
-      if (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr)) {
+      if (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr)
+          || std::any_of(custom_shaders.begin(), custom_shaders.end(), [](const auto& entry) {
+               return !entry.second.views.empty();
+             })) {
         if (new_injections != nullptr) {
           shader_injection_size = sizeof(T) / sizeof(uint32_t);
           shader_injection = reinterpret_cast<float*>(new_injections);

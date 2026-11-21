@@ -1,0 +1,85 @@
+#ifndef RENODX_ZELDA_OOT_OZ_SCENE_TONEMAP_SLANGI
+#define RENODX_ZELDA_OOT_OZ_SCENE_TONEMAP_SLANGI
+// CUSTOM FILE: Added scene mapper; native mapper stays in each decompiled caller.
+
+#include "./shared.h"
+#include "./adaptation.slangi"
+#include "../../shaders/tonemap/psychov/test35.hlsl"
+
+// CUSTOM: Both native scene permutations share the same ACES fit and output domain.
+float3 ApplySceneToneMap(float3 custom_untonemapped, float3 custom_native_gain) {
+    // CUSTOM: Zero exposure is black; PsychoV35 requires a positive output anchor.
+    if (RENODX_TONE_MAP_EXPOSURE == 0.f) return float3(0.f, 0.f, 0.f);
+    renodx::draw::Config custom_config = renodx::draw::BuildConfig();
+    custom_config.peak_white_nits = max(RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS);
+    custom_config.tone_map_hue_correction = 0.f;
+    // Separate the scalar baseline render gain from its native channel adjustment.
+    custom_untonemapped *= renodx::math::DivideSafe(custom_native_gain, custom_native_gain.x);
+    float custom_reference_exposure = RENODX_VANILLA_MIDGRAY
+        ? saturate(0.18f * (2.51f * 0.18f + 0.03f)
+            / (0.18f * (2.43f * 0.18f + 0.59f) + 0.14f)) / 0.18f
+        : 1.f;
+    if (shader_injection.custom_hue_clip > 0.f) {
+        // Preserve the native fit's clip bend, RGB range and relative luminance.
+        float3 custom_magnitude = abs(custom_untonemapped);
+        float3 custom_reference = saturate(
+            custom_magnitude * (2.51f * custom_magnitude + 0.03f)
+            / (custom_magnitude * (2.43f * custom_magnitude + 0.59f) + 0.14f));
+        float custom_min = renodx::math::Min(custom_reference);
+        float custom_range = renodx::math::Max(custom_reference) - custom_min;
+        bool custom_neutral = custom_range == 0.f;
+        float3 custom_transferred = renodx::math::Rescale(
+            custom_reference - custom_min, 0.f,
+            renodx::math::Select(custom_neutral, 1.f, custom_range),
+            renodx::math::Min(custom_magnitude), renodx::math::Max(custom_magnitude));
+        custom_transferred = renodx::math::CopySign(custom_transferred, custom_untonemapped);
+        custom_transferred = renodx::math::Select(custom_neutral, custom_untonemapped, custom_transferred);
+        float3 custom_bent = lerp(custom_untonemapped, custom_transferred, shader_injection.custom_hue_clip);
+        float custom_original_y = renodx::color::y::from::BT709(custom_untonemapped);
+        float custom_bent_y = renodx::color::y::from::BT709(custom_bent);
+        if (custom_original_y > 0.f && custom_bent_y > 0.f) {
+            custom_untonemapped = custom_bent * (custom_original_y / custom_bent_y);
+        }
+    }
+    // Analytic log-slope x*V'(x)/V(x) at V''(x)=0,
+    // x=0.120305925, for the exact game's Narkowicz coefficients.
+    float custom_cone = RENODX_VANILLA_SLOPE
+        ? 1.3355037565264822f : 1.f;
+    float4 custom_adapted = ReadAdaptationState();
+    float custom_anchor_in = RENODX_ADAPTED_MIDGRAY && custom_adapted.w >= 0.f ? custom_adapted.x : 0.18f;
+    float custom_anchor_out = custom_anchor_in * custom_native_gain.x
+        * custom_reference_exposure * custom_config.tone_map_exposure;
+    // CUSTOM: Eye adaptation uses RenoDX's bounded scene-average output policy,
+    // expressed relative to reference white instead of absolute output nits.
+    if (RENODX_ADAPTED_MIDGRAY) {
+        custom_anchor_out = clamp(
+            shader_injection.adaptation_target * custom_anchor_in / 0.18f,
+            shader_injection.adaptation_target * exp2(shader_injection.adaptation_min_stops),
+            shader_injection.adaptation_target * exp2(shader_injection.adaptation_max_stops));
+        // CUSTOM: Exposure must not lift the final anchor above the peak.
+        custom_anchor_out = min(custom_anchor_out * custom_config.tone_map_exposure,
+            0.95f * custom_config.peak_white_nits / custom_config.diffuse_white_nits);
+    }
+    float3 custom_mapped = renodx::tonemap::psychov::psychotm_test35(
+            custom_untonemapped,
+            custom_config.peak_white_nits / custom_config.diffuse_white_nits,
+            1.f, custom_config.tone_map_highlights,
+            custom_config.tone_map_shadows, custom_config.tone_map_contrast,
+            custom_config.tone_map_saturation, 1.f, 100.f, 1.f, 1.f, 0,
+            custom_cone * RENODX_TONE_MAP_CONE_CONTRAST,
+            float3(custom_anchor_in, custom_anchor_in, custom_anchor_in),
+            float3(custom_anchor_out, custom_anchor_out, custom_anchor_out),
+            RENODX_PSYCHOV_GAMUT_COMPRESSION,
+#ifdef RENODX_ZELDA_SDR
+            0,  // CUSTOM: Fit the SDR reference to BT.709 rather than BT.2020.
+#else
+            1,
+#endif
+            1.f, RENODX_PSYCHOV_COMPRESSION);
+    // CUSTOM: Preserve signed BT.709 components carrying wide-gamut colors.
+    // Output encoder uses graphics white; scene scaling remains independent.
+    return custom_mapped
+        * custom_config.diffuse_white_nits / custom_config.graphics_white_nits;
+}
+
+#endif
