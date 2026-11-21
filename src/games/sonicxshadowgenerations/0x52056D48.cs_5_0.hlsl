@@ -40,7 +40,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   // Apply one luminance-derived gain to all channels to preserve color ratios.
   float3 linear_color = renodx::draw::DecodeColor(c.rgb, RENODX_INTERMEDIATE_ENCODING);
   float luminance = max(0.f, renodx::color::y::from::BT709(linear_color));
-  float encoded_luminance = pow(luminance, 1.f / 2.2f);
+  float encoded_luminance = renodx::draw::EncodeColor(luminance.xxx, RENODX_INTERMEDIATE_ENCODING).x;
   float gain = encoded_luminance > 0.f ? ApplyCurve(encoded_luminance) / encoded_luminance : 1.f;
   float3 curved = c.rgb * gain;
 

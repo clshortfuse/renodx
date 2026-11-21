@@ -36,6 +36,8 @@ struct ShaderInjectData {
   float sg_highlight_rolloff;
   float tone_map_type;
   float fx_sharpening;
+  float swap_chain_output_preset;
+  float gamma_correction;
 };
 
 #ifndef __cplusplus
@@ -59,10 +61,11 @@ cbuffer shader_injection : register(b9) {
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 
-#define RENODX_GAMMA_CORRECTION renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
+#define RENODX_GAMMA_CORRECTION shader_injection.gamma_correction
 #define RENODX_SWAP_CHAIN_ENCODING renodx::draw::ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE renodx::color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE renodx::color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET shader_injection.swap_chain_output_preset
 
 #include "../../shaders/renodx.hlsl"
 

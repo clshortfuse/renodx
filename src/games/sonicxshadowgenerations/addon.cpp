@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <string_view>
 
 #include <deps/imgui/imgui.h>
@@ -399,6 +400,36 @@ constexpr const char* LENS_SHARPENING_SECTION = "Lens & Sharpening";
 constexpr const char* TEXTURE_FILTERING_SECTION = "Texture Filtering";
 constexpr const char* ABOUT_SECTION = "About";
 
+// Both games use an r10g10b10a2 swapchain, so Output Mode switches between SDR sRGB and HDR10.
+// These pointers let HandleOutputModeChange read the user's HDR values back.
+settings_ui::Setting* output_mode_setting = nullptr;
+settings_ui::Setting* tone_map_peak_nits_setting = nullptr;
+settings_ui::Setting* tone_map_game_nits_setting = nullptr;
+settings_ui::Setting* tone_map_ui_nits_setting = nullptr;
+
+reshade::api::swapchain* tracked_swapchain = nullptr;
+std::optional<reshade::api::color_space> next_color_space = std::nullopt;
+
+void HandleOutputModeChange() {
+  if (output_mode_setting->GetValue() == 0.f) {
+    next_color_space = reshade::api::color_space::srgb_nonlinear;
+    shader_injection.swap_chain_output_preset = 0.f;
+    shader_injection.peak_white_nits = 203.f;
+    shader_injection.diffuse_white_nits = 203.f;
+    shader_injection.graphics_white_nits = 203.f;
+    shader_injection.gamma_correction = 0.f;
+  } else {
+    next_color_space = reshade::api::color_space::hdr10_st2084;
+    shader_injection.swap_chain_output_preset = 1.f;
+    shader_injection.gamma_correction = 1.f;
+    shader_injection.peak_white_nits = tone_map_peak_nits_setting->GetValue();
+    shader_injection.diffuse_white_nits = tone_map_game_nits_setting->GetValue();
+    shader_injection.graphics_white_nits = tone_map_ui_nits_setting->GetValue();
+  }
+}
+
+bool IsHDREnabled() { return shader_injection.swap_chain_output_preset == 1.f; }
+
 renodx::utils::settings::Settings settings = {
     // Status
     new settings_ui::Setting{
@@ -419,11 +450,12 @@ renodx::utils::settings::Settings settings = {
             motion_blur_item = {"Vanilla Motion Blur", false};
           }
 
+          const bool hdr_on = IsHDREnabled();
           const bool tone_map_on = shader_injection.tone_map_type != 0.f;
           const bool rcas_on = shader_injection.fx_sharpening != 0.f;
           const bool af_on = force_anisotropic_filtering != 0.f;
           const Item shadow_items[] = {
-              {"HDR10", true},
+              {hdr_on ? "HDR10" : "SDR", hdr_on},
               {tone_map_on ? "RenoDRT" : "Vanilla", tone_map_on},
               motion_blur_item,
               {rcas_on ? "RCAS" : "Vanilla Sharpen", rcas_on},
@@ -432,7 +464,7 @@ renodx::utils::settings::Settings settings = {
           const bool bloom_on = shader_injection.sg_bloom_enabled != 0.f;
           const bool hdr_bloom_on = shader_injection.sg_bloom_hdr > 0.f;
           const Item sonic_items[] = {
-              {"HDR10", true},
+              {hdr_on ? "HDR10" : "SDR", hdr_on},
               {tone_map_on ? "RenoDRT" : "Vanilla", tone_map_on},
               motion_blur_item,
               {bloom_on ? "Bloom" : "Bloom Off", bloom_on},
@@ -533,6 +565,19 @@ renodx::utils::settings::Settings settings = {
     },
 
     // Tone Mapping
+    output_mode_setting = new settings_ui::Setting{
+        .key = "OutputMode",
+        .value_type = settings_ui::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = false,
+        .label = "Output Mode",
+        .section = TONE_MAPPING_SECTION,
+        .tooltip = "SDR outputs the game's original image. HDR uses HDR10.",
+        .labels = {"SDR", "HDR"},
+        .style = settings_ui::SettingStyle::SEGMENTED,
+        .tint = sonic_ui::SHADOW.tint,
+        .on_change_value = [](float previous, float current) { HandleOutputModeChange(); },
+    },
     new settings_ui::Setting{
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
@@ -546,7 +591,7 @@ renodx::utils::settings::Settings settings = {
         .tint = sonic_ui::SHADOW.tint,
         .parse = [](float value) { return value * 3.f; },
     },
-    new settings_ui::Setting{
+    tone_map_peak_nits_setting = new settings_ui::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
@@ -557,8 +602,9 @@ renodx::utils::settings::Settings settings = {
         .tint = sonic_ui::SHADOW.tint,
         .min = 48.f,
         .max = 4000.f,
+        .is_enabled = &IsHDREnabled,
     },
-    new settings_ui::Setting{
+    tone_map_game_nits_setting = new settings_ui::Setting{
         .key = "ToneMapGameNits",
         .binding = &shader_injection.diffuse_white_nits,
         .default_value = 203.f,
@@ -568,8 +614,9 @@ renodx::utils::settings::Settings settings = {
         .tint = sonic_ui::SHADOW.tint,
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = &IsHDREnabled,
     },
-    new settings_ui::Setting{
+    tone_map_ui_nits_setting = new settings_ui::Setting{
         .key = "ToneMapUINits",
         .binding = &shader_injection.graphics_white_nits,
         .default_value = 203.f,
@@ -579,6 +626,7 @@ renodx::utils::settings::Settings settings = {
         .tint = sonic_ui::SHADOW.tint,
         .min = 48.f,
         .max = 500.f,
+        .is_enabled = &IsHDREnabled,
     },
     new settings_ui::Setting{
         .key = "ToneMapHueProcessor",
@@ -607,7 +655,7 @@ renodx::utils::settings::Settings settings = {
     new settings_ui::Setting{
         .key = "ToneMapHighlightChromaRollOff",
         .binding = &shader_injection.tone_map_highlight_chroma_rolloff,
-        .default_value = 10.f,
+        .default_value = 0.f,
         .label = "Highlight Chroma Roll-off",
         .section = TONE_MAPPING_SECTION,
         .tooltip = "Controls how color rolls off in the brightest highlights.",
@@ -895,6 +943,25 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+// The swapchain is only known once it presents, so the output mode is applied on the first present.
+void OnPresent(reshade::api::command_queue* queue,
+               reshade::api::swapchain* swapchain,
+               const reshade::api::rect* source_rect,
+               const reshade::api::rect* dest_rect,
+               uint32_t dirty_rect_count,
+               const reshade::api::rect* dirty_rects) {
+  auto* device = queue->get_device();
+  auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
+  if (data == nullptr) return;
+  if (tracked_swapchain != swapchain) {
+    tracked_swapchain = swapchain;
+    HandleOutputModeChange();
+  } else if (next_color_space.has_value()) {
+    renodx::utils::swapchain::ChangeColorSpace(tracked_swapchain, next_color_space.value());
+    next_color_space = std::nullopt;
+  }
+}
+
 // Swapchain and Display Output setup shared by both games.
 void SetupSwapChain() {
   renodx::mods::swapchain::expected_constant_buffer_index = 9;
@@ -934,6 +1001,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           is_sonic_generations = true;
         }
       }
+
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
+      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&HandleOutputModeChange);
 
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::mods::shader::expected_constant_buffer_space = 50;
@@ -1103,6 +1173,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       if (is_sonic_generations) {
         reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
         reshade::unregister_addon(h_module);
