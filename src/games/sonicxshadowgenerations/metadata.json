@@ -1,0 +1,15 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "sonicxshadowgenerations",
+  "title": "Sonic X Shadow Generations",
+  "maintainers": ["Ostad"],
+  "status": "experimental",
+  "compatibility": "working",
+  "summary": "HDR10 output with RenoDRT tone mapping, bloom and motion blur controls for Sonic X Shadow Generations and the bundled Sonic Generations (SONIC_GENERATIONS.exe).",
+  "deploy": {
+    "steam_appid": 2513280,
+    "game_exe": "SONIC_X_SHADOW_GENERATIONS.exe",
+    "api": "d3d11",
+    "architecture": ["x64"]
+  }
+}
