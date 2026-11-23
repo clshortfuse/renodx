@@ -48,6 +48,21 @@ float3 SGHighlightShoulder(float3 color) {
   return color * (ys / y);
 }
 
+// RenoDX: auto exposure. Returns the exposure multiplier that replaces key / (adapted + 0.001).
+// Mode 0 (Off): fixed exposure at the reference luminance. Mode 1 (Vanilla): the game's division.
+// Mode 2 (Custom): the reference exposure scaled by the vanilla/reference ratio, with per-direction exponent and limits.
+static const float SG_AE_REFERENCE_LUMINANCE = 0.18f;
+
+float SGAutoExposure(float key, float adapted) {
+  float vanilla = key / (adapted + 0.001f);
+  float reference = key / (SG_AE_REFERENCE_LUMINANCE + 0.001f);
+  if (shader_injection.sg_auto_exposure == 1.f) return vanilla;
+  if (shader_injection.sg_auto_exposure != 2.f) return reference;
+  float ratio = vanilla / reference;
+  float s = ratio > 1.f ? shader_injection.sg_ae_brighten : shader_injection.sg_ae_darken;
+  return reference * clamp(pow(ratio, s), exp2(-shader_injection.sg_ae_limit_darken), exp2(shader_injection.sg_ae_limit_brighten));
+}
+
 renodx::draw::Config SonicToneMapConfig() {
   renodx::draw::Config config = renodx::draw::BuildConfig();
   config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::NEUTWO;

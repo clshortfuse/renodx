@@ -106,7 +106,9 @@ void main(
   r1.xyz = g_Source_NedSmpignorenametexture.Sample(g_Source_sampler_s, r0.xz).xyz;
   r2.xyzw = g_SourceLow_NedSmpignorenametexture.Sample(g_SourceLow_sampler_s, r0.xz).xyzw;
   r0.xzw = r2.xyz + -r1.xyz;
-  r1.w = g_Param3.z * r2.w;
+  // RenoDX: DoF strength scales the blur weight; capped at 1 so boosted values stay at full blur (vanilla at 1).
+  float dof_weight = g_Param3.z * r2.w;
+  r1.w = min(dof_weight * shader_injection.sg_dof_strength, max(dof_weight, 1.f));
   r0.xzw = r1.www * r0.xzw + r1.xyz;
   // RenoDX: Motion Blur Off skips the blur lerp; Improved blurs the full-res source along the velocity map (t2).
   if (shader_injection.sg_motion_blur != 0.f) {

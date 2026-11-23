@@ -243,6 +243,8 @@ renodx::mods::shader::CustomShaders sonic_generations_shaders = {
     CustomShaderEntry(0x2AE7A8E5),  // bloom bright pass: threshold scaled by the Bloom Threshold setting
     CustomShaderEntry(0xC31D7195),  // bloom bright pass (luma-based): threshold scaled by the Bloom Threshold setting
     CustomShaderEntry(0x5F91F19E),  // motion blur: Improved writes the velocity map for the composites
+    CustomShaderEntry(0x3CB9BFBB),  // AE metering: center-weighted log average (Custom mode)
+    CustomShaderEntry(0xBDF6C074),  // AE eye adaptation: brighter/darker speeds (Custom mode)
 };
 
 #define UpgradeRTVActivateShader(value) {value, {.crc32 = value, .on_draw = OnDrawActivateRenderTargetHotSwap}}
@@ -394,7 +396,9 @@ bool is_sonic_generations = false;
 constexpr const char* STATUS_SECTION = "Status";
 constexpr const char* TONE_MAPPING_SECTION = "Tone Mapping";
 constexpr const char* COLOR_GRADING_SECTION = "Color Grading";
+constexpr const char* DEPTH_OF_FIELD_SECTION = "Depth of Field";
 constexpr const char* BLOOM_SECTION = "Bloom";
+constexpr const char* AUTO_EXPOSURE_SECTION = "Auto Exposure";
 constexpr const char* MOTION_BLUR_SECTION = "Motion Blur";
 constexpr const char* LENS_SHARPENING_SECTION = "Lens & Sharpening";
 constexpr const char* TEXTURE_FILTERING_SECTION = "Texture Filtering";
@@ -899,6 +903,15 @@ void OnPresetOff() {
     settings_ui::UpdateSetting("SGBloomThreshold", 100.f);
     settings_ui::UpdateSetting("SGBloomHDR", 0.f);
     settings_ui::UpdateSetting("SGMotionBlur", 1.f);
+    settings_ui::UpdateSetting("SGAutoExposure", 1.f);
+    settings_ui::UpdateSetting("SGAEBrighten", 100.f);
+    settings_ui::UpdateSetting("SGAEDarken", 100.f);
+    settings_ui::UpdateSetting("SGAELimitBrighten", 8.f);
+    settings_ui::UpdateSetting("SGAELimitDarken", 8.f);
+    settings_ui::UpdateSetting("SGAESpeedBrighter", 100.f);
+    settings_ui::UpdateSetting("SGAESpeedDarker", 100.f);
+    settings_ui::UpdateSetting("SGAECenterWeight", 0.f);
+    settings_ui::UpdateSetting("SGDepthOfField", 100.f);
   } else {
     settings_ui::UpdateSetting("ToneMapUINits", 203.f);
     settings_ui::UpdateSetting("FxBloom", 100.f);
@@ -1013,14 +1026,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (is_sonic_generations) {
         renodx::utils::settings::global_name = "renodx-sonicgenerations";
         palette = &sonic_ui::SONIC;
+        shader_injection.sg_ui_graphics_white = 1.f;
 
         // Only one game runs per process, so the copied Shadow settings can take Sonic tints in place.
         auto copy_shadow_section = [](std::string_view section) {
           for (auto* setting : settings) {
             if (setting->section != section) continue;
-            // Vanilla Hue Influence depends on Shadow's Uchimura reference curve, and Sonic has no UI brightness path
-            // (graphics white is fixed in shared.h), so both settings are excluded.
-            if (setting->key == "ToneMapVanillaHueInfluence" || setting->key == "ToneMapUINits") continue;
+            // Vanilla Hue Influence depends on Shadow's Uchimura reference curve, so it is excluded.
+            // Sonic's UI brightness comes from graphics white in the intermediate/swap chain passes, so ToneMapUINits stays.
+            if (setting->key == "ToneMapVanillaHueInfluence") continue;
             setting->tint = sonic_ui::SONIC.tint;
             if (setting->key == "ToneMapHighlightChromaRollOff") {
               setting->default_value = 0.f;
@@ -1047,6 +1061,105 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         copy_shadow_section(COLOR_GRADING_SECTION);
 
         sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAutoExposure",
+            .binding = &shader_injection.sg_auto_exposure,
+            .value_type = settings_ui::SettingValueType::INTEGER,
+            .default_value = 1.f,
+            .label = "Auto Exposure",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "Off locks exposure to a fixed middle-grey reference. Vanilla keeps the game's eye adaptation. Custom enables the options below.",
+            .labels = {"Off", "Vanilla", "Custom"},
+            .style = settings_ui::SettingStyle::SEGMENTED,
+            .tint = sonic_ui::SONIC.tint,
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAEBrighten",
+            .binding = &shader_injection.sg_ae_brighten,
+            .default_value = 100.f,
+            .label = "Brightening",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "How much auto exposure may brighten dark scenes. 100 = vanilla, 0 = none.",
+            .tint = sonic_ui::SONIC.tint,
+            .max = 200.f,
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+            .parse = [](float value) { return value * 0.01f; },
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAEDarken",
+            .binding = &shader_injection.sg_ae_darken,
+            .default_value = 100.f,
+            .label = "Darkening",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "How much auto exposure may darken bright scenes. 100 = vanilla, 0 = none.",
+            .tint = sonic_ui::SONIC.tint,
+            .max = 200.f,
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+            .parse = [](float value) { return value * 0.01f; },
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAELimitBrighten",
+            .binding = &shader_injection.sg_ae_limit_brighten,
+            .default_value = 8.f,
+            .label = "Brighten Limit",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "Most auto exposure may brighten, in stops above the reference.",
+            .tint = sonic_ui::SONIC.tint,
+            .min = 0.f,
+            .max = 8.f,
+            .format = "%.1f EV",
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAELimitDarken",
+            .binding = &shader_injection.sg_ae_limit_darken,
+            .default_value = 8.f,
+            .label = "Darken Limit",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "Most auto exposure may darken, in stops below the reference.",
+            .tint = sonic_ui::SONIC.tint,
+            .min = 0.f,
+            .max = 8.f,
+            .format = "%.1f EV",
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAESpeedBrighter",
+            .binding = &shader_injection.sg_ae_speed_brighter,
+            .default_value = 100.f,
+            .label = "Adapt Speed (to bright)",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "Adaptation speed when the scene gets brighter. 100 = vanilla, 0 freezes.",
+            .tint = sonic_ui::SONIC.tint,
+            .max = 400.f,
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+            .parse = [](float value) { return value * 0.01f; },
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAESpeedDarker",
+            .binding = &shader_injection.sg_ae_speed_darker,
+            .default_value = 100.f,
+            .label = "Adapt Speed (to dark)",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "Adaptation speed when the scene gets darker. 100 = vanilla, 0 freezes.",
+            .tint = sonic_ui::SONIC.tint,
+            .max = 400.f,
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+            .parse = [](float value) { return value * 0.01f; },
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGAECenterWeight",
+            .binding = &shader_injection.sg_ae_center_weight,
+            .default_value = 0.f,
+            .label = "Center Weighting",
+            .section = AUTO_EXPOSURE_SECTION,
+            .tooltip = "How much the screen center counts more than the edges when metering. 0 = vanilla (flat).",
+            .tint = sonic_ui::SONIC.tint,
+            .max = 100.f,
+            .is_enabled = []() { return shader_injection.sg_auto_exposure == 2.f; },
+            .parse = [](float value) { return value * 0.01f; },
+        });
+
+        sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGBloom",
             .binding = &shader_injection.sg_bloom_enabled,
             .value_type = settings_ui::SettingValueType::INTEGER,
@@ -1057,6 +1170,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .labels = {"Off", "On"},
             .style = settings_ui::SettingStyle::SEGMENTED,
             .tint = sonic_ui::SONIC.tint,
+        });
+        sonic_generations_settings.push_back(new settings_ui::Setting{
+            .key = "SGDepthOfField",
+            .binding = &shader_injection.sg_dof_strength,
+            .default_value = 100.f,
+            .label = "Strength",
+            .section = DEPTH_OF_FIELD_SECTION,
+            .tooltip = "Scales the game's depth of field blur. 0 = off, 100 = vanilla.",
+            .tint = sonic_ui::SONIC.tint,
+            .max = 200.f,
+            .parse = [](float value) { return value * 0.01f; },
         });
         sonic_generations_settings.push_back(new settings_ui::Setting{
             .key = "SGBloomStrength",

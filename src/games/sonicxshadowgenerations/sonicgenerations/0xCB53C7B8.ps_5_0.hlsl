@@ -1,5 +1,7 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Nov 19 05:03:48 2026
 
+#include "./common.hlsli"  // RenoDX
+
 cbuffer _Globals : register(b0)
 {
   row_major float4x4 g_MtxProjection : packoffset(c16);
@@ -109,8 +111,8 @@ void main(
   r0.y = 1 + -r0.x;
   o0.w = saturate(r0.w * r0.y + r0.x);  // RenoDX: emulate the RGBA8 UNORM clamp on the DOF CoC
   r0.x = s4_NedSmpignorenametexture.Sample(s4_sampler_s, float2(0.5,0.5)).x;
-  r0.x = 0.00100000005 + r0.x;
-  r0.x = g_MiddleGray_Scale_LuminanceLow_LuminanceHigh.x / r0.x;
+  // RenoDX: auto exposure mode (vanilla division in mode 1)
+  r0.x = SGAutoExposure(g_MiddleGray_Scale_LuminanceLow_LuminanceHigh.x, r0.x);
   r0.yzw = s0_NedSmpignorenametexture.Sample(s0_sampler_s, v2.xy).xyz;
   // o0.xyz = r0.yzw * r0.xxx;
   o0.xyz = min(r0.yzw * r0.xxx, 1000.f);  // RenoDX: keep fp16 finite

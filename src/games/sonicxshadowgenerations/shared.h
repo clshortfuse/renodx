@@ -38,6 +38,16 @@ struct ShaderInjectData {
   float fx_sharpening;
   float swap_chain_output_preset;
   float gamma_correction;
+  float sg_auto_exposure;
+  float sg_ae_brighten;
+  float sg_ae_darken;
+  float sg_ae_limit_brighten;
+  float sg_ae_limit_darken;
+  float sg_ae_speed_brighter;
+  float sg_ae_speed_darker;
+  float sg_ae_center_weight;
+  float sg_dof_strength;
+  float sg_ui_graphics_white;
 };
 
 #ifndef __cplusplus
@@ -51,7 +61,7 @@ cbuffer shader_injection : register(b9) {
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            min(shader_injection.diffuse_white_nits, shader_injection.peak_white_nits)
-#define RENODX_GRAPHICS_WHITE_NITS           renodx::color::bt2408::REFERENCE_WHITE
+#define RENODX_GRAPHICS_WHITE_NITS           (shader_injection.sg_ui_graphics_white != 0.f ? shader_injection.graphics_white_nits : renodx::color::bt2408::REFERENCE_WHITE)
 #define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_HUE_CORRECTION       1.f
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
