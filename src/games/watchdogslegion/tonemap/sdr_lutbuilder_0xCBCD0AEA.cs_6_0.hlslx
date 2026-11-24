@@ -1,0 +1,49 @@
+#include "tonemap.hlsli"
+
+Texture3D<float4> t0 : register(t0);
+
+Texture3D<float4> t1 : register(t1);
+
+Texture3D<float4> t2 : register(t2);
+
+RWTexture3D<float4> u0 : register(u0);
+
+cbuffer cb0 : register(b0) {
+  float cb0_008x : packoffset(c008.x);
+  float cb0_009x : packoffset(c009.x);
+  float cb0_010x : packoffset(c010.x);
+  int cb0_023y : packoffset(c023.y);
+};
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float4 _19;
+  float4 _28;
+  float4 _40;
+  float _47;
+  float _48;
+  float _49;
+  if (!((((uint)(int)(SV_DispatchThreadID.x) > (uint)cb0_023y) || ((uint)(int)(SV_DispatchThreadID.y) > (uint)cb0_023y)) || ((uint)(int)(SV_DispatchThreadID.z) > (uint)cb0_023y))) {
+    _19 = t0.Load(int4((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), (int)(SV_DispatchThreadID.z), 0));
+    _28 = t1.Load(int4((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), (int)(SV_DispatchThreadID.z), 0));
+    _40 = t2.Load(int4((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), (int)(SV_DispatchThreadID.z), 0));
+    _47 = ((_28.x * cb0_009x) + (_19.x * cb0_008x)) + (_40.x * cb0_010x);
+    _48 = ((_28.y * cb0_009x) + (_19.y * cb0_008x)) + (_40.y * cb0_010x);
+    _49 = ((_28.z * cb0_009x) + (_19.z * cb0_008x)) + (_40.z * cb0_010x);
+    u0[int3((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y), (int)(SV_DispatchThreadID.z))] = float4(select((_47 <= 0.0031308000907301903f), (_47 * 12.920000076293945f), ((exp2(log2(abs(_47)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)),
+                                                                                                                select((_48 <= 0.0031308000907301903f), (_48 * 12.920000076293945f), ((exp2(log2(abs(_48)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)),
+                                                                                                                select((_49 <= 0.0031308000907301903f), (_49 * 12.920000076293945f), ((exp2(log2(abs(_49)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f)), 0.0f);
+  }
+}
