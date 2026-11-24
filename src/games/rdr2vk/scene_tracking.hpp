@@ -413,7 +413,7 @@ static bool OnBeforeUIDraw(reshade::api::command_list* cmd_list) {
   const std::unique_lock lock(owner.state->mutex);
   if (owner.state->closing || owner.index >= owner.state->back_buffers.size()) return true;
   auto& buffer = owner.state->back_buffers[owner.index];
-  const auto* settings = reinterpret_cast<const ShaderInjectData*>(buffer.proxy.shader_injection);
+  const auto* settings = output::CurrentSettings();
   if (settings == nullptr) return true;
   if (settings->diffuse_white_nits > 0.f && std::isfinite(settings->diffuse_white_nits)
       && settings->diffuse_white_nits == settings->graphics_white_nits) {
@@ -751,8 +751,9 @@ inline void PublishSubmission(std::vector<PendingBackBuffer>* pending_buffers, b
 
 inline void Use(DWORD reason) {
   if (reason == DLL_PROCESS_ATTACH) {
-    // Functional source binding history, independent of optional diagnostics.
-    // Preserve its existing descriptor-pool reuse limits; no parallel cache.
+    // Deciding whether a draw reads the scene needs the descriptor bindings
+    // recorded before it. Use the shared tracker as is, with its limits when
+    // descriptor pools are reused, rather than keeping a second copy here.
     renodx::utils::descriptor::trace_descriptor_tables = true;
     renodx::utils::descriptor::Use(reason);
     reshade::register_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);

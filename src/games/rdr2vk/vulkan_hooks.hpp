@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "./diagnostics_config.hpp"
-
 #include <windows.h>
 
 #include <bit>
@@ -22,10 +20,6 @@
 #include "./output.hpp"
 #include "./scene_tracking.hpp"
 #include "./vulkan_types.hpp"
-
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-#include "./diagnostics/recorder.hpp"
-#endif
 
 namespace rdr2vk::vulkan_hooks {
 namespace internal {
@@ -57,43 +51,21 @@ static PFN_vkAcquireNextImage2KHR acquire_next_image2 = nullptr;
 static PFN_vkBeginCommandBuffer begin_command_buffer = nullptr;
 static PFN_vkQueueSubmit queue_submit = nullptr;
 static PFN_vkQueueSubmit2 queue_submit2 = nullptr;
-static std::vector<renodx::utils::detour::Function> required_hooks;
+static std::vector<renodx::utils::detour::Function> installed_hooks;
 
 static VkResult WINAPI QueueSubmit(VkQueue queue, std::uint32_t count, const VkSubmitInfo* submits, VkFence fence) {
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-  const auto request = diagnostics::NextRequest();
-  const auto fence_handle = reinterpret_cast<std::uint64_t>(fence);
-  diagnostics::RecordSync({.kind = "submit_enter", .object = reinterpret_cast<std::uint64_t>(queue), .request = request, .count = 1, .handles = &fence_handle});
-#endif
-  VkResult result;
-  {
-    // ReShade calls execute_command_list inside the original submit. Those
-    // callbacks select uploads; only the original return can accept their facts.
-    scene_tracking::SubmissionScope submission;
-    result = queue_submit(queue, count, submits, fence);
-    scene_tracking::PublishSubmission(&submission.pending, result == VK_SUCCESS);
-  }
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-  diagnostics::RecordSync({.kind = "submit_return", .object = reinterpret_cast<std::uint64_t>(queue), .request = request, .result = result, .count = 1, .handles = &fence_handle});
-#endif
+  // ReShade calls execute_command_list inside the original submit. Those
+  // callbacks select uploads; only the original return can accept their facts.
+  scene_tracking::SubmissionScope submission;
+  const auto result = queue_submit(queue, count, submits, fence);
+  scene_tracking::PublishSubmission(&submission.pending, result == VK_SUCCESS);
   return result;
 }
 
 static VkResult WINAPI QueueSubmit2(VkQueue queue, std::uint32_t count, const VkSubmitInfo2* submits, VkFence fence) {
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-  const auto request = diagnostics::NextRequest();
-  const auto fence_handle = reinterpret_cast<std::uint64_t>(fence);
-  diagnostics::RecordSync({.kind = "submit2_enter", .object = reinterpret_cast<std::uint64_t>(queue), .request = request, .count = 1, .handles = &fence_handle});
-#endif
-  VkResult result;
-  {
-    scene_tracking::SubmissionScope submission;
-    result = queue_submit2(queue, count, submits, fence);
-    scene_tracking::PublishSubmission(&submission.pending, result == VK_SUCCESS);
-  }
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-  diagnostics::RecordSync({.kind = "submit2_return", .object = reinterpret_cast<std::uint64_t>(queue), .request = request, .result = result, .count = 1, .handles = &fence_handle});
-#endif
+  scene_tracking::SubmissionScope submission;
+  const auto result = queue_submit2(queue, count, submits, fence);
+  scene_tracking::PublishSubmission(&submission.pending, result == VK_SUCCESS);
   return result;
 }
 
@@ -102,9 +74,6 @@ static VkResult WINAPI AcquireNextImage(
     VkSemaphore semaphore, VkFence fence, std::uint32_t* index) {
   const auto result = acquire_next_image(device, swapchain, timeout, semaphore, fence, index);
   if ((result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) && index != nullptr) {
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-    diagnostics::RecordSync({.kind = "acquire", .device = reinterpret_cast<std::uint64_t>(device), .object = reinterpret_cast<std::uint64_t>(swapchain), .result = result, .count = *index});
-#endif
     output::OnAcquireBackBuffer(reinterpret_cast<std::uint64_t>(swapchain), *index);
   }
   return result;
@@ -114,9 +83,6 @@ static VkResult WINAPI AcquireNextImage2(
     VkDevice device, const VkAcquireNextImageInfoKHR* info, std::uint32_t* index) {
   const auto result = acquire_next_image2(device, info, index);
   if ((result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) && info != nullptr && index != nullptr) {
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-    diagnostics::RecordSync({.kind = "acquire", .device = reinterpret_cast<std::uint64_t>(device), .object = reinterpret_cast<std::uint64_t>(info->swapchain), .result = result, .count = *index});
-#endif
     output::OnAcquireBackBuffer(reinterpret_cast<std::uint64_t>(info->swapchain), *index);
   }
   return result;
@@ -130,7 +96,7 @@ static VkResult WINAPI BeginCommandBuffer(VkCommandBuffer buffer, const VkComman
 }
 
 static void OnInitDevice(reshade::api::device* device) {
-  if (device->get_api() != reshade::api::device_api::vulkan || !required_hooks.empty()) return;
+  if (device->get_api() != reshade::api::device_api::vulkan || !installed_hooks.empty()) return;
   const auto get = reinterpret_cast<PFN_vkGetDeviceProcAddr>(
       GetProcAddress(reshade::internal::get_reshade_module_handle(), "vkGetDeviceProcAddr"));
   if (get == nullptr) {
@@ -150,47 +116,44 @@ static void OnInitDevice(reshade::api::device* device) {
     renodx::utils::log::e("rdr2vk: required Vulkan acquire, command-buffer begin, or queue-submit functions are missing.");
     return;
   }
-  required_hooks = {
+  installed_hooks = {
       {&acquire_next_image, AcquireNextImage},
       {&begin_command_buffer, BeginCommandBuffer},
       {&queue_submit, QueueSubmit},
   };
   if (acquire_next_image2 != nullptr) {
-    required_hooks.emplace_back(&acquire_next_image2, AcquireNextImage2);
+    installed_hooks.emplace_back(&acquire_next_image2, AcquireNextImage2);
   }
   if (queue_submit2 != nullptr) {
-    required_hooks.emplace_back(&queue_submit2, QueueSubmit2);
+    installed_hooks.emplace_back(&queue_submit2, QueueSubmit2);
   }
   try {
-    // Core rolls back an uncommitted transaction. Optional recording hooks
-    // have their own group, so their failure cannot undo this installation.
-    renodx::utils::detour::Install(required_hooks);
+    // All hooks go in together; if one fails, none stay installed.
+    renodx::utils::detour::Install(installed_hooks);
   } catch (const std::system_error& error) {
-    required_hooks.clear();
-    renodx::utils::log::e("rdr2vk: could not install required Vulkan hooks; error=", error.code().value());
+    installed_hooks.clear();
+    renodx::utils::log::e("rdr2vk: could not install the Vulkan hooks; error=", error.code().value());
   }
 }
 
 }  // namespace internal
 
-static bool Use(DWORD reason) {
+static void Use(DWORD reason) {
   if (reason == DLL_PROCESS_ATTACH) {
     reshade::register_event<reshade::addon_event::init_device>(internal::OnInitDevice);
   } else if (reason == DLL_PROCESS_DETACH) {
     reshade::unregister_event<reshade::addon_event::init_device>(internal::OnInitDevice);
-    if (!internal::required_hooks.empty()) {
+    if (!internal::installed_hooks.empty()) {
       try {
-        renodx::utils::detour::Uninstall(internal::required_hooks);
-        internal::required_hooks.clear();
+        renodx::utils::detour::Uninstall(internal::installed_hooks);
+        internal::installed_hooks.clear();
       } catch (const std::system_error& error) {
-        // Keep the installed group and original pointers available. Returning
-        // false cannot prevent FreeLibrary; live hot unload is not supported.
-        renodx::utils::log::e("rdr2vk: could not remove required Vulkan hooks; error=", error.code().value());
-        return false;
+        // Keep the original pointers: the hooks may still be called. Unloading
+        // the add-on while the game runs is not supported.
+        renodx::utils::log::e("rdr2vk: could not remove the Vulkan hooks; error=", error.code().value());
       }
     }
   }
-  return true;
 }
 
 }  // namespace rdr2vk::vulkan_hooks

@@ -30,18 +30,12 @@
 #include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/state.hpp"
-#include "./diagnostics_config.hpp"
 #include "./output.hpp"
 #include "./pipeline_layouts.hpp"
 #include "./resource_fixes.hpp"
 #include "./scene_tracking.hpp"
 #include "./shared.h"
 #include "./vulkan_hooks.hpp"
-
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-#include "./diagnostics/recorder.hpp"
-#include "./diagnostics/vulkan_hooks.hpp"
-#endif
 
 namespace {
 
@@ -430,19 +424,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   } else if (fdw_reason == DLL_PROCESS_DETACH) {
     // Stop our callbacks before the shared code frees the textures and output buffers.
     rdr2vk::resource_fixes::UseDescriptorFilters(DLL_PROCESS_DETACH);
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-    const bool diagnostic_hooks_removed = rdr2vk::diagnostics::vulkan_hooks::Use(DLL_PROCESS_DETACH);
-#endif
-    const bool required_hooks_removed = rdr2vk::vulkan_hooks::Use(DLL_PROCESS_DETACH);
+    rdr2vk::vulkan_hooks::Use(DLL_PROCESS_DETACH);
     rdr2vk::scene_tracking::Use(DLL_PROCESS_DETACH);
     rdr2vk::output::Use(DLL_PROCESS_DETACH);
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-    if (required_hooks_removed && diagnostic_hooks_removed) {
-      rdr2vk::diagnostics::Use(DLL_PROCESS_DETACH);
-    }
-#else
-    (void)required_hooks_removed;
-#endif
     rdr2vk::resource_fixes::Use(DLL_PROCESS_DETACH);
     reshade::unregister_event<reshade::addon_event::init_device>(&OnInitDevice);
   }
@@ -453,18 +437,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   if (fdw_reason == DLL_PROCESS_ATTACH) {
-    // Recording must be ready before its optional native producers are installed.
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-    rdr2vk::diagnostics::Use(DLL_PROCESS_ATTACH);
-#endif
     // Output owns images; scene tracking owns recorded work; native boundaries
     // tell us which work Vulkan accepted. Keep these lifecycle phases explicit.
     rdr2vk::output::Use(DLL_PROCESS_ATTACH);
     rdr2vk::scene_tracking::Use(DLL_PROCESS_ATTACH);
     rdr2vk::vulkan_hooks::Use(DLL_PROCESS_ATTACH);
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-    rdr2vk::diagnostics::vulkan_hooks::Use(DLL_PROCESS_ATTACH);
-#endif
     rdr2vk::resource_fixes::UseDescriptorFilters(DLL_PROCESS_ATTACH);
     // Apply our GPU-specific upgrade rules after the shared defaults are set.
     reshade::register_event<reshade::addon_event::init_device>(&OnInitDevice);

@@ -15,6 +15,7 @@
 #include <memory_resource>
 #include <mutex>
 #include <shared_mutex>
+#include <span>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -24,19 +25,13 @@
 
 #include "../../mods/swapchain_v2.hpp"
 #include "../../utils/data.hpp"
-#include "../../utils/draw.hpp"
 #include "../../utils/log.hpp"
 #include "../../utils/pipeline.hpp"
 #include "../../utils/render.hpp"
 #include "../../utils/resource.hpp"
 #include "../../utils/resource_upgrade.hpp"
 #include "../../utils/windowing.hpp"
-#include "./diagnostics_config.hpp"
 #include "./shared.h"
-
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-#include "./diagnostics/recorder.hpp"
-#endif
 
 namespace rdr2vk::output {
 
@@ -141,7 +136,8 @@ struct BackBufferState {
 
   reshade::api::resource back_buffer = {0};
   reshade::api::resource clone = {0};
-  renodx::utils::draw::SwapchainProxyPass proxy;
+  // Draws the clone into the backbuffer and encodes HDR10.
+  renodx::utils::render::RenderPass output_pass;
   reshade::api::resource scene_copy = {0};
   renodx::utils::render::RenderPass scene_scale_pass;
   reshade::api::resource shader_injection = {0};
@@ -202,6 +198,12 @@ inline std::pmr::vector<SwapchainEntry> GetDeviceSwapchains(
   return entries;
 }
 
+// The settings the user has chosen right now, which the final output also reads.
+// The shared swapchain code holds them as a float array in the shared.h layout.
+inline const ShaderInjectData* CurrentSettings() {
+  return reinterpret_cast<const ShaderInjectData*>(renodx::mods::swapchain::v2::shader_injection);
+}
+
 // The native wrappers call this only after SUCCESS or SUBOPTIMAL. Acquisition
 // starts a new image use but does not prove its GPU semaphore has signaled.
 inline void OnAcquireBackBuffer(std::uint64_t native_swapchain, std::uint32_t index) {
@@ -229,7 +231,7 @@ inline bool RenderSceneBrightness(
     reshade::api::resource_usage usage, const SettingsUpload* upload = nullptr) {
   if (buffer->scene_failed) return false;
   const bool fallback = upload == nullptr;
-  const auto* values = (fallback ? reinterpret_cast<const ShaderInjectData*>(buffer->proxy.shader_injection) : upload->data);
+  const auto* values = (fallback ? CurrentSettings() : upload->data);
   if (values == nullptr) return false;
   if (!(values->diffuse_white_nits > 0.f) || !std::isfinite(values->diffuse_white_nits)
       || !(values->graphics_white_nits > 0.f) || !std::isfinite(values->graphics_white_nits)) {
@@ -300,7 +302,7 @@ static void RetireSwapchain(const std::shared_ptr<SwapchainState>& state) {
     if (buffer.scene_copy.handle != 0) {
       state->device->destroy_resource(buffer.scene_copy);
     }
-    buffer.proxy.Destroy(state->device);
+    buffer.output_pass.DestroyAll(state->device);
   }
 }
 
@@ -357,18 +359,6 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
                           && info.desc.texture.width == width && info.desc.texture.height == height;
     });
     if (!valid_back_buffer || width == 0 || height == 0) return;
-
-    buffer.proxy = {
-        .vertex_shader = swapchain_data->swap_chain_proxy_vertex_shader,
-        .pixel_shader = swapchain_data->swap_chain_proxy_pixel_shader,
-        .expected_constant_buffer_index = swapchain_data->expected_constant_buffer_index,
-        .expected_constant_buffer_space = swapchain_data->expected_constant_buffer_space,
-        .revert_state = swapchain_data->swapchain_proxy_revert_state,
-        .use_compatibility_mode = false,
-        .proxy_format = reshade::api::format::r16g16b16a16_float,
-        .shader_injection = renodx::mods::swapchain::v2::shader_injection,
-        .shader_injection_size = renodx::mods::swapchain::v2::shader_injection_size,
-    };
   }
 
   // Create clones before workers request them while recording. Shared resource
@@ -467,19 +457,44 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, [[maybe_unused]]
     }
     pass.auto_generate_descriptor_table_updates = false;
 
-    // Supply the final-output sampler before publishing this image. The shared
-    // renderer does not check automatic sampler creation failures; its existing
-    // generated-sampler list still owns normal and partial-setup cleanup here.
-    auto& proxy_pass = buffer.proxy.pass;
-    proxy_pass.sampler_descs.emplace_back();
+    // The final output draws the clone into this backbuffer. Bind both here,
+    // once: presentation must not ask the swapchain for its images. On Vulkan,
+    // ReShade answers with vkGetSwapchainImagesKHR, and the Steam overlay's
+    // layer leaks a semaphore on every such call. The images bound here stay
+    // valid: Vulkan never changes a swapchain's images, and when the game
+    // recreates its swapchain, ReShade sends destroy_swapchain and then
+    // init_swapchain, which rebuilds this entry.
+    auto& output_pass = buffer.output_pass;
+    output_pass.render_target_slots.resources = {buffer.back_buffer};
+    output_pass.shader_resource_slots.resources = {clone};
+    output_pass.render_target_load_op = reshade::api::render_pass_load_op::discard;
+    output_pass.revert_state_after_render = swapchain_data->swapchain_proxy_revert_state;
+    output_pass.pipeline_subobjects.vertex_shader = swapchain_data->swap_chain_proxy_vertex_shader;
+    output_pass.pipeline_subobjects.pixel_shader = swapchain_data->swap_chain_proxy_pixel_shader;
+    if (renodx::mods::swapchain::v2::shader_injection_size != 0) {
+      // The output shaders read the settings as push constants, in register 0
+      // unless the mod chose another.
+      output_pass.push_constants[{
+          .slot = static_cast<std::uint8_t>(swapchain_data->expected_constant_buffer_index == -1
+                                                ? 0
+                                                : swapchain_data->expected_constant_buffer_index),
+          .space = static_cast<std::uint8_t>(swapchain_data->expected_constant_buffer_space),
+      }] = std::span<const float>(renodx::mods::swapchain::v2::shader_injection,
+                                  renodx::mods::swapchain::v2::shader_injection_size);
+    }
+
+    // Create the output sampler here rather than letting the pass create it at
+    // the first present, where a failure would go unchecked. The pass destroys
+    // it with its other generated objects.
+    output_pass.sampler_descs.emplace_back();
     reshade::api::sampler sampler = {};
-    if (!device->create_sampler(proxy_pass.sampler_descs.front(), &sampler)) {
+    if (!device->create_sampler(output_pass.sampler_descs.front(), &sampler)) {
       renodx::utils::log::e("rdr2vk: could not create the final output sampler; index=", index);
       RetireSwapchain(state);
       return;
     }
-    proxy_pass.samplers.push_back(sampler);
-    proxy_pass.generated_samplers.push_back(sampler);
+    output_pass.samplers.push_back(sampler);
+    output_pass.generated_samplers.push_back(sampler);
   }
   swapchains.try_emplace(swapchain, std::move(state));
 }
@@ -495,9 +510,6 @@ static void OnPresent(
   auto* device = swapchain->get_device();
   if (device->get_api() != reshade::api::device_api::vulkan
       || queue->get_device() != device || queue->get_immediate_command_list() == nullptr) return;
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-  diagnostics::RecordSync({.kind = "present", .device = device->get_native(), .object = queue->get_native()});
-#endif
 
   // Window changes can recreate the swapchain: no output lock may be held here.
   auto* swapchain_data = renodx::utils::data::Get<renodx::mods::swapchain::v2::DeviceData>(device);
@@ -526,6 +538,8 @@ static void OnPresent(
   if (state->closing) return;
   const auto index = swapchain->get_current_back_buffer_index();
   if (index >= state->back_buffers.size()) return;
+  // The entry already holds this image's backbuffer. Do not ask the swapchain
+  // for it again; see OnInitSwapchain.
   auto& buffer = state->back_buffers[index];
   if (buffer.failed) return;
 
@@ -536,10 +550,6 @@ static void OnPresent(
                           ". Waiting for the game to recreate its output buffers.");
   };
 
-  if (buffer.back_buffer.handle != swapchain->get_back_buffer(index).handle) {
-    fail("backbuffer changed without the swapchain being recreated");
-    return;
-  }
   if (state->queue != nullptr && state->queue != queue) {
     fail("presentation queue changed without the swapchain being recreated");
     return;
@@ -589,7 +599,10 @@ static void OnPresent(
   if (transition_scene) {
     cmd_list->barrier(clone, buffer.submitted.usage, reshade::api::resource_usage::shader_resource);
   }
-  const bool rendered = buffer.proxy.Render(swapchain, queue, &clone);
+  const bool rendered = buffer.output_pass.Render(cmd_list, queue);
+  if (rendered) {
+    cmd_list->barrier(buffer.back_buffer, reshade::api::resource_usage::render_target, reshade::api::resource_usage::present);
+  }
   if (transition_scene) {
     cmd_list->barrier(clone, reshade::api::resource_usage::shader_resource, buffer.submitted.usage);
   }

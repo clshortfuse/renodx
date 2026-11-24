@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "./diagnostics_config.hpp"
-
 #include <windows.h>
 
 #include <cstddef>
@@ -71,55 +69,5 @@ static_assert(offsetof(VkAcquireNextImageInfoKHR, swapchain) == 16
               && offsetof(VkAcquireNextImageInfoKHR, semaphore) == 32
               && offsetof(VkAcquireNextImageInfoKHR, fence) == 40
               && offsetof(VkAcquireNextImageInfoKHR, device_mask) == 48);
-
-#if RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
-
-struct VkBufferViewCreateInfo {
-  std::uint32_t type;
-  const void* next;
-  std::uint32_t flags;
-  std::uint64_t buffer;
-  std::uint32_t format;
-  std::uint64_t offset;
-  std::uint64_t range;
-};
-
-struct VkWriteDescriptorSet {
-  std::uint32_t type;
-  const void* next;
-  std::uint64_t set;
-  std::uint32_t binding;
-  std::uint32_t element;
-  std::uint32_t count;
-  std::uint32_t descriptor_type;
-  const void* images;
-  const void* buffers;
-  const std::uint64_t* views;
-};
-
-// Allocator, image/buffer descriptor payloads, and descriptor-copy arrays are
-// API-owned data forwarded verbatim. Only texel-buffer inputs are inspected.
-using PFN_vkDestroyImageView = void(WINAPI*)(VkDevice, std::uint64_t, const void*);
-using PFN_vkCreateBufferView = VkResult(WINAPI*)(VkDevice, const VkBufferViewCreateInfo*, const void*, std::uint64_t*);
-using PFN_vkDestroyBufferView = void(WINAPI*)(VkDevice, std::uint64_t, const void*);
-using PFN_vkUpdateDescriptorSets = void(WINAPI*)(VkDevice, std::uint32_t, const VkWriteDescriptorSet*, std::uint32_t, const void*);
-using PFN_vkGetFenceStatus = VkResult(WINAPI*)(VkDevice, VkFence);
-// Non-dispatchable fence array elements have the same eight-byte x64 ABI as VkFence.
-using PFN_vkWaitForFences = VkResult(WINAPI*)(VkDevice, std::uint32_t, const std::uint64_t*, std::uint32_t, std::uint64_t);
-using PFN_vkResetFences = VkResult(WINAPI*)(VkDevice, std::uint32_t, const std::uint64_t*);
-
-static_assert(sizeof(VkBufferViewCreateInfo) == 56 && alignof(VkBufferViewCreateInfo) == 8);
-static_assert(offsetof(VkBufferViewCreateInfo, buffer) == 24
-              && offsetof(VkBufferViewCreateInfo, format) == 32
-              && offsetof(VkBufferViewCreateInfo, offset) == 40
-              && offsetof(VkBufferViewCreateInfo, range) == 48);
-static_assert(sizeof(VkWriteDescriptorSet) == 64 && alignof(VkWriteDescriptorSet) == 8);
-static_assert(offsetof(VkWriteDescriptorSet, set) == 16
-              && offsetof(VkWriteDescriptorSet, descriptor_type) == 36
-              && offsetof(VkWriteDescriptorSet, images) == 40
-              && offsetof(VkWriteDescriptorSet, buffers) == 48
-              && offsetof(VkWriteDescriptorSet, views) == 56);
-
-#endif  // RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS
 
 }  // namespace rdr2vk::vulkan

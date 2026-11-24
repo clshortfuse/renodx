@@ -17,23 +17,23 @@ This mod preserves scene HDR detail through the game's effects and produces HDR1
 
 The game's exposure, bloom, color lookup tables, and grading masks remain in use. Match Vanilla selects Vanilla+, resets grading, restores dithering, and disables added grain. Preset Off selects Vanilla and restores the original lighting limit. Both reset Game/UI Brightness and SDR EOTF Emulation; neither changes Peak Brightness.
 
-## Build and diagnostics
+## Build
 
-Close RDR2 before building target **`rdr2vk`** with VS Code's CMake integration and the selected toolchain and configuration. Release output is `build/Release/renodx-rdr2vk.addon64`; other configurations use their corresponding output directory. The addon uses the repository's existing build rules and shared code; no game-specific CMake changes or local test files are required.
+Close RDR2 before building target **`rdr2vk`**. Release output is `build/Release/renodx-rdr2vk.addon64`. No game-specific CMake changes are needed.
 
-The optional crash recorder is controlled by **`RDR2VK_ENABLE_LIFETIME_DIAGNOSTICS`** in `diagnostics_config.hpp`. It accepts only `0` or `1` and defaults to **`0`**. At zero, the compiler leaves out the recorder's history, locks, call stacks, exception observer, failure scans, extra Vulkan hooks, and file writes. The rendering code and ordinary failure messages remain. Set it to `1` and rebuild only when investigating a problem; a compiler definition can override the default.
+To investigate a crash, load the separate **`rdr2vkprobe`** add-on beside the mod or with ReShade alone; see its [README](../../addons/rdr2vkprobe/README.md). The mod itself contains no recording code.
 
-Diagnostics are **observation only**. Both builds forward original native calls and results, including repeated destruction requests. There is no duplicate-destroy blocker. Enabled builds write version-5 traces beside the game executable; see [Architecture](ARCHITECTURE.md#diagnostics-observe-without-repairing).
+For how the mod works inside, read [Architecture](ARCHITECTURE.md).
 
-## Status and checks still required
+## Status
 
-**The crash after prolonged play remains unresolved.** The current fixes do not establish its cause. Both recorder settings compile with the existing MSVC Release configuration. The recorder defaults to off; its report text is absent from the normal addon and present in the recorder-enabled addon. Compilation and local checks are not proof of correct pixels or crash-free gameplay.
+**Crash after prolonged play.** The mod leaked memory every frame. At each present it asked ReShade for the swapchain's images; ReShade answers with `vkGetSwapchainImagesKHR`, and the Steam overlay's Vulkan layer creates a semaphore on every such call and never destroys it. Process memory and Windows kernel memory grew until the game exited. The mod no longer asks, and in a loaded save both now stay level. That this leak caused the crash is likely but not proven: the crash was recorded on NVIDIA driver 621.01 and did not reproduce on 621.14 even with the leak present. The crash's last step is confirmed: once the driver refuses to create a buffer view, the game reuses an old handle, destroys it a second time, and the driver crashes.
 
-- Compare unequal and equal Game/UI Brightness in gameplay, FXAA on/off, weapon wheel, pause/map, menus/videos, and HUD-hidden play. Load a save before revealing the HUD; check each slider independently and watch transparency, masks, and highlights.
-- Exercise Alt-Tab, minimize/restore, resolution and window-mode changes, VSync/Reflex/buffering changes, loading/fades, and exit/relaunch. Confirm both brightness controls still work after output recreation.
-- Check prolonged play, memory trends, and `ReShade.log`, first without DevKit/ReShade effects and then with the usual overlays. Diagnostic timing differs from the normal build. A successful build or small test does not establish crash-free gameplay.
+Still to check in the game:
 
-For the CPU/GPU model, ownership, brightness ordering, lifecycle, known limits, and old-to-new function map, read [Architecture](ARCHITECTURE.md).
+- Unequal and equal Game/UI Brightness in gameplay, FXAA on/off, weapon wheel, pause/map, menus/videos, and HUD-hidden play. Load a save before revealing the HUD; check each slider on its own and watch transparency, masks, and highlights.
+- Alt-Tab, minimize/restore, resolution and window-mode changes, VSync/Reflex/buffering changes, loading/fades, and exit/relaunch. Both brightness controls must still work after the output is recreated.
+- Prolonged play with the usual overlays and effects, watching memory and `ReShade.log`.
 
 ## Compatibility report under investigation
 
@@ -45,7 +45,5 @@ To compare affected and unaffected systems, record the exact addon, game, ReShad
 
 ## Changes in this update
 
-- Restore the tracked Vulkan pipeline bindings as well as the other drawing state after the pre-UI brightness pass.
-- Prevent pending submission data from restoring scene-source handles that resource destruction has already removed.
-- Create and check final-output samplers during setup, before publishing output state. Existing render-pass cleanup owns successful samplers, so no shared renderer change is needed.
-- Let the optional recorder capture access violations during active native view creation or destruction, including invalid jumps outside the driver module. Observation never suppresses the original call or handles the exception.
+- Fix the per-frame memory leak described under Status. The final output pass now draws to the backbuffer recorded when the swapchain was set up.
+- Move the crash recorder out of the mod into the `rdr2vkprobe` add-on. The mod no longer has a recorder switch.
