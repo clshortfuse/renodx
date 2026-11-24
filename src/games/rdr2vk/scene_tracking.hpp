@@ -301,6 +301,92 @@ static void OnSceneDrawRecorded(reshade::api::command_list* cmd_list) {
   buffer->usage = reshade::api::resource_usage::render_target;
 }
 
+// Scene sources -------------------------------------------------------------
+
+// The descriptor set 1 bindings that the scene copies and TAA sharpening sample
+// their source from, in that order. Only these are tracked. The game makes
+// thousands of descriptor updates per frame from several threads, and tracing
+// all of them under one device-wide lock cost more CPU time than the updates.
+static constexpr std::array<std::uint32_t, 2> SOURCE_BINDINGS = {186u, 156u};
+
+// The view last written to each source binding, by descriptor set. A set that
+// is freed keeps its entry until the same handle is written again. A draw only
+// reads the entry of a set it has bound, and Vulkan requires a set's
+// descriptors to be written before a draw uses them.
+static renodx::utils::data::ParallelFlatHashMap<
+    std::uint64_t, std::array<reshade::api::resource_view, SOURCE_BINDINGS.size()>, std::shared_mutex>
+    source_views;
+
+// A zero view means the binding's content is unknown.
+static void SetSourceView(reshade::api::descriptor_table table, std::size_t binding_index, reshade::api::resource_view view) {
+  source_views.lazy_emplace_l(
+      table.handle,
+      [&](auto& entry) {
+        auto& [set, views] = entry;
+        views[binding_index] = view;
+      },
+      [&](const auto& ctor) {
+        std::array<reshade::api::resource_view, SOURCE_BINDINGS.size()> views = {};
+        views[binding_index] = view;
+        ctor(table.handle, views);
+      });
+}
+
+static bool OnUpdateDescriptorTables(
+    reshade::api::device* device, std::uint32_t count, const reshade::api::descriptor_table_update* updates) {
+  for (const auto& update : std::span(updates, count)) {
+    if (update.type != reshade::api::descriptor_type::sampler_with_resource_view
+        && update.type != reshade::api::descriptor_type::texture_shader_resource_view) continue;
+    for (std::size_t binding_index = 0; binding_index < SOURCE_BINDINGS.size(); ++binding_index) {
+      const auto binding = SOURCE_BINDINGS[binding_index];
+      std::uint32_t element = 0;
+      if (update.binding == binding) {
+        if (update.array_offset != 0) continue;
+      } else if (update.binding < binding && update.count > 1) {
+        // A write of several descriptors continues into the following bindings.
+        // The descriptor heap offsets say whether it reaches this one.
+        reshade::api::descriptor_heap start_heap = {};
+        std::uint32_t start = 0;
+        device->get_descriptor_heap_offset(update.table, update.binding, update.array_offset, &start_heap, &start);
+        reshade::api::descriptor_heap source_heap = {};
+        std::uint32_t source = 0;
+        device->get_descriptor_heap_offset(update.table, binding, 0, &source_heap, &source);
+        if (start_heap.handle == 0 || start_heap.handle != source_heap.handle
+            || source < start || source - start >= update.count) continue;
+        element = source - start;
+      } else {
+        continue;
+      }
+      SetSourceView(update.table, binding_index, renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update, element));
+    }
+  }
+  return false;
+}
+
+static bool OnCopyDescriptorTables(
+    [[maybe_unused]] reshade::api::device* device, std::uint32_t count, const reshade::api::descriptor_table_copy* copies) {
+  for (const auto& copy : std::span(copies, count)) {
+    for (std::size_t binding_index = 0; binding_index < SOURCE_BINDINGS.size(); ++binding_index) {
+      const auto binding = SOURCE_BINDINGS[binding_index];
+      const bool starts_at_source = copy.dest_binding == binding && copy.dest_array_offset == 0;
+      const bool may_reach_source = copy.dest_binding < binding && copy.count > 1;
+      if (!starts_at_source && !may_reach_source) continue;
+      // Only a copy from another tracked source binding has a known view.
+      reshade::api::resource_view view = {0};
+      const auto source_binding = std::ranges::find(SOURCE_BINDINGS, copy.source_binding);
+      if (starts_at_source && copy.source_array_offset == 0 && source_binding != SOURCE_BINDINGS.end()) {
+        const auto source_index = static_cast<std::size_t>(std::distance(SOURCE_BINDINGS.begin(), source_binding));
+        source_views.if_contains(copy.source_table.handle, [&](const auto& entry) {
+          const auto& [set, views] = entry;
+          view = views[source_index];
+        });
+      }
+      SetSourceView(copy.dest_table, binding_index, view);
+    }
+  }
+  return false;
+}
+
 // Observe scene output without changing the game's shader math.
 static constexpr auto ON_SCENE_OUTPUT = []<typename Context>(Context& context)
     -> renodx::utils::command_action::CallbackResult<Context> {
@@ -310,28 +396,16 @@ static constexpr auto ON_SCENE_OUTPUT = []<typename Context>(Context& context)
       || context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER) {
     // A descriptor binding identifies the view sampled by a shader, not owned
     // texture storage. Copy and TAA shaders use different source bindings.
-    const std::uint32_t source_binding = (context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER ? 156u : 186u);
+    const std::size_t binding_index = (context.matched_shader_hash == SCENE_TAA_SHARPEN_SHADER ? 1 : 0);
     auto* device = context.cmd_list->get_device();
     const auto tables = renodx::utils::state::CopyBoundDescriptorTables(
         context.cmd_list, renodx::utils::state::PipelineBindPoint::GRAPHICS);
     if (!tables.has_value() || !tables->known || !tables->tables.has(1)) return {};
-    reshade::api::descriptor_heap heap = {};
-    std::uint32_t offset = 0;
-    if (!renodx::utils::descriptor::TryGetDescriptorHeapOffset(
-            device, tables->tables.get(1), source_binding, 0, &heap, &offset)) return {};
-    auto* descriptors = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
-    if (descriptors == nullptr) return {};
     reshade::api::resource_view source_view = {};
-    {
-      const std::shared_lock lock(descriptors->mutex);
-      const auto found = descriptors->heaps.find(heap.handle);
-      if (found != descriptors->heaps.end()) {
-        const auto& [heap_handle, entries] = *found;
-        if (offset < entries.size() && entries[offset].HasResourceView()) {
-          source_view = entries[offset].resource_view;
-        }
-      }
-    }
+    source_views.if_contains(tables->tables.get(1).handle, [&](const auto& entry) {
+      const auto& [set, views] = entry;
+      source_view = views[binding_index];
+    });
     if (source_view.handle == 0) return {};
 
     // The saved binding may refer to a view that was already freed. Read our
@@ -716,6 +790,9 @@ static void OnDestroyDevice(reshade::api::device* device) {
   for (const auto pipeline : retired_pipelines) {
     pipeline_color_writes.erase(pipeline);
   }
+  // Descriptor sets end with their device. Handles are not tagged by device;
+  // the mod assumes one device.
+  source_views.clear();
 }
 
 }  // namespace internal
@@ -751,11 +828,8 @@ inline void PublishSubmission(std::vector<PendingBackBuffer>* pending_buffers, b
 
 inline void Use(DWORD reason) {
   if (reason == DLL_PROCESS_ATTACH) {
-    // Deciding whether a draw reads the scene needs the descriptor bindings
-    // recorded before it. Use the shared tracker as is, with its limits when
-    // descriptor pools are reused, rather than keeping a second copy here.
-    renodx::utils::descriptor::trace_descriptor_tables = true;
-    renodx::utils::descriptor::Use(reason);
+    reshade::register_event<reshade::addon_event::update_descriptor_tables>(internal::OnUpdateDescriptorTables);
+    reshade::register_event<reshade::addon_event::copy_descriptor_tables>(internal::OnCopyDescriptorTables);
     reshade::register_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);
     reshade::register_event<reshade::addon_event::init_command_list>(internal::OnInitCommandList);
     reshade::register_event<reshade::addon_event::destroy_command_list>(internal::OnDestroyCommandList);
@@ -776,7 +850,6 @@ inline void Use(DWORD reason) {
                                                                          });
     }
   } else if (reason == DLL_PROCESS_DETACH) {
-    renodx::utils::descriptor::Use(reason);
     renodx::utils::command_action::Unregister(internal::ON_SCENE_OUTPUT);
     reshade::unregister_event<reshade::addon_event::init_command_list>(internal::OnInitCommandList);
     reshade::unregister_event<reshade::addon_event::destroy_command_list>(internal::OnDestroyCommandList);
@@ -791,6 +864,8 @@ inline void Use(DWORD reason) {
     reshade::unregister_event<reshade::addon_event::execute_command_list>(internal::OnExecuteCommandList);
     reshade::unregister_event<reshade::addon_event::execute_secondary_command_list>(internal::OnExecuteSecondaryCommandList);
     reshade::unregister_event<reshade::addon_event::destroy_device>(internal::OnDestroyDevice);
+    reshade::unregister_event<reshade::addon_event::copy_descriptor_tables>(internal::OnCopyDescriptorTables);
+    reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(internal::OnUpdateDescriptorTables);
   }
 }
 

@@ -42,7 +42,7 @@ Dependencies run one way: `addon -> vulkan_hooks -> scene_tracking -> output -> 
 | `output::RenderSceneBrightness(...)` | Records the scene copy and the brightness draw. The caller holds the swapchain state lock and knows the image's current usage. |
 | `output::OnAcquireBackBuffer(...)` | Starts a new use of an image after a successful acquire and clears what was known about its previous use. |
 | `output::GetDeviceSwapchains(...)` | Copies the swapchain owners for a device. Callers lock and recheck each one before use. |
-| `scene_tracking::Use(reason)` | Registers the recording, classification, and submission callbacks and turns on descriptor binding history. |
+| `scene_tracking::Use(reason)` | Registers the recording, classification, submission, and scene-source descriptor callbacks. |
 | `scene_tracking::OnBeforeUIDraw(...)` | At the first real UI draw onto a backbuffer, records a brightness pass in front of it when that is safe. |
 | `scene_tracking::OnSceneDrawRecorded(...)` | Notes that a scene draw was recorded. |
 | `scene_tracking::RecordingScope` | Keeps the command buffer's begin flags available during the original begin call. |
@@ -100,7 +100,7 @@ Until final output, the image is encoded BT.709 in the RGBA16F clone, which keep
 | Copy `0x1FC46AC9`, MSAA copy `0xF60E4A26`, and TAA sharpening `0xEF9E7CFC` count as scene only with a known scene source. | They also serve menus. Copies read set 1 binding 186; sharpening reads binding 156. |
 | Draws that write only alpha or stencil are not UI. | The RGB write mask decides, including dynamic masks. An unknown mask is treated as unknown. |
 
-Scene sources are resolved from the shared resource records of live views, never by asking the driver about a view that may be gone. When a source resource is destroyed, it leaves the source history, so a reused handle cannot pass as a scene source. Destruction also advances a counter; if it moved while a submit was in flight, that submit does not restore its pending source list.
+To find a copy's source, the mod records the view the game writes to binding 186 or 156 of each descriptor set, and nothing else; a descriptor copy from any other binding leaves the source unknown. Recording every descriptor write instead, under one lock for the whole device, cost several times the CPU time of the writes themselves, because the game makes thousands of them per frame from several threads. Scene sources are resolved from the shared resource records of live views, never by asking the driver about a view that may be gone. When a source resource is destroyed, it leaves the source history, so a reused handle cannot pass as a scene source. Destruction also advances a counter; if it moved while a submit was in flight, that submit does not restore its pending source list.
 
 ### Why the brightness pass is recorded disabled
 
@@ -198,7 +198,7 @@ Detach runs: descriptor filters, hooks, scene tracking, output, early repairs, G
 | Limit | Effect |
 |---|---|
 | Dynamic offsets after the pre-UI pass | With ReShade API 18 headers, restoring the graphics snapshot does not replay descriptor dynamic offsets. |
-| Descriptor pool reuse | Source binding history inherits the shared tracker's limits when pools are reset and reused. |
+| Freed descriptor sets | A freed set keeps its recorded source view until its handle is written again. A draw only looks up a set it has bound, and Vulkan requires a set's descriptors to be written before a draw uses them. |
 | ReShade's cached render passes and framebuffers | Destroying the mod's views does not free them. |
 | One device | The hooks assume every device shares the same native function addresses. |
 | Descriptor handler election | If another add-on takes over the shared descriptor handler later, it may not keep this mod's filters. |
