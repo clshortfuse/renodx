@@ -72,7 +72,7 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped)
 }
 
 // Replaces the game's ACES peak, min and exposure inputs, scaled so that 100 is diffuse white.
-// Gamma correction mode 1 pre-applies the inverse of the 2.2 correction done at output. Mode 2 skips the 2.2 shape
+// SDR EOTF emulation mode 1 pre-applies the inverse of the 2.2 correction done at output. Mode 2 skips the 2.2 shape
 // and lowers the ACES min nits instead, which lowers the curve's black floor.
 void ApplyToneMapInputs(inout float peak_nits, inout float min_nits, inout float exposure) {
   if (RENODX_OVERRIDE_PEAK_NITS) {
@@ -80,10 +80,10 @@ void ApplyToneMapInputs(inout float peak_nits, inout float min_nits, inout float
   }
   if (!RENODX_TONE_MAP_TYPE) return;
 
-  min_nits = (RENODX_GAMMA_CORRECTION == 2.f ? 0.0000000016f : 0.0001f);
+  min_nits = (RENODX_SDR_EOTF_EMULATION == 2.f ? 0.0000000016f : 0.0001f);
   exposure = 8.f * RENODX_TONE_MAP_EXPOSURE;
 
-  if (RENODX_GAMMA_CORRECTION == 1.f) {
+  if (RENODX_SDR_EOTF_EMULATION == 1.f) {
     peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
     min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
   } else {

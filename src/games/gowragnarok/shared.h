@@ -6,7 +6,7 @@
 struct ShaderInjectData {
   float tone_map_type;
   float tone_map_override_peak_nits;
-  float gamma_correction;
+  float sdr_eotf_emulation;
   float peak_white_nits;
   float diffuse_white_nits;
   float tone_map_exposure;
@@ -30,7 +30,7 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_OVERRIDE_PEAK_NITS            shader_injection.tone_map_override_peak_nits
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
-#define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
+#define RENODX_SDR_EOTF_EMULATION            shader_injection.sdr_eotf_emulation
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows

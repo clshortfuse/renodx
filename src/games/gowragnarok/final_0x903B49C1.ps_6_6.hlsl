@@ -138,7 +138,7 @@ void frag_main() {
       _309 = corrected.r, _310 = corrected.g, _311 = corrected.b;
     } else {
       // Mode 1 tone maps in the 2.2 domain and mode 2 stores its LUT output lifted; both end with the 2.2 correction.
-      if (RENODX_GAMMA_CORRECTION != 0.f) {
+      if (RENODX_SDR_EOTF_EMULATION != 0.f) {
         x = renodx::color::correct::GammaSafe(x);
       }
       _309 = x.r, _310 = x.g, _311 = x.b;

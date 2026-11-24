@@ -13,7 +13,6 @@
 
 #include <embed/shaders.h>
 
-#include <algorithm>
 #include <span>
 
 #include "../../mods/shader.hpp"
@@ -92,11 +91,11 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Vanilla+"},
     },
     new renodx::utils::settings::Setting{
-        .key = "GammaCorrection",
-        .binding = &shader_injection.gamma_correction,
+        .key = "SDREOTFEmulation",
+        .binding = &shader_injection.sdr_eotf_emulation,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
-        .label = "Gamma Correction",
+        .default_value = 1.f,
+        .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF, or lowers the tone mapper's black floor instead of applying 2.2",
         .labels = {"Off", "2.2", "Lower Black Floor"},
@@ -284,19 +283,29 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
   }
 }
 
-// Workaround until the core rewrite: the game's compute pipeline state streams also carry graphics states, which
-// the core counts as graphics and resolves to an UNKNOWN bind point. Binds are then dropped and custom compute
-// shaders never match a dispatch, so their injected constants are never pushed. A D3D12 PSO with a CS is compute.
+// Workaround until the core rewrite. D3D12 types a pipeline state stream by which of VS, CS or MS has bytecode,
+// fails creation if more than one does, and ignores every other subobject (D3D12_PIPELINE_STATE_STREAM_DESC
+// remarks). This game's compute streams also carry graphics states, which the core counts as graphics, so the
+// PSO resolves to an UNKNOWN bind point and the D3D12 state tracker drops its binds. ReShade only lists a shader
+// subobject when it has bytecode, so the first VS, CS or MS found decides the type.
 void OnInitPipeline(
     renodx::utils::pipeline::PipelineInfo* info,
     uint32_t subobject_count,
     const reshade::api::pipeline_subobject* subobjects) {
   if (info->bind_point != renodx::utils::pipeline::PipelineBindPoint::UNKNOWN) return;
-  const std::span pipeline_subobjects(subobjects, subobject_count);
-  if (std::ranges::any_of(pipeline_subobjects, [](const reshade::api::pipeline_subobject& subobject) {
-        return subobject.type == reshade::api::pipeline_subobject_type::compute_shader;
-      })) {
-    info->bind_point = renodx::utils::pipeline::PipelineBindPoint::COMPUTE;
+  if (info->device == nullptr || info->device->get_api() != reshade::api::device_api::d3d12) return;
+  for (const auto& subobject : std::span(subobjects, subobject_count)) {
+    switch (subobject.type) {
+      case reshade::api::pipeline_subobject_type::compute_shader:
+        info->bind_point = renodx::utils::pipeline::PipelineBindPoint::COMPUTE;
+        return;
+      case reshade::api::pipeline_subobject_type::vertex_shader:
+      case reshade::api::pipeline_subobject_type::mesh_shader:
+        info->bind_point = renodx::utils::pipeline::PipelineBindPoint::GRAPHICS;
+        return;
+      default:
+        break;
+    }
   }
 }
 
@@ -317,7 +326,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", peak_nits_default},
       {"ToneMapGameNits", 100.f},
       {"ToneMapType", 0.f},
-      {"GammaCorrection", 0.f},
+      {"SDREOTFEmulation", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},

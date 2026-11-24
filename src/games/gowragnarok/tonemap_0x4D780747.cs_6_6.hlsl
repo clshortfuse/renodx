@@ -158,7 +158,7 @@ void comp_main() {
     _251 = _76;
   }
   float tonemapped = exp2(_251 * 3.3219280242919921875f) * 0.00999999977648258209228515625f;
-  if (RENODX_TONE_MAP_TYPE && RENODX_GAMMA_CORRECTION == 2.f) {
+  if (RENODX_TONE_MAP_TYPE && RENODX_SDR_EOTF_EMULATION == 2.f) {
     // The LUT is applied per channel and the result is stored with 12-bit luma and chroma as a clamped ratio to luma,
     // then grain is added. Stored unlifted, the low floor drives minor channels of saturated highlights toward zero
     // and the chroma ratio clips into grain. Lift by the inverse 2.2 here; the final shader removes it.

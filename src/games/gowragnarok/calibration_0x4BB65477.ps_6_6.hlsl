@@ -340,7 +340,7 @@ void frag_main() {
     } else {
       float3 corrected = float3(_593, _595, _596);
       // This preview skips the LUT and the game's intermediate, so only mode 1 needs the 2.2 correction here.
-      if (RENODX_GAMMA_CORRECTION == 1.f) {
+      if (RENODX_SDR_EOTF_EMULATION == 1.f) {
         corrected = renodx::color::correct::GammaSafe(corrected);
       }
       _695 = corrected.r, _701 = corrected.g, _707 = corrected.b;
