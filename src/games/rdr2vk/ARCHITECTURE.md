@@ -51,6 +51,24 @@ Dependencies run one way: `addon -> vulkan_hooks -> scene_tracking -> output -> 
 
 `vulkan_types.hpp` declares the few Vulkan types the hooks need, with size and offset checks, so the mod does not need the Vulkan SDK.
 
+## How the game builds a frame
+
+Captured with the DevKit in November 2026, SDR path, DLSS unless noted. Every tone map writes the same full-size texture, which the game calls `Working LDR Texture`; it is R11G11B10, upgraded to RGBA16F on NVIDIA.
+
+| State | Scene steps, in order | Then |
+|---|---|---|
+| Gameplay, HUD shown or hidden | tone map -> copy `0x1FC46AC9` to the backbuffer | UI on the backbuffer, if any |
+| FXAA | tone map -> FXAA `0x599298B6` writes the backbuffer | UI |
+| TAA with sharpening | tone map -> sharpening `0xEF9E7CFC` writes the backbuffer | UI |
+| Weapon wheel | tone map -> blurs -> regrade `0x2B012EDD` writes the backbuffer | wheel UI |
+| Map | pause tone map -> regrade `0x2B012EDD` writes the backbuffer | map UI |
+| Dead Eye | Dead Eye tone map -> copy `0x1FC46AC9`, or regrade `0x2B012EDD` | UI |
+| Pause | pause tone map -> blurs that use the backbuffer as scratch -> regrade `0x2B012EDD` reads the backbuffer -> copy -> paper overlay `0x2C748C70` -> copy `0x1FC46AC9` to the backbuffer | menu UI |
+
+In every state, exactly one draw writes the finished scene to the backbuffer, and the UI follows it directly. Some HUD parts are first drawn into offscreen textures (the 512x512 minimap, a 4K RGBA8 layer) and then onto the backbuffer. UI that reaches the backbuffer blends alpha with `one` and `one - source alpha`; `0x7BE28339` writes stencil only.
+
+The executable also has a post-HUD stage (`Working PostHud Backbuffer Pair`, `ColorLUT - POSTFX POSTHUD`). When a flag in the render state is set, the game copies the backbuffer into that buffer, draws the HUD there, and applies a LUT over scene and HUD together. Dead Eye, pause, the weapon wheel, and the map do not turn it on; what does is unknown.
+
 ## From recording to output
 
 ```mermaid
@@ -185,3 +203,50 @@ Detach runs: descriptor filters, hooks, scene tracking, output, early repairs, G
 | One device | The hooks assume every device shares the same native function addresses. |
 | Descriptor handler election | If another add-on takes over the shared descriptor handler later, it may not keep this mod's filters. |
 | Crash investigation | The `rdr2vkprobe` add-on records object lifetimes, creation failures, and memory trends without changing the mod. |
+| Post-HUD stage | When the game draws the HUD into its post-HUD buffer instead of the backbuffer, the first UI draw on the backbuffer is not the scene/UI boundary. Never seen in play so far. |
+| Map transition | Before the tone map, `0x1994C234` composites the scene into an 8-bit 4K texture that the gameplay tone map blends in, probably while the map opens or closes. Highlights may clip there; not checked by eye. |
+
+## Planned: frame generation
+
+DLSS Frame Generation through Streamline needs, for every frame: the final image, the same image without UI (HUD-less), UI alpha, depth, motion vectors, camera data, and Reflex markers. It also has to own presentation. The mod only outputs HDR10 (PQ, BT.2020), so only that swapchain has to work. Nothing below is implemented yet. The order puts the riskiest question first. Points marked *(unverified)* have not been checked on this game yet.
+
+### 1. Prove Streamline can run inside the add-on
+
+Everything else depends on this, so it comes first, as a throwaway test outside the mod.
+
+- **Below ReShade.** Streamline takes over swapchain creation, image queries, acquire, and present. The mod writes the swapchain image during ReShade's present handling, so Streamline must sit below ReShade: it sees each frame after the final output, and the frames it generates go to the driver without passing through ReShade and the mod again. The mod already detours native Vulkan functions, so the driver-side swapchain functions can be routed through Streamline's. Putting Streamline's interposer in front of the game's Vulkan loader would do the opposite: Streamline would get the swapchain image before the mod writes it, and every generated frame would go through ReShade.
+- **Device creation.** On Vulkan, Streamline must be initialized before the device exists, and it may need extra device extensions, features, and queues (graphics, compute, optical flow). ReShade loads add-ons inside the game's `vkCreateInstance`, and the game creates its device later on another thread, so an add-on can call `slInit` (manual hooking), hook device creation to add what `slGetFeatureRequirements` asks for, and then call `slSetVulkanInfo` with the added queues. The game's device already has `VK_KHR_timeline_semaphore` and `VK_KHR_push_descriptor`.
+- **Queues.** Add Streamline's queues ourselves instead of letting its interposer plan them. The game asks for one graphics queue, every queue in the compute family, and two transfer queues *(unverified)*. For that request, the Streamline 2.14.1 interposer adds a duplicate compute-family entry and device creation fails. The extra compute queues have to go to a family with spare capacity, such as the graphics family. Log the game's request with the probe first.
+- **Instance.** The game asks for Vulkan 1.1 with `VK_KHR_get_physical_device_properties2`, `VK_KHR_get_surface_capabilities2`, `VK_KHR_surface`, `VK_KHR_win32_surface`, and `VK_EXT_swapchain_colorspace`. The instance already exists when an add-on can act, so whatever Streamline needs at instance level must already be in that list.
+- **Calls to adapt.** The exe references `vkAcquireNextImage2KHR`, device-group present, and `VK_EXT_buffer_device_address`, which Streamline does not take as they come *(unverified)*. Pass acquire 2 to Streamline as `vkAcquireNextImageKHR` when the device mask is 1, drop a device-group present mask of 1, and hide the EXT buffer device address extension from the game so Streamline uses the core version.
+- **Reflex.** The game calls `NvLL_VK_SetSleepMode` and `NvLL_VK_SetLatencyMarker` itself through `NvLowLatencyVk.dll`. Start by leaving those calls alone, sending Streamline's PCL markers from the mod, and not calling Streamline's Reflex sleep. Whether the driver handles both sets of markers cleanly is unknown.
+- **HDR.** DLSS-G has a status bit for an unsupported HDR setup, and an HDR10 backbuffer with DLSS-G on Vulkan is unproven, so the test uses the mod's real swapchain.
+
+Done when Streamline generates frames from placeholder inputs while ReShade and the mod still present correctly. Known Vulkan limits: no VSync with frame generation and no dynamic multi-frame generation.
+
+### 2. HUD-less image and UI alpha from the mod
+
+These can be built and checked with the DevKit before Streamline is in.
+
+- **Run the brightness pass every frame** while frame generation is on, including when Game and UI Brightness are equal (scale 1). Today it is skipped then.
+- **Second output: the HUD-less image.** The brightness shader writes the scaled scene to the clone as now, in gamma-encoded BT.709 so the UI keeps blending in gamma, and also writes the same color through `renodx::draw::SwapChainPass` into a backbuffer-sized HDR10 texture. The final output calls the same function on the same values, so the two match exactly wherever there is no UI, which frame generation relies on. DLSS's own output cannot stand in for it: it comes before the tone map, so it is not in the backbuffer's color space.
+- **Alpha 0 for the clone.** The tone map stores luma in alpha for FXAA, and the copy carries it to the backbuffer. Nothing after the UI starts reads it, so the brightness pass writes alpha 0. The UI's alpha blend then leaves the clone's alpha equal to UI coverage.
+- **Second output of the final pass: UI alpha.** The final pass copies the clone's alpha into its own texture. The swapchain's 2-bit alpha is too coarse to tag. Tag UI alpha only, without UI color. Streamline expects `final = UI color + (1 - UI alpha) x HUD-less`, which a UI color of ours would not satisfy after a gamma-space blend and a PQ encode; with alpha only, it has no UI color to compare.
+- **Frames without UI.** The scene-only path at present writes the HUD-less image the same way, and UI alpha is 0.
+- **Still to check:** the draws that composite the offscreen HUD layers onto the backbuffer, and the menu UI, must write alpha with the same blend. Any that do not would need a pipeline variant that writes alpha, or a UAV write in that shader only.
+
+### 3. Depth, motion vectors, and camera data
+
+- **Depth and motion vectors** come from the game's DLSS call. `src/utils/dlss/nvngx.hpp` only handles D3D12 today. With FXAA or TAA there is no DLSS call, so frame generation would first require DLSS or DLAA.
+  - Hook `GetProcAddress`, which the game uses to find NGX *(unverified)*, to wrap `NVSDK_NGX_VULKAN_CreateFeature` for the DLSS flags (`DLSS.Feature.Create.Flags`: inverted depth, low-resolution motion vectors, jittered motion vectors) and `NVSDK_NGX_VULKAN_EvaluateFeature` for the inputs. The exe references both names.
+  - The driver exports no C functions for reading NGX parameters, so read them through the parameter object's virtual table.
+  - Read `Depth`, `MotionVectors`, `Jitter.Offset.X`/`Y`, `MV.Scale.X`/`Y`, `Reset`, and the subrect sizes and origins (`DLSS.Render.Subrect.Dimensions.*`, `DLSS.Input.Depth.Subrect.Base.*`, `DLSS.Input.MV.Subrect.Base.*`). Skip evaluations that carry `DLSSG.Backbuffer`; they belong to DLSS-G.
+  - Tag depth (`D32_SFLOAT_S8_UINT`) and motion vectors (`R16G16_SFLOAT`) on the evaluate's command buffer as valid only now, so Streamline copies them there and the mod keeps no copies. The tag needs each image's current layout, tracked from the command buffer's barriers.
+  - Divide the motion vector scale by the motion vector size, because Streamline multiplies it back, and set reset when the DLSS quality mode changes.
+- **Camera data.** Start with a neutral camera: a fixed projection (60-degree vertical field of view, near 0.05, far 10000), identity clip-to-previous-clip, and camera motion marked as included in the motion vectors. DLSS-G accepts that and generates frames *(unverified)*, so the game's matrices do not block a first version. Then read the real view-to-clip and clip-to-previous-clip matrices from the game's per-frame constant buffers once their location is known, and check whether they improve the result.
+
+### 4. Per-frame tagging and pacing
+
+- **One frame token per frame**, shared by the markers, the tags, and the constants. Evaluate and present can run on different threads, so match inputs to a present through the submitted command buffers, not the order calls arrive in. When the match fails, skip the frame instead of using the newest inputs.
+- **When frame generation runs.** Turn it on only after DLSS has evaluated for a while, and off when it stops (title video, loading screens), keeping its resources while off so turning it back on does not stall. Turn it off before the swapchain is recreated. Set reset on camera cuts.
+- **Lifetimes.** Vulkan resources stay alive on the mod's side, because Streamline does not hold references to them on Vulkan.
