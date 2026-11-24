@@ -18,21 +18,7 @@ void comp_main() {
   float min_nits = max(9.9999997473787516355514526367188e-05f, ConstBuf_constants_m0[3u].w);
   float exposure = ConstBuf_constants_m0[4u].x;  // brightness slider
 
-  if (RENODX_OVERRIDE_PEAK_NITS) {
-    peak_nits = RENODX_PEAK_WHITE_NITS;
-  }
-  if (RENODX_TONE_MAP_TYPE) {
-    min_nits = 0.0001f;
-    exposure = 8.f * RENODX_TONE_MAP_EXPOSURE;
-
-    if (RENODX_GAMMA_CORRECTION) {
-      peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
-      min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
-    } else {
-      peak_nits = (peak_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
-      min_nits = (min_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
-    }
-  }
+  ApplyToneMapInputs(peak_nits, min_nits, exposure);
 
   float untonemapped = exp2(((float(gl_GlobalInvocationID.x) * 33.0f) * ConstBuf_constants_m0[10u].y) + (-15.0f));
 
@@ -171,7 +157,14 @@ void comp_main() {
   } else {
     _251 = _76;
   }
-  outputTexture[gl_GlobalInvocationID.x] = (exp2(_251 * 3.3219280242919921875f) * 0.00999999977648258209228515625f).xxxx;  // _9[asuint(ConstBuf_constants_m0[10u]).x][gl_GlobalInvocationID.x] = (exp2(_251 * 3.3219280242919921875f) * 0.00999999977648258209228515625f).xxxx;
+  float tonemapped = exp2(_251 * 3.3219280242919921875f) * 0.00999999977648258209228515625f;
+  if (RENODX_TONE_MAP_TYPE && RENODX_GAMMA_CORRECTION == 2.f) {
+    // The LUT is applied per channel and the result is stored with 12-bit luma and chroma as a clamped ratio to luma,
+    // then grain is added. Stored unlifted, the low floor drives minor channels of saturated highlights toward zero
+    // and the chroma ratio clips into grain. Lift by the inverse 2.2 here; the final shader removes it.
+    tonemapped = renodx::color::correct::Gamma(tonemapped, true);
+  }
+  outputTexture[gl_GlobalInvocationID.x] = tonemapped.xxxx;  // _9[asuint(ConstBuf_constants_m0[10u]).x][gl_GlobalInvocationID.x] = (exp2(_251 * 3.3219280242919921875f) * 0.00999999977648258209228515625f).xxxx;
 }
 
 [numthreads(64, 1, 1)]

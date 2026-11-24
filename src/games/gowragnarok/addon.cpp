@@ -98,8 +98,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
+        .tooltip = "Emulates a 2.2 EOTF, or lowers the tone mapper's black floor instead of applying 2.2",
+        .labels = {"Off", "2.2", "Lower Black Floor"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
@@ -200,7 +200,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
-        .group = "button-line-1",
+        .group = "button-line-0",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;

@@ -69,16 +69,7 @@ void frag_main() {
   float min_nits = max(9.9999997473787516355514526367188e-05f, ConstBuf_passData_m0[2270u].w);
   float exposure = ConstBuf_passData_m0[2271u].x;  // brightness slider
 
-  if (RENODX_OVERRIDE_PEAK_NITS) {
-    peak_nits = RENODX_PEAK_WHITE_NITS;
-  }
-  if (RENODX_TONE_MAP_TYPE) {
-    min_nits = 0.0001f;
-    exposure = 8.f * RENODX_TONE_MAP_EXPOSURE;
-
-    peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
-    min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
-  }
+  ApplyToneMapInputs(peak_nits, min_nits, exposure);
 
   if ((asuint(ConstBuf_modelData_m0[0u]).x & 512u) == 0u) {
     _117 = 1.0f;
@@ -347,7 +338,11 @@ void frag_main() {
       _701 = exp2(log2(max(_689 + ((_595 < 0.017999999225139617919921875f) ? (_585 * 0.0449999980628490447998046875f) : ((exp2(_599 * 0.449999988079071044921875f) * 1.09899997711181640625f) + (-0.098999999463558197021484375f))), 0.0f)) * 2.400000095367431640625f) * _688;
       _707 = exp2(log2(max(_689 + ((_596 < 0.017999999225139617919921875f) ? (_591 * 0.0449999980628490447998046875f) : ((exp2(_600 * 0.449999988079071044921875f) * 1.09899997711181640625f) + (-0.098999999463558197021484375f))), 0.0f)) * 2.400000095367431640625f) * _688;
     } else {
-      float3 corrected = ApplyGammaCorrection(float3(_593, _595, _596));
+      float3 corrected = float3(_593, _595, _596);
+      // This preview skips the LUT and the game's intermediate, so only mode 1 needs the 2.2 correction here.
+      if (RENODX_GAMMA_CORRECTION == 1.f) {
+        corrected = renodx::color::correct::GammaSafe(corrected);
+      }
       _695 = corrected.r, _701 = corrected.g, _707 = corrected.b;
     }
 

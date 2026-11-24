@@ -71,29 +71,23 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped)
   return color;
 }
 
-float3 GammaCorrectHuePreserving(float3 incorrect_color) {
-  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
-
-  const float y_in = renodx::color::y::from::BT709(incorrect_color);
-  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
-
-  float3 lum = incorrect_color * select(y_in > 0, y_out / y_in, 0.f);
-
-  // use chrominance from channel gamma correction and apply hue shifting from per channel tonemap
-  float3 result = renodx::color::correct::ChrominanceICtCp(lum, ch);
-
-  return result;
-}
-
-float3 ApplyGammaCorrection(float3 incorrect_color) {
-  float3 corrected_color;
-  if (RENODX_GAMMA_CORRECTION == 2.f) {
-    corrected_color = GammaCorrectHuePreserving(incorrect_color);
-  } else if (RENODX_GAMMA_CORRECTION == 1.f) {
-    corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
-  } else {
-    corrected_color = incorrect_color;
+// Replaces the game's ACES peak, min and exposure inputs, scaled so that 100 is diffuse white.
+// Gamma correction mode 1 pre-applies the inverse of the 2.2 correction done at output. Mode 2 skips the 2.2 shape
+// and lowers the ACES min nits instead, which lowers the curve's black floor.
+void ApplyToneMapInputs(inout float peak_nits, inout float min_nits, inout float exposure) {
+  if (RENODX_OVERRIDE_PEAK_NITS) {
+    peak_nits = RENODX_PEAK_WHITE_NITS;
   }
+  if (!RENODX_TONE_MAP_TYPE) return;
 
-  return corrected_color;
+  min_nits = (RENODX_GAMMA_CORRECTION == 2.f ? 0.0000000016f : 0.0001f);
+  exposure = 8.f * RENODX_TONE_MAP_EXPOSURE;
+
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    peak_nits = renodx::color::correct::Gamma(peak_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
+    min_nits = renodx::color::correct::Gamma(min_nits / RENODX_DIFFUSE_WHITE_NITS, true) * 100.f;
+  } else {
+    peak_nits = (peak_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
+    min_nits = (min_nits / RENODX_DIFFUSE_WHITE_NITS) * 100.f;
+  }
 }
