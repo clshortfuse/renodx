@@ -1,7 +1,5 @@
 #include "./shared.h"
 
-#include "./shared.h"
-
 Texture2D<float4> g_xPostToneMapFrameBufferTexture : register(t0);
 
 // RenoDX: linear view depth copied by the addon, one uint per texel, low 16 bits = half float depth. Header at byte 512: size (xy) and row stride in texels (z).
@@ -33,7 +31,7 @@ float4 main(
   float _31 = dot(float3(_27.x, _27.y, _27.z), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   // RenoDX: Ultra uses a lower edge threshold so more subtle edges are anti-aliased.
   float edge_threshold = (CUSTOM_SMAA_ULTRA == 1.f) ? 0.05f : 0.10000000149011612f;
-  // RenoDX: depth predication. Lower the edge threshold on depth-discontinuity-free curvature only where depth geometry bends, so depth silhouettes get anti-aliased.
+  // RenoDX: lower the edge threshold where depth curves sharply (second difference above 2% of depth), so depth silhouettes get anti-aliased.
   [branch]
   if (CUSTOM_DEPTH_EDGES > 0.f) {
     uint colour_width;

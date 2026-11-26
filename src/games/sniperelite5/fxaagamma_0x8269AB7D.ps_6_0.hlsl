@@ -1138,35 +1138,10 @@ float4 main(
     _737 = _9.z;
     _738 = _9.w;
   }
-  // RenoDX: output the FXAA colour before the gamma pow and clamp; vanilla gamma/clamp kept below for reference
+  // RenoDX: output the FXAA colour before the gamma pow and clamp
   SV_Target.x = _735;
   SV_Target.y = _736;
   SV_Target.z = _737;
   SV_Target.w = 1.0f;
   return SV_Target;
-  // float _739 = abs(_735);
-  // float _740 = abs(_736);
-  // float _741 = abs(_737);
-  // float _742 = abs(_738);
-  // float _745 = log2(_739);
-  // float _746 = log2(_740);
-  // float _747 = log2(_741);
-  // float _748 = log2(_742);
-  // float _749 = _745 * g_fFXAALinearGamma;
-  // float _750 = _746 * g_fFXAALinearGamma;
-  // float _751 = _747 * g_fFXAALinearGamma;
-  // float _752 = _748 * g_fFXAALinearGamma;
-  // float _753 = exp2(_749);
-  // float _754 = exp2(_750);
-  // float _755 = exp2(_751);
-  // float _756 = exp2(_752);
-  // float _757 = max(_753, g_fFXAAClampValue);
-  // float _758 = max(_754, g_fFXAAClampValue);
-  // float _759 = max(_755, g_fFXAAClampValue);
-  // float _760 = max(_756, g_fFXAAClampValue);
-  // SV_Target.x = _757;
-  // SV_Target.y = _758;
-  // SV_Target.z = _759;
-  // SV_Target.w = _760;
-  // return SV_Target;
 }

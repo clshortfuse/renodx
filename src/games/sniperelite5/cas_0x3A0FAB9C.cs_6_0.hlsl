@@ -29,8 +29,7 @@ float3 SharpenPixel(int2 pos) {
     float lum_max = max(max(lum_left, max(lum_mid, lum_right)), max(lum_up, lum_down));
     float lum_min = min(min(min(lum_left, min(lum_mid, lum_right)), min(lum_up, lum_down)), 1.0f - lum_max);
     float rcp_max = asfloat((uint)(2129690299u - (int)asint(lum_max)));
-    // RenoDX: sharpening strength slider (0 = no sharpening)
-    float weight = asfloat((int)((uint)asint(saturate(rcp_max * lum_min)) >> 1) + 532432441u) * const1.x * CUSTOM_SHARPENING;
+    float weight = asfloat((int)((uint)asint(saturate(rcp_max * lum_min)) >> 1) + 532432441u) * const1.x;
 
     float denom = (weight * 4.0f) + 1.0f;
     float inv = asfloat((uint)(2129764351u - (int)asint(denom)));

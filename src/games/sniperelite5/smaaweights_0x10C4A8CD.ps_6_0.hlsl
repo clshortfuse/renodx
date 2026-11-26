@@ -21,13 +21,11 @@ float4 main(
   float4 SV_Target;
   // RenoDX: Ultra uses a longer diagonal search range
   float diag_limit = (CUSTOM_SMAA_ULTRA == 1.f) ? 15.0f : 7.0f;
-  // RenoDX: search end, extended on Ultra
   float4 search_end = TEXCOORD_2[2];
-  // RenoDX: Ultra search end
   if (CUSTOM_SMAA_ULTRA == 1.f) {
     search_end = float4(mad(g_xRTMetrics.x, -64.0f, TEXCOORD_2[0].x), mad(g_xRTMetrics.x, 64.0f, TEXCOORD_2[0].z), mad(g_xRTMetrics.y, -64.0f, TEXCOORD_2[1].y), mad(g_xRTMetrics.y, 64.0f, TEXCOORD_2[1].w));
   }
-  float4 _22 =g_xEdgesTexture.Sample(g_xBilinearClamp, float2(TEXCOORD.x, TEXCOORD.y));
+  float4 _22 = g_xEdgesTexture.Sample(g_xBilinearClamp, float2(TEXCOORD.x, TEXCOORD.y));
   float _33;
   float _34;
   float _35;

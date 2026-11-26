@@ -8,6 +8,7 @@
 #define DEBUG_LEVEL_0
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -89,19 +90,15 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x99A0AA1A),  // SunlightPS: tolerant material-ID compares
     CustomShaderEntry(0xC1B8304C),  // ASL_MainCS: tolerant material-ID compares
     CustomShaderEntry(0xC43C7E87),  // ASL_MainCS: tolerant material-ID compares
-    // CustomSwapchainShader(0x00000000),
-    // BypassShaderEntry(0x00000000),
-    // __ALL_CUSTOM_SHADERS
 };
 
 ShaderInjectData shader_injection;
 
-// Strength of the depth-based edge threshold (0..1). Forwarded to shader_injection.custom_depth_edges only when the
-// depth copy is valid for the current edge pass.
+// Depth edge strength (0..1); forwarded to custom_depth_edges only when the depth copy is valid.
 float depth_edges_strength = 0.5f;
 
 // Set when the game's own HDR reconstruction shaders run; never cleared.
-bool game_hdr_in_use = false;
+std::atomic<bool> game_hdr_in_use = false;
 
 namespace ui = sniperelite5_ui;
 namespace settings_ui = renodx::utils::settings;
@@ -127,7 +124,7 @@ settings_ui::Settings settings = {
         .label = "The game's in-game HDR option is on. RenoDX replaces it with its own HDR output, so set the game's HDR option to Off.",
         .section = STATUS_SECTION,
         .tint = ui::TINT_BRASS,
-        .is_visible = []() { return game_hdr_in_use; },
+        .is_visible = []() { return game_hdr_in_use.load(); },
     },
     new settings_ui::Setting{
         .value_type = settings_ui::SettingValueType::BUTTON,
@@ -452,6 +449,7 @@ settings_ui::Settings settings = {
         .tint = ui::TINT_BRASS,
         .max = 100.f,
         .format = "%.0f%%",
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new settings_ui::Setting{
@@ -621,20 +619,24 @@ settings_ui::Settings settings = {
     },
 };
 
-
 void OnPresetOff() {
-  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
-  //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("GammaCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
+  renodx::utils::settings::UpdateSetting("FxLensDirt", 100.f);
+  renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
+  renodx::utils::settings::UpdateSetting("AutoExposureIgnoreDark", 0.f);
+  renodx::utils::settings::UpdateSetting("AutoExposureSpeed", 100.f);
+  renodx::utils::settings::UpdateSetting("AutoExposureLimitBrighten", 4.f);
+  renodx::utils::settings::UpdateSetting("AutoExposureLimitDarken", 4.f);
   renodx::utils::settings::UpdateSetting("AutoExposureBrighten", 100.f);
   renodx::utils::settings::UpdateSetting("AutoExposureDarken", 100.f);
   renodx::utils::settings::UpdateSetting("AutoExposureMetering", 0.f);
@@ -658,15 +660,18 @@ int half_res_srgb_target_index = -1;
 
 bool fired_on_init_swapchain = false;
 
-// Render-resolution targets (AMD_FSR 1-4 or RenderScale 0.5-2.0) are matched by back-buffer aspect ratio plus a
-// minimum size, so the minimums follow the swapchain size.
+// Render-resolution targets are matched by back-buffer aspect ratio plus a minimum size that follows the swapchain.
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
+  if (!renodx::utils::swapchain::IsDXGI(swapchain)) return;
+  const auto back_buffer = swapchain->get_back_buffer(0);
+  if (back_buffer.handle == 0u) return;
+
   // Peak Brightness defaults to the peak Windows reports for the display, detected once on the first DXGI swapchain.
-  if (!fired_on_init_swapchain && renodx::utils::swapchain::IsDXGI(swapchain)) {
-    fired_on_init_swapchain = true;
+  if (!fired_on_init_swapchain) {
     const auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
     auto* peak_setting = settings_ui::FindSetting("ToneMapPeakNits");
     if (peak.has_value() && peak_setting != nullptr) {
+      fired_on_init_swapchain = true;
       const float peak_nits = std::round(peak.value());
       peak_setting->default_value = peak_nits;
       peak_setting->can_reset = true;
@@ -682,24 +687,30 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool /*resize*/) {
 
   if (typeless_target_index < 0 || half_res_srgb_target_index < 0) return;
 
-  const auto back_buffer_desc = swapchain->get_device()->get_resource_desc(swapchain->get_back_buffer(0));
-  auto& typeless_min = renodx::mods::swapchain::swap_chain_upgrade_targets[typeless_target_index].min_dimensions;
-  typeless_min.width = static_cast<int16_t>(back_buffer_desc.texture.width * 0.45f);
-  typeless_min.height = static_cast<int16_t>(back_buffer_desc.texture.height * 0.45f);
-  auto& half_res_min = renodx::mods::swapchain::swap_chain_upgrade_targets[half_res_srgb_target_index].min_dimensions;
-  half_res_min.width = static_cast<int16_t>(back_buffer_desc.texture.width * 0.2f);
-  half_res_min.height = static_cast<int16_t>(back_buffer_desc.texture.height * 0.2f);
+  const auto back_buffer_desc = swapchain->get_device()->get_resource_desc(back_buffer);
+  auto& typeless_min = renodx::mods::swapchain::resource_upgrade_infos[typeless_target_index].min_dimensions;
+  auto& half_res_min = renodx::mods::swapchain::resource_upgrade_infos[half_res_srgb_target_index].min_dimensions;
+  const auto typeless_width = static_cast<int16_t>(back_buffer_desc.texture.width * 0.45f);
+  const auto typeless_height = static_cast<int16_t>(back_buffer_desc.texture.height * 0.45f);
+  const auto half_res_width = static_cast<int16_t>(back_buffer_desc.texture.width * 0.2f);
+  const auto half_res_height = static_cast<int16_t>(back_buffer_desc.texture.height * 0.2f);
+  if (typeless_min.width == typeless_width && typeless_min.height == typeless_height && half_res_min.width == half_res_width
+      && half_res_min.height == half_res_height) {
+    return;
+  }
+  typeless_min.width = typeless_width;
+  typeless_min.height = typeless_height;
+  half_res_min.width = half_res_width;
+  half_res_min.height = half_res_height;
   // The swapchain mod copies the upgrade infos into the device at init_device; push the new sizes to it.
   renodx::utils::resource::upgrade::SetUpgradeInfos(swapchain->get_device(), renodx::mods::swapchain::resource_upgrade_infos);
 }
 
-// SMAA edge detection reads half-resolution linear depth. The depth pass target (r16g16_float) is copied each frame
-// into an addon-owned raw buffer that is bound to the edge shader as a root SRV at t0 space50.
+// SMAA edge depth: the r16g16_float depth pass target is copied each frame into an addon-owned raw buffer (root SRV t0 space50).
 constexpr uint32_t DEPTH_CAPTURE_SHADER_HASH = 0xD9F1BE58u;
 constexpr uint32_t SMAA_EDGE_SHADER_HASH = 0xD38BEC23u;
 constexpr uint32_t DEPTH_EDGES_SRV_REGISTER = 0u;
 constexpr uint32_t DEPTH_EDGES_SRV_SPACE = 50u;
-constexpr uint32_t DEPTH_EDGES_RETIRE_PRESENT_COUNT = 3u;
 constexpr uint64_t DEPTH_EDGES_PLACEHOLDER_BYTES = 256u;
 // The edge shader reads the depth copy from byte 2048; the first 2 KiB of the buffer are left unused.
 constexpr uint64_t DEPTH_BUFFER_OFFSET = 2048u;
@@ -708,26 +719,9 @@ constexpr uint64_t DEPTH_HEADER_BUFFER_OFFSET = 512u;
 constexpr uint64_t DEPTH_HEADER_BYTES = 16u;
 constexpr uint32_t DEPTH_CANDIDATE_CAPACITY = 4u;
 
-// The raw buffer holds the depth header at DEPTH_HEADER_BUFFER_OFFSET and the depth copy at DEPTH_BUFFER_OFFSET.
-struct BufferLayout {
-  uint32_t depth_row_texels;
-  uint64_t size_bytes;
-};
-
-BufferLayout GetBufferLayout(uint32_t depth_width, uint32_t depth_height) {
-  // Row pitch is 64-texel (256-byte) aligned for copy_texture_to_buffer. Depth texels are r16g16 (4 bytes each).
-  const uint32_t depth_row_texels = (depth_width + 63u) & ~63u;
-  const uint64_t depth_bytes = static_cast<uint64_t>(depth_row_texels) * 4u * depth_height;
-  return {
-      .depth_row_texels = depth_row_texels,
-      .size_bytes = DEPTH_BUFFER_OFFSET + depth_bytes,
-  };
-}
-
 struct RetiredDepthBuffer {
   reshade::api::resource buffer = {0u};
   reshade::api::resource_view srv = {0u};
-  uint32_t presents_left = DEPTH_EDGES_RETIRE_PRESENT_COUNT;
 };
 
 // A depth pass target seen recently.
@@ -766,9 +760,9 @@ void DestroyDepthBuffer(reshade::api::device* device, reshade::api::resource buf
   if (buffer.handle != 0u) device->destroy_resource(buffer);
 }
 
-// Replaces the buffer when it is missing or too small. The superseded buffer is retired rather than destroyed,
-// because command lists recorded earlier may still reference it. Caller holds depth_edges.mutex.
+// Superseded buffers are retired, not destroyed: earlier command lists may still reference them. Caller holds depth_edges.mutex.
 bool EnsureDepthBufferLocked(reshade::api::device* device, uint64_t size_bytes) {
+  if (depth_edges.device != nullptr && depth_edges.device != device) return false;
   if (depth_edges.buffer.handle != 0u && depth_edges.size_bytes >= size_bytes) return true;
 
   const reshade::api::resource_desc buffer_desc(
@@ -881,19 +875,21 @@ bool OnDepthEdgesReplace(reshade::api::command_list* cmd_list) {
     return true;
   }
 
-  const auto layout = GetBufferLayout(candidate.width, candidate.height);
+  // Row pitch is 64-texel (256-byte) aligned for copy_texture_to_buffer; depth texels are r16g16 (4 bytes each).
+  const uint32_t depth_row_texels = (candidate.width + 63u) & ~63u;
+  const uint64_t buffer_size_bytes = DEPTH_BUFFER_OFFSET + static_cast<uint64_t>(depth_row_texels) * 4u * candidate.height;
   reshade::api::resource buffer = {0u};
   reshade::api::resource depth_header_upload = {0u};
   {
     std::unique_lock lock(depth_edges.mutex);
-    if (!EnsureDepthBufferLocked(device, layout.size_bytes)) {
+    if (!EnsureDepthBufferLocked(device, buffer_size_bytes)) {
       return true;
     }
     buffer = depth_edges.buffer;
     const DepthHeaderWords header = {
         .depth_width = candidate.width,
         .depth_height = candidate.height,
-        .depth_row_texels = layout.depth_row_texels,
+        .depth_row_texels = depth_row_texels,
     };
     if (depth_edges.depth_header_upload.handle == 0u || !(depth_edges.depth_header_words == header)) {
       if (depth_edges.depth_header_upload.handle != 0u) {
@@ -922,7 +918,7 @@ bool OnDepthEdgesReplace(reshade::api::command_list* cmd_list) {
   cmd_list->barrier(candidate.resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::copy_source);
   cmd_list->barrier(buffer, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::copy_dest);
   cmd_list->copy_texture_to_buffer(
-      candidate.resource, 0u, nullptr, buffer, DEPTH_BUFFER_OFFSET, layout.depth_row_texels, candidate.height);
+      candidate.resource, 0u, nullptr, buffer, DEPTH_BUFFER_OFFSET, depth_row_texels, candidate.height);
   cmd_list->barrier(candidate.resource, reshade::api::resource_usage::copy_source, reshade::api::resource_usage::shader_resource);
   cmd_list->copy_buffer_region(depth_header_upload, 0u, buffer, DEPTH_HEADER_BUFFER_OFFSET, DEPTH_HEADER_BYTES);
   cmd_list->barrier(buffer, reshade::api::resource_usage::copy_dest, reshade::api::resource_usage::shader_resource);
@@ -942,7 +938,7 @@ reshade::api::resource_view GetDepthEdgesView(reshade::api::command_list* cmd_li
 }
 
 void OnPresentDepthEdges(
-    reshade::api::command_queue* /*queue*/,
+    reshade::api::command_queue* queue,
     reshade::api::swapchain* /*swapchain*/,
     const reshade::api::rect* /*source_rect*/,
     const reshade::api::rect* /*dest_rect*/,
@@ -950,12 +946,12 @@ void OnPresentDepthEdges(
     const reshade::api::rect* /*dirty_rects*/) {
   std::unique_lock lock(depth_edges.mutex);
   auto* device = depth_edges.device;
-  if (device == nullptr) return;
-  std::erase_if(depth_edges.retired, [device](RetiredDepthBuffer& entry) {
-    if (--entry.presents_left > 0u) return false;
+  if (device == nullptr || depth_edges.retired.empty() || queue->get_device() != device) return;
+  queue->wait_idle();
+  for (const auto& entry : depth_edges.retired) {
     DestroyDepthBuffer(device, entry.buffer, entry.srv);
-    return true;
-  });
+  }
+  depth_edges.retired.clear();
 }
 
 void OnDestroyDepthEdgesResource(reshade::api::device* /*device*/, reshade::api::resource resource) {
@@ -983,8 +979,6 @@ void OnDestroyDepthEdgesDevice(reshade::api::device* device) {
   depth_edges.size_bytes = 0u;
 }
 
-bool initialized = false;
-
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -1002,7 +996,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::state::use_render_target_tracking = true;
       custom_shaders.at(DEPTH_CAPTURE_SHADER_HASH).on_replace = OnDepthCaptureReplace;
       for (const uint32_t hash : {0x495002B9u, 0x624D485Au}) {
-        custom_shaders.at(hash).on_replace = [](reshade::api::command_list* cmd_list) {
+        custom_shaders.at(hash).on_replace = [](reshade::api::command_list* /*cmd_list*/) {
           game_hdr_in_use = true;
           return true;
         };
@@ -1017,7 +1011,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .get_view = GetDepthEdgesView,
         }};
       }
-      if (!initialized) {
+      {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
@@ -1061,13 +1055,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::device_proxy_wait_idle_source = false;
         renodx::mods::swapchain::device_proxy_wait_idle_destination = false;
 
-        // Post-tonemap 8-bit targets (FXAA/MLAA, bokeh, CAS, UI).
-        // Both rules match by back-buffer aspect ratio (render-resolution rounding, e.g. 1707x960) and a minimum size
-        // set in OnInitSwapchain; until the first swapchain the minimum is int16 max, so nothing matches.
-        // The sRGB rule's minimum (0.2x) covers R/2 at RenderScale 0.5 and knowingly includes the full-resolution
-        // G-buffer RT1 clone (memory cost only; it was the shipped config before 2026-11-22 14:25).
-        typeless_target_index = static_cast<int>(renodx::mods::swapchain::swap_chain_upgrade_targets.size());
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        // Post-tonemap 8-bit targets matched by back-buffer aspect ratio; min_dimensions are set in OnInitSwapchain.
+        typeless_target_index = static_cast<int>(renodx::mods::swapchain::resource_upgrade_infos.size());
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,  // has to be float instead of typeless
             .use_resource_view_cloning = true,
@@ -1076,8 +1066,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .min_dimensions = {.width = INT16_MAX, .height = INT16_MAX},
             .usage_include = reshade::api::resource_usage::render_target,
         });
-        half_res_srgb_target_index = static_cast<int>(renodx::mods::swapchain::swap_chain_upgrade_targets.size());
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        half_res_srgb_target_index = static_cast<int>(renodx::mods::swapchain::resource_upgrade_infos.size());
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
             .new_format = reshade::api::format::r16g16b16a16_float,  // has to be float instead of typeless
             .use_resource_view_cloning = true,
@@ -1086,10 +1076,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .min_dimensions = {.width = INT16_MAX, .height = INT16_MAX},
             .usage_include = reshade::api::resource_usage::render_target,
         });
-
-        renodx::utils::random::binds.push_back(&shader_injection.custom_random);
-
-        initialized = true;
       }
 
       break;
@@ -1105,7 +1091,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-  renodx::utils::random::Use(fdw_reason);
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
 
   return TRUE;
 }

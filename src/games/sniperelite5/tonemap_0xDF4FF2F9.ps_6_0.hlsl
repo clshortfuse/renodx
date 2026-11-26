@@ -116,7 +116,7 @@ float4 main(
       if (RENODX_GAMMA_CORRECTION != 0.f) {
         display_peak = renodx::color::correct::Gamma(display_peak, RENODX_GAMMA_CORRECTION > 0.f, abs(RENODX_GAMMA_CORRECTION) == 1.f ? 2.2f : 2.4f);
       }
-      // shoulder 0.5 (measured on 2 sunny views): <1% of pixels differ from None, brightest 0.01% stays at 95-98% of peak
+      // DICE shoulder starts at half the display peak
       colour = renodx::tonemap::dice::BT709(colour, display_peak, 0.5f * display_peak);
     }
     // RenoDX: a non-finite value becomes 0 so it cannot spread through float targets (negatives stay for wide gamut)
