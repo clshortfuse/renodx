@@ -1,0 +1,12 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "sniperelite5",
+  "title": "Sniper Elite 5",
+  "status": "experimental",
+  "deploy": {
+    "steam_appid": 1029690,
+    "game_exe": "Sniper5_dx12.exe",
+    "api": "d3d12",
+    "architecture": "x64"
+  }
+}

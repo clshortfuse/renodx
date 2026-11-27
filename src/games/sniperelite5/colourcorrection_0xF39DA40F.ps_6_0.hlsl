@@ -1,0 +1,45 @@
+#include "./shared.h"
+#include "./colourcorrection.hlsli"
+
+Texture2D<float4> g_xSceneTextureLinear : register(t2);
+
+Texture2D<float4> g_xSceneTextureSRGB : register(t3);
+
+Texture3D<float4> g_xCCLutTexture : register(t4);
+
+cbuffer ColourCorrectionPSConstants : register(b9) {
+  float g_fIntensity : packoffset(c000.x);
+};
+
+SamplerState g_xPointClamp : register(s1);
+
+SamplerState g_xBilinearClamp : register(s3);
+
+float4 main(
+  noperspective float4 SV_Position : SV_Position,
+  linear float2 TEXCOORD : TEXCOORD
+) : SV_Target {
+  float4 SV_Target;
+  // float4 _13 = g_xSceneTextureLinear.Load(int3(int(SV_Position.x), int(SV_Position.y), 0));  // custom: no longer used for LUT coords
+  // float4 _23 = g_xCCLutTexture.Sample(g_xBilinearClamp, float3(((_13.x * 0.9375f) + 0.03125f), ((_13.y * 0.9375f) + 0.03125f), ((_13.z * 0.9375f) + 0.03125f)));  // custom: replaced below
+  float4 _27 = g_xSceneTextureSRGB.Sample(g_xPointClamp, float2(TEXCOORD.x, TEXCOORD.y));
+
+  // custom: HDR bridge around the SDR colour-grading LUT
+  float3 hdr = _27.xyz;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    float3 sdr = saturate(hdr);
+    float3 graded_sdr = lerp(
+        sdr,
+        g_xCCLutTexture.Sample(g_xBilinearClamp, renodx::color::srgb::EncodeSafe(sdr) * 0.9375f + 0.03125f).xyz,
+        g_fIntensity * CUSTOM_LUT_STRENGTH);  // RenoDX: colour grading LUT strength slider
+    SV_Target.xyz = graded_sdr;
+  } else {
+    // RenoDX: gamut-compress + max-channel bridge into the LUT, then undo both
+    SV_Target.xyz = ApplyColourCorrectionLut(hdr, g_xCCLutTexture, g_xBilinearClamp, g_fIntensity * CUSTOM_LUT_STRENGTH);
+  }
+  // SV_Target.x = ((g_fIntensity * (_23.x - _27.x)) + _27.x);  // custom: replaced above
+  // SV_Target.y = ((g_fIntensity * (_23.y - _27.y)) + _27.y);  // custom: replaced above
+  // SV_Target.z = ((g_fIntensity * (_23.z - _27.z)) + _27.z);  // custom: replaced above
+  SV_Target.w = _27.w;
+  return SV_Target;
+}
