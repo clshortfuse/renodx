@@ -1,0 +1,11 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "CODMW3",
+  "title": "Call of Duty: Modern Warfare 3 (64-bit)",
+  "status": "experimental",
+  "deploy": {
+    "architecture": [
+      "x64"
+    ]
+  }
+}

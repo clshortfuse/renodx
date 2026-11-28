@@ -21,8 +21,10 @@ namespace internal {
 static bool attached = false;
 }  // namespace internal
 
-static bool PatchIAT(const char* moduleName, void* function, void* hook, void** trampoline, const char* functionName = nullptr) {
-  HMODULE hModule = GetModuleHandle(nullptr);  // Current module (exe or DLL)
+// targetModule selects whose import table is patched; nullptr is the game's exe.
+static bool PatchIAT(const char* moduleName, void* function, void* hook, void** trampoline, const char* functionName = nullptr,
+                     HMODULE targetModule = nullptr) {
+  HMODULE hModule = targetModule != nullptr ? targetModule : GetModuleHandle(nullptr);
   if (!hModule) return false;
   if (trampoline && *trampoline != nullptr) {
     // Already hooked, do not patch again
@@ -75,8 +77,9 @@ static bool PatchIAT(const char* moduleName, void* function, void* hook, void** 
   return false;
 }
 
-static bool UnpatchIAT(const char* moduleName, void* hook, void* original, const char* functionName = nullptr) {
-  HMODULE hModule = GetModuleHandle(nullptr);  // Current module (exe or DLL)
+static bool UnpatchIAT(const char* moduleName, void* hook, void* original, const char* functionName = nullptr,
+                       HMODULE targetModule = nullptr) {
+  HMODULE hModule = targetModule != nullptr ? targetModule : GetModuleHandle(nullptr);
   if (!hModule) return false;
   if (original == nullptr) return false;
 

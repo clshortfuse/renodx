@@ -1,0 +1,13 @@
+{
+  "id": "generic_opengl",
+  "title": "Generic OpenGL Development Kit",
+  "status": "experimental",
+  "category": "engine",
+  "compatibility": "in-progress",
+  "summary": "Profile-driven GLSL/ARB replacement and opt-in compatibility-profile fixed-function injection.",
+  "deploy": {
+    "api": "opengl",
+    "architecture": ["x86", "x64"],
+    "reshade_preferred_name": "opengl32.dll"
+  }
+}

@@ -250,6 +250,11 @@ struct HandleFrameResult {
 }
 
 [[nodiscard]] bool MatchesDevkitPipePrefix(std::string_view pipe_name) {
+  // Keep the full enumerated name when connecting: LOCAL is part of the name,
+  // not a directory to discard. Legacy Win32 endpoints remain discoverable.
+  if (pipe_name.size() >= 6 && _strnicmp(pipe_name.data(), "LOCAL\\", 6) == 0) {
+    pipe_name.remove_prefix(6);
+  }
   return pipe_name.starts_with(DEFAULT_PIPE_PREFIX);
 }
 

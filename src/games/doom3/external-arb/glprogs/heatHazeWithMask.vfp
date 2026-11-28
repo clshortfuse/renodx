@@ -1,0 +1,101 @@
+
+!!ARBvp1.0 OPTION ARB_position_invariant ;
+
+# input:
+#
+# texcoord[0] TEX0	texcoords
+#
+# local[0]	scroll
+# local[1]	deform magnitude (1.0 is reasonable, 2.0 is twice as wavy, 0.5 is half as wavy, etc)
+#
+# output:
+#
+# texture 0 is _currentRender
+# texture 1 is a normal map that we will use to deform texture 0
+#
+# texCoord[0] is the model surface texture coords unmodified for the mask
+# texCoord[1] is the model surface texture coords with a scroll
+# texCoord[2] is the copied deform magnitude
+
+TEMP	R0, R1, R2;
+
+# texture 0 takes the texture coordinates unmodified
+MOV		result.texcoord[0], vertex.texcoord[0];
+
+# texture 1 takes the texture coordinates and adds a scroll
+ADD		result.texcoord[1], vertex.texcoord[0], program.local[0];
+
+# texture 2 takes the deform magnitude and scales it by the projection distance
+PARAM	vec = { 1, 0, 0, 1 };
+
+MOV		R0, vec;
+DP4		R0.z, vertex.position, state.matrix.modelview.row[2];
+
+DP4		R1, R0, state.matrix.projection.row[0];
+DP4		R2, R0, state.matrix.projection.row[3];
+
+# don't let the recip get near zero for polygons that cross the view plane
+MAX		R2, R2, 1;
+
+RCP		R2, R2.w;
+MUL		R1, R1, R2;
+
+# clamp the distance so the the deformations don't get too wacky near the view
+MIN		R1, R1, 0.02;
+
+MUL		result.texcoord[2], R1, program.local[1];
+
+END
+
+#======================================================================
+
+!!ARBfp1.0
+OPTION ARB_precision_hint_fastest;
+
+# nodhewm3gammahack -- custom gamma tail preserves HDR range
+TEMP renodxResult;
+
+# texture 0 is _currentRender
+# texture 1 is a normal map that we will use to deform texture 0
+# texture 2 is a mask texture
+#
+# env[0] is the 1.0 to _currentRender conversion
+# env[1] is the fragment.position to 0.0 - 1.0 conversion
+
+TEMP	localNormal, mask, R0;
+
+PARAM	subOne = { -1, -1, -1, -1 };
+PARAM	scaleTwo = { 2, 2, 2, 2 };
+
+# load the distortion map
+TEX		mask, fragment.texcoord[0], texture[2], 2D;
+
+# kill the pixel if the distortion wound up being very small
+SUB		mask.xy, mask, 0.01;
+KIL		mask;
+
+# load the filtered normal map and convert to -1 to 1 range
+TEX		localNormal, fragment.texcoord[1], texture[1], 2D;
+MOV		localNormal.x, localNormal.a;
+MAD		localNormal, localNormal, scaleTwo, subOne;
+MUL		localNormal, localNormal, mask;
+
+# calculate the screen texcoord in the 0.0 to 1.0 range
+MUL		R0, fragment.position, program.env[1];
+
+# offset by the scaled localNormal and clamp it to 0.0 - 1.0
+MAD_SAT	R0, localNormal, fragment.texcoord[2], R0;
+
+# scale by the screen non-power-of-two-adjust
+MUL		R0, R0, program.env[0];
+
+# load the screen render
+TEX		renodxResult.xyz, R0, texture[0], 2D;
+
+MUL renodxResult.xyz, program.env[21], renodxResult;
+MAX renodxResult.xyz, renodxResult, 0.0;
+POW result.color.x, renodxResult.x, program.env[21].w;
+POW result.color.y, renodxResult.y, program.env[21].w;
+POW result.color.z, renodxResult.z, program.env[21].w;
+MOV result.color.w, renodxResult.w;
+END

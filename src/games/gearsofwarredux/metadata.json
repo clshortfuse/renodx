@@ -1,0 +1,14 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "gearsofwarredux",
+  "title": "Gears of War Redux",
+  "status": "experimental",
+  "deploy": {
+    "game_exe": "Gears Of War Redux.exe",
+    "process_name": "Gears Of War Redux",
+    "api": "d3d11",
+    "architecture": [
+      "x64"
+    ]
+  }
+}
