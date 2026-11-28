@@ -7,8 +7,8 @@
 
 #define GEARSRELOADED_TONE_MAP_TYPE_VANILLA   0.f
 #define GEARSRELOADED_TONE_MAP_TYPE_RENODRT   3.f
-#define GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV30 30.f
 #define GEARSRELOADED_TONE_MAP_TYPE_PRISM     31.f
+#define GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV35 30.f  // Retain the former V30 preset ID.
 
 // ============================================================================
 // Shader injection
@@ -16,7 +16,7 @@
 //
 // Existing fields remain in their original order.
 //
-// PsychoV30 controls are appended to the end so existing offsets stay stable.
+// PsychoV35 retains the former V30 fields so existing offsets stay stable.
 // PrismTM has no parameters of its own.
 //
 
@@ -61,7 +61,7 @@ struct ShaderInjectData {
   float custom_flip_uv_y;
 
   // --------------------------------------------------------------------------
-  // PsychoV30
+  // PsychoV35 controls retain the former V30 field names for ABI compatibility.
   // --------------------------------------------------------------------------
 
   float psychov30_purity_scale;
@@ -71,10 +71,23 @@ struct ShaderInjectData {
 
   float psychov30_gamut_target;
 
-  // 36 floats: already on a float4 boundary.
+  float reserved_sdr_match;
+  float padding_0;
+  float padding_1;
+  float padding_2;
+
+  // 40 floats: existing fields retain their original offsets.
 };
 
+#ifdef __cplusplus
+static_assert(sizeof(ShaderInjectData) % 16 == 0);
+#endif
+
 #ifndef __cplusplus
+
+#ifndef GEARSRELOADED_SDR_BLACK_MATCH
+#define GEARSRELOADED_SDR_BLACK_MATCH 1.f
+#endif
 
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
 
@@ -178,22 +191,22 @@ cbuffer shader_injection : register(b13) {
   shader_injection.swap_chain_encoding_color_space
 
 // ============================================================================
-// PsychoV30 bindings
+// PsychoV35 bindings (existing field layout)
 // ============================================================================
 
-#define RENODX_PSYCHOV30_PURITY_SCALE \
+#define RENODX_PSYCHOV35_PURITY_SCALE \
   shader_injection.psychov30_purity_scale
 
-#define RENODX_PSYCHOV30_CONE_RESPONSE \
+#define RENODX_PSYCHOV35_CONE_RESPONSE \
   shader_injection.psychov30_cone_response_exponent
 
-#define RENODX_PSYCHOV30_GAMUT_COMPRESSION \
+#define RENODX_PSYCHOV35_GAMUT_COMPRESSION \
   shader_injection.psychov30_gamut_compression
 
-#define RENODX_PSYCHOV30_COMPRESSION \
+#define RENODX_PSYCHOV35_COMPRESSION \
   shader_injection.psychov30_compression
 
-#define RENODX_PSYCHOV30_GAMUT_TARGET \
+#define RENODX_PSYCHOV35_GAMUT_TARGET \
   shader_injection.psychov30_gamut_target
 
 #define RENODX_RENO_DRT_TONE_MAP_METHOD \

@@ -12,6 +12,8 @@ float3 ExtractGameBloom(float3 color, float threshold, float peak_relative_to_wh
     // Join the native curve at its old ceiling with a slope of one.
     amount += headroom * (1.f - exp(-(excess - 1.f) / max(headroom, 1.e-6f)));
   }
+  // Restore a more pronounced glow in HDR, before the shared display mapper.
+  if (UseSceneHDR()) amount *= 1.5f;
   // The original blur shaders decode sRGB before filtering.
   return EncodeGameSRGB(color * (amount / max(maximum, 1.e-6f)));
 }

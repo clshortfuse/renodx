@@ -1,7 +1,8 @@
 #ifndef SRC_UNREALENGINE_SHARED_H_
 #define SRC_UNREALENGINE_SHARED_H_
 
-#define GEARS4_TONE_MAP_PSYCHOV30 30.f
+// Preserve the V30 selection ID and injected layout for existing profiles.
+#define GEARS4_TONE_MAP_PSYCHOV35 30.f
 #define GEARS4_TONE_MAP_PRISM     31.f
 
 // Must be 32bit aligned
@@ -83,11 +84,11 @@ cbuffer injected_buffer : register(b13) {
 #define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.color_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             shader_injection.color_grade_hue_shift
-#define RENODX_PSYCHOV30_PURITY_SCALE            shader_injection.psychov30_purity_scale
-#define RENODX_PSYCHOV30_CONE_RESPONSE           shader_injection.psychov30_cone_response
-#define RENODX_PSYCHOV30_GAMUT_COMPRESSION       shader_injection.psychov30_gamut_compression
-#define RENODX_PSYCHOV30_GAMUT_TARGET            shader_injection.psychov30_gamut_target
-#define RENODX_PSYCHOV30_COMPRESSION             shader_injection.psychov30_compression
+#define RENODX_PSYCHOV35_PURITY_SCALE            shader_injection.psychov30_purity_scale
+#define RENODX_PSYCHOV35_CONE_RESPONSE           shader_injection.psychov30_cone_response
+#define RENODX_PSYCHOV35_GAMUT_COMPRESSION       shader_injection.psychov30_gamut_compression
+#define RENODX_PSYCHOV35_GAMUT_TARGET            shader_injection.psychov30_gamut_target
+#define RENODX_PSYCHOV35_COMPRESSION             shader_injection.psychov30_compression
 #define CUSTOM_LUT_OPTIMIZATION                  1.f
 #define CUSTOM_GRAIN_TYPE                        0.f
 #define CUSTOM_GRAIN_STRENGTH                    1.f

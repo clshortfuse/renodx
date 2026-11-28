@@ -2,6 +2,7 @@
 #define GEARSOFWAR4_LEGACY_LUT_HLSL_
 
 #include "../common.hlsl"
+#include "../lut_domain.hlsl"
 
 // These older builders finish their pre-film grading in BT.709, not AP1.
 void SetGearsUntonemappedBT709(float3 color) {
@@ -15,7 +16,10 @@ void SetGearsUntonemappedBT709(float3 color) {
 // section, color matrix and shadow tint. The added term is tangent(x)-curve(x):
 // (a*d-b)*(x-h)^2 / ((h+d)^2*(x+d)). It is zero with zero derivative at h.
 // Work on the pre-curve value, before the original shader clamps it to h.
-float3 ExtendGearsLegacyShoulder(float3 input, float3 vanilla, float h, float d, float a, float b) {
+float3 GetGearsLegacyHdrInput(float3 input, float3 vanilla, float h, float d, float a, float b) {
+  // PsychoV35 replaces the display curve. Preserve the linear signal after
+  // the game's color matrix and shadow tint instead of shaping it twice.
+  if (RENODX_TONE_MAP_TYPE == GEARS4_TONE_MAP_PSYCHOV35) return input;
   float denominator = h + d;
   float numerator = a * d - b;
   float3 extended = vanilla;

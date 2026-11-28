@@ -1,3 +1,18 @@
+Highlight extension (2026-11-19):
+- Custom HDR tonemappers now extend reconstructed scene highlights before their
+  display shoulder. For RGB maximum m above diffuse white, the extension uses
+  m + (m - 1)^2 and scales RGB uniformly. Values through 1.0 are unchanged, and
+  the transition retains unit slope. Vanilla and later UI composition bypass it.
+- Set Peak Brightness to 4000 nits for the requested ceiling; the existing
+  display shoulder and output clamp still enforce the configured peak.
+- DevKit compiled and activated all seven tonemapper variants. The active
+  0x9B6E3C62 path produced sampled scRGB peak luminance around 3100-3800 nits,
+  with finite, nonnegative output. These are live, changing-frame measurements,
+  not a frozen-frame A/B comparison or validation of every scene/menu variant.
+- This session uses DevKit live replacements. The addon has not been rebuilt;
+  close Ghosts and build CODGHOSTS with the command below to embed this change.
+  Verify other scenes and Vanilla/UI behavior manually after rebuilding.
+
 COD Ghosts - Shared tone-mapper basis (updated 2026-10-01)
 
 All seven tone-mapper shaders now include common.hlsl. This replaces the

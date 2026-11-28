@@ -9,6 +9,7 @@ float4 main(float2 texcoord : TEXCOORD0) : COLOR0 {
   // The two preceding downsample passes store the normalization in alpha.
   float3 color = max(DecodeGameSRGB(packed.rgb) * (CBHDRFactor__packed0.w * CBHDRFactor__packed0.z)
       / max(packed.a, 1.e-6f), 0.f);
+  color *= GameHDRExposureRatio(CBHDRFactor__packed0);
   float peak = UseSceneHDR() ? RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS : 1.f;
   return float4(ExtractGameBloom(color, CBBloomFilter__packed0.w, peak), 1.f);
 }

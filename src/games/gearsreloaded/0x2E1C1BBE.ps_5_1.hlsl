@@ -75,6 +75,14 @@ void main(
   r0.xyz = r0.xyz * r0.xyz;
   r0.xyz = float3(1,1,1) + -r0.xyz;
   r0.xyz = NeutralScale * r0.xyz;
+  // Build alpha on the native SDR grid independently of the HDR PQ grid.
+  float3 sdr_grade = LUTWeights[0] * r0.xyz
+      + LUTWeights[1] * GearsReloadedSampleArtistLUT(Texture1, LUTSampler_s, r0.xyz);
+  // Captured SDR OutputColorSpace=1: artist gamma 2.2, then sRGB output.
+  // Store sRGB-shaped luminance so SDR interpolation precedes decoding.
+  sdr_grade = pow(saturate(sdr_grade), 2.2f);
+  float sdr_reference_luminance = renodx::color::srgb::Encode(dot(sdr_grade,
+      float3(0.2126f, 0.7152f, 0.0722f)));
   r1.xyz = cmp(OutputColorSpace == int3(2,0,3));
   // Interpolated UVs can put the zero LUT node just below zero.
   r2.xyz = log2(max(r0.xyz, 0.f));
@@ -447,6 +455,9 @@ void main(
     }
     o0.xyz = r1.yzw;
     o0.w = 0;
+  }
+  if (custom_hdr) {
+    o0.a = sdr_reference_luminance;
   }
   return;
 }

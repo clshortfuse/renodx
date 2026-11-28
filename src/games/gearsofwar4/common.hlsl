@@ -1,5 +1,6 @@
 #include "./shared.h"
 #include "./prismTM.hlsl"
+#include "../../shaders/tonemap/psychov/test35.hlsl"
 
 // clang-format off
 static struct UELutBuilderConfig {
@@ -72,12 +73,12 @@ void SetGradedBT709(inout float3 color) {
   RENODX_UE_CONFIG.graded_bt709 *= sign(RENODX_UE_CONFIG.tonemapped_bt709);
 }
 
-// PsychoV30 and Prism are not ToneMapPass types, and ToneMapPass would apply only
+// PsychoV35 and Prism are not ToneMapPass types, and ToneMapPass would apply only
 // the user grade for them. They map the linear graded signal to the true display
 // peak. Gamma correction stays after the tone map, in RenderIntermediatePass.
 float3 Gears4ToneMapPass(float3 color, renodx::draw::Config config) {
   [branch]
-  if (config.tone_map_type != GEARS4_TONE_MAP_PSYCHOV30 && config.tone_map_type != GEARS4_TONE_MAP_PRISM) {
+  if (config.tone_map_type != GEARS4_TONE_MAP_PSYCHOV35 && config.tone_map_type != GEARS4_TONE_MAP_PRISM) {
     return renodx::draw::ToneMapPass(color, config);
   }
 
@@ -94,14 +95,30 @@ float3 Gears4ToneMapPass(float3 color, renodx::draw::Config config) {
 
   float peak = config.peak_white_nits / config.diffuse_white_nits;
   [branch]
-  if (config.tone_map_type == GEARS4_TONE_MAP_PSYCHOV30) {
-    color = renodx::tonemap::psychov::psychotm_test30(
-        color, peak, 1.f, 1.f, 1.f, 1.f,
-        RENODX_PSYCHOV30_PURITY_SCALE, 1.f, 100.f, 1.f, 1.f, 0,
-        RENODX_PSYCHOV30_CONE_RESPONSE, 0.18f, 0.18f,
-        RENODX_PSYCHOV30_GAMUT_COMPRESSION,
-        RENODX_PSYCHOV30_GAMUT_TARGET >= 0.5f ? 1 : 0, 1.f,
-        RENODX_PSYCHOV30_COMPRESSION);
+  if (config.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35) {
+    // RenderIntermediatePass applies gamma correction after this mapper.
+    // Invert that operation for the ceiling so the final LUT reaches the
+    // requested display peak without scaling diffuse white or the whole image.
+    if (config.gamma_correction == renodx::draw::GAMMA_CORRECTION_GAMMA_2_2) {
+      peak = renodx::color::correct::GammaSafe(peak, true, 2.2f);
+    } else if (config.gamma_correction == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4) {
+      peak = renodx::color::correct::GammaSafe(peak, true, 2.4f);
+    }
+    // Reconstructed legacy grades can leave the positive signal domain.
+    // Test35's logarithmic cone response does not repair unsupported inputs.
+    float3 psychov35_input = max(color, 0.f);
+    color = renodx::tonemap::psychov::psychotm_test35(
+        psychov35_input, peak, 1.f, 1.f, 1.f, 1.f,
+        RENODX_PSYCHOV35_PURITY_SCALE, 1.f, 100.f, 1.f, 1.f, 0,
+        RENODX_PSYCHOV35_CONE_RESPONSE, 0.18f, 0.18f,
+        RENODX_PSYCHOV35_GAMUT_COMPRESSION,
+        RENODX_PSYCHOV35_GAMUT_TARGET >= 0.5f ? 1 : 0, 1.f,
+        RENODX_PSYCHOV35_COMPRESSION);
+    // Reject the entire invalid triplet before writing the generated LUT;
+    // a single NaN cell can contaminate many interpolated scene pixels.
+    if (any((asuint(color) & 0x7F800000u) == 0x7F800000u)) {
+      color = psychov35_input / (1.f + max(psychov35_input.r, max(psychov35_input.g, psychov35_input.b)) / peak);
+    }
   } else {
     color = prism(color, peak);
   }
@@ -115,6 +132,11 @@ float3 Gears4ToneMapPass(float3 color, renodx::draw::Config config) {
             0.f, 0.f, renodx::color::grade::config::hue_correction_type::INPUT,
             1.f - config.tone_map_highlight_saturation));
   }
+
+  // PsychoV35 smoothly fits its selected target gamut. Its BT.709-encoded
+  // output can exceed the BT.709 channel ceiling when targeting BT.2020;
+  // clipping that representation would discard valid wide-gamut highlights.
+  if (config.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35) return color;
 
   // Prism's outset and the chroma controls can overshoot; scale RGB evenly so hue holds.
   return color * min(1.f, peak / max(max(color.r, max(color.g, color.b)), 1e-6f));

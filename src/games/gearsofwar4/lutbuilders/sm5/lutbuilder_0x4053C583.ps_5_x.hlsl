@@ -26,7 +26,7 @@ void main(
   r0.x = (uint)v2.x;
   r0.z = 0.0322580636 * r0.x;
   r0.xy = v0.xy;
-  r0.xyz = float3(-0.434017599, -0.434017599, -0.434017599) + r0.xyz;
+  r0.xyz = float3(-0.434017599, -0.434017599, -0.434017599) + ExpandGearsLutCoordinates(r0.xyz);
   r0.xyz = float3(14, 14, 14) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
   r0.xyz = float3(0.180000007, 0.180000007, 0.180000007) * r0.xyz;
@@ -312,7 +312,7 @@ void main(
   float3 neutral_legacy = saturate(r1.xyz);
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     if (legacy_tonemapper) {
-      SetGearsUntonemappedBT709(ExtendGearsLegacyShoulder(
+      SetGearsUntonemappedBT709(GetGearsLegacyHdrInput(
           legacy_curve_input, r1.xyz, cb0[24].z, cb0[24].w,
           cb0[25].x, cb0[25].y));
     }

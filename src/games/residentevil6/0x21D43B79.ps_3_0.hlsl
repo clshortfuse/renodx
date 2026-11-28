@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./color_grade.hlsli"
 
 sampler2D SSPoint__tBaseMap : register(s0);
 float4 CBHDRFactor__packed0 : register(c1);
@@ -91,7 +91,7 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
     // keep the same multipliers, but remove the saturate.
     float hdr_scale =
         CBHDRFactor__packed0.y *
-        CBHDRFactor__packed0.z;
+        CBHDRFactor__packed0.z * GameHDRExposureRatio(CBHDRFactor__packed0);
 
     float3 hdr_color = SafePositive(linear_color * hdr_scale);
 

@@ -2,7 +2,7 @@
 #define SRC_GAMES_GEARSRELOADED_COMMON_HLSL_
 
 #include "./shared.h"
-#include "../../shaders/tonemap/psychov/psychov.hlsl"
+#include "../../shaders/tonemap/psychov/test35.hlsl"
 #include "./prismTM.hlsl"
 
 #define GEARSRELOADED_CUSTOM_HDR_ENABLED (RENODX_PEAK_WHITE_NITS >= 48.f && RENODX_TONE_MAP_TYPE != GEARSRELOADED_TONE_MAP_TYPE_VANILLA)
@@ -20,14 +20,23 @@ static const float GEARSRELOADED_REFERENCE_HABLE_INVERSE_WHITE = 0.5151363611221
 static const float GEARSRELOADED_REFERENCE_HABLE_ASYMPTOTE = 1.1304830312728882f;
 
 // Preserve the engine's centered packed LUT and interpolation between slices.
-float3 GearsReloadedSampleStripLUT(Texture2D<float4> lut, SamplerState lut_sampler, float3 encoded, float size) {
+float4 GearsReloadedSampleStripLUT(Texture2D<float4> lut, SamplerState lut_sampler, float3 encoded, float size) {
   float3 coordinate = saturate(encoded);
   float lower_slice = floor(coordinate.b * (size - 1.f - 1e-4f));
   float blend = coordinate.b * (size - 1.f) - lower_slice;
   float2 uv = float2((coordinate.r * (size - 1.f) + lower_slice * size + 0.5f) / (size * size),
       (coordinate.g * (size - 1.f) + 0.5f) / size);
+  return lerp(lut.SampleLevel(lut_sampler, uv, 0),
+      lut.SampleLevel(lut_sampler, uv + float2(1.f / size, 0.f), 0), blend);
+}
+
+float3 GearsReloadedSampleArtistLUT(Texture2D<float4> lut, SamplerState lut_sampler, float3 encoded) {
+  float lower_slice = floor(encoded.b * 14.9999f);
+  float2 uv = float2((encoded.r * 0.9375f + lower_slice + 0.03125f) / 16.f,
+      encoded.g * 0.9375f + 0.03125f);
   return lerp(lut.SampleLevel(lut_sampler, uv, 0).rgb,
-      lut.SampleLevel(lut_sampler, uv + float2(1.f / size, 0.f), 0).rgb, blend);
+      lut.SampleLevel(lut_sampler, uv + float2(1.f / 16.f, 0.f), 0).rgb,
+      encoded.b * 15.f - lower_slice);
 }
 
 float3 GearsReloadedToneMapPass(float3 untonemapped, float4 overlay,
@@ -37,9 +46,9 @@ float3 GearsReloadedToneMapPass(float3 untonemapped, float4 overlay,
       / (untonemapped * (0.335f * untonemapped + 0.784f) + 0.663f) - 0.417647064f;
   hable = max(hable * GEARSRELOADED_REFERENCE_SCENE_WHITE_SCALE, 0.f);
   float3 lut_coordinate = renodx::color::pq::EncodeSafe(hable, 100.f);
+  float4 reference_sample = GearsReloadedSampleStripLUT(grade_lut, lut_sampler, lut_coordinate, 32.f);
   float3 reference_bt2020 = renodx::color::pq::DecodeSafe(
-      GearsReloadedSampleStripLUT(grade_lut, lut_sampler, lut_coordinate, 32.f) * 1.05f,
-      GEARSRELOADED_REFERENCE_WHITE_NITS);
+      reference_sample.rgb * 1.05f, GEARSRELOADED_REFERENCE_WHITE_NITS);
   float3 reference = renodx::color::bt709::from::BT2020(reference_bt2020);
 
   // Evaluate the same bounded native curve without the artist grade. This is
@@ -82,11 +91,18 @@ float3 GearsReloadedToneMapPass(float3 untonemapped, float4 overlay,
   reference = renodx::color::grade::config::ApplyUserColorGrading(reference, grade_config);
 
   float peak = GEARSRELOADED_HDR_PEAK_NITS / GEARSRELOADED_HDR_PAPER_WHITE_NITS;
-  if (RENODX_TONE_MAP_TYPE == GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV30) {
-    mapped = renodx::tonemap::psychov::psychotm_test30(mapped, peak,
-        1.f, 1.f, 1.f, 1.f, RENODX_PSYCHOV30_PURITY_SCALE, 1.f, 100.f, 1.f, 1.f, 0,
-        RENODX_PSYCHOV30_CONE_RESPONSE, 0.18f, 0.18f, RENODX_PSYCHOV30_GAMUT_COMPRESSION,
-        (int)RENODX_PSYCHOV30_GAMUT_TARGET, 1.f, RENODX_PSYCHOV30_COMPRESSION);
+  if (RENODX_TONE_MAP_TYPE == GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV35) {
+    // Test35 consumes linear BT.709. Legacy grade reconstruction can leave
+    // negative channels, so constrain its input at this game boundary.
+    float3 psycho_input = max(mapped, 0.f);
+    mapped = renodx::tonemap::psychov::psychotm_test35(psycho_input, peak,
+        1.f, 1.f, 1.f, 1.f, RENODX_PSYCHOV35_PURITY_SCALE, 1.f, 100.f, 1.f, 1.f, 0,
+        max(RENODX_PSYCHOV35_CONE_RESPONSE, 1.e-4f), 0.18f, 0.18f,
+        RENODX_PSYCHOV35_GAMUT_COMPRESSION, (int)RENODX_PSYCHOV35_GAMUT_TARGET,
+        1.f, RENODX_PSYCHOV35_COMPRESSION);
+    if (!all(isfinite(mapped))) {
+      mapped = psycho_input / (1.f + max(psycho_input.r, max(psycho_input.g, psycho_input.b)) / peak);
+    }
   } else if (RENODX_TONE_MAP_TYPE == GEARSRELOADED_TONE_MAP_TYPE_PRISM) {
     mapped = prism(mapped, peak);
   } else {
@@ -104,6 +120,14 @@ float3 GearsReloadedToneMapPass(float3 untonemapped, float4 overlay,
     config.tone_map_blowout = 0.f;
     mapped = renodx::draw::ToneMapPass(mapped, config);
   }
+  // The mapper owns highlight luminance; the authored LUT owns chromaticity.
+  // Reconstructing the grade and then mapping it can wash saturated native
+  // highlights toward white, even while the neutral ramp remains matched.
+  float reference_luminance = renodx::color::y::from::BT709(reference);
+  float mapped_luminance = max(renodx::color::y::from::BT709(mapped), 0.f);
+  if (reference_luminance > 1.e-6f) {
+    mapped = reference * (mapped_luminance / reference_luminance);
+  }
   if (RENODX_TONE_MAP_BLOWOUT != 0.f || RENODX_TONE_MAP_HIGHLIGHT_SATURATION != 1.f) {
     mapped = renodx::color::grade::config::ApplyUserColorGrading(mapped,
         renodx::color::grade::config::Create(1.f, 1.f, 1.f, 1.f, 0.f, 1.f,
@@ -117,6 +141,20 @@ float3 GearsReloadedToneMapPass(float3 untonemapped, float4 overlay,
   float reference_max = max(reference_bt2020.r, max(reference_bt2020.g, reference_bt2020.b));
   float match_weight = 1.f - smoothstep(match_low, match_high, reference_max);
   mapped = lerp(mapped, reference, match_weight);
+  if (GEARSRELOADED_SDR_BLACK_MATCH > 0.f) {
+    // Limit SDR matching to low luminance. The native HDR reference and
+    // selected mapper keep their existing midtone and highlight behavior.
+    // Alpha uses the native SDR address and sRGB encoding; RGB retains HDR PQ.
+    float sdr_luminance = renodx::color::srgb::Decode(max(GearsReloadedSampleStripLUT(grade_lut, lut_sampler,
+        pow(saturate(hable), 1.f / 2.2f), 32.f).a, 0.f));
+    float reference_level = max(sdr_luminance, max(hable.r, max(hable.g, hable.b)));
+    float weight = saturate(GEARSRELOADED_SDR_BLACK_MATCH)
+        * (1.f - smoothstep(0.01f, 0.05f, reference_level));
+    float3 graded_sdr_luminance = renodx::color::grade::config::ApplyUserColorGrading(
+        sdr_luminance.xxx, grade_config);
+    float mapped_luminance = max(renodx::color::y::from::BT709(mapped), 0.f);
+    mapped *= lerp(1.f, max(graded_sdr_luminance.x, 0.f) / max(mapped_luminance, 1.e-6f), weight);
+  }
   mapped = lerp(mapped, max(overlay.rgb, 0.f), saturate(overlay.a));
   float3 bt2020 = max(renodx::color::bt2020::from::BT709(mapped), 0.f);
   bt2020 *= min(1.f, peak / max(max(bt2020.r, max(bt2020.g, bt2020.b)), 1e-6f));

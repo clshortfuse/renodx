@@ -185,6 +185,12 @@ float3 GhostsRestoreGrade(float3 proxy, float3 graded, float scale) {
       / max(scale, GHOSTS_EPSILON));
 }
 float3 GhostsDisplayMap(float3 color) {
+  // Extend scene highlights before the display shoulder. Diffuse white and
+  // darker values keep their response; uniform RGB scaling preserves the
+  // reconstructed grade's chromaticity at this stage.
+  float maximum = max(color.r, max(color.g, color.b));
+  float excess = max(maximum - 1.f, 0.f);
+  color *= 1.f + GhostsSafeDivide(excess * excess, maximum);
   color = GhostsPostControls(color);
   // Keep the existing saturated-color gamut guard before perceptual transforms.
   color = GhostsSafeColor(renodx::color::bt709::clamp::AP1(color));

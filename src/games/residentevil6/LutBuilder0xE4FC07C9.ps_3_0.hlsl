@@ -164,7 +164,7 @@ float4 main(float texcoord : TEXCOORD) : COLOR {
   bool hdr = UseSceneHDR();
   o.w = saturate(curve);
 
-  float base_linear = max(hdr ? curve : o.w, kEpsilon);
+  float base_linear = max(hdr && !MatchOriginalCurve() ? curve : o.w, kEpsilon);
   float3 gamma_linear = exp2(log2(base_linear) * fColorCorrectGamma.xyz);
   float3 encoded = LinearToSRGB(gamma_linear);
   o.xyz = hdr ? encoded : QuantizeGameLut(encoded);

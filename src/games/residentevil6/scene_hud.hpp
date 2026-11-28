@@ -10,6 +10,7 @@
 #include <include/reshade.hpp>
 
 #include "../../utils/command_action.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/state.hpp"
 
 namespace re6_scene_hud {
@@ -129,11 +130,20 @@ inline void CaptureScene(api::command_list* cmd) {
 inline void TrackCopy(api::command_list* cmd, api::resource source, api::resource dest, bool full_copy) {
   auto* layers = cmd->get_device()->get_private_data<FrameLayers>();
   if (layers == nullptr || !layers->capturing) return;
+  // Native capture sees float clones; ReShade copy events carry the game's originals.
+  if (const auto clone = renodx::utils::resource::upgrade::GetResourceClone(source, {.allow_create = false});
+      clone.handle != 0u) {
+    source = clone;
+  }
+  if (const auto clone = renodx::utils::resource::upgrade::GetResourceClone(dest, {.allow_create = false});
+      clone.handle != 0u) {
+    dest = clone;
+  }
   if (dest.handle == layers->target_resource || dest.handle == layers->target_view) {
     layers->capturing = false;
   } else if (dest.handle == layers->composite_texture || dest.handle == layers->composite_view) {
     layers->copied_composite = full_copy
-        && (source.handle == layers->target_resource || source.handle == layers->target_view);
+                               && (source.handle == layers->target_resource || source.handle == layers->target_view);
   }
 }
 
@@ -159,6 +169,10 @@ inline bool OnCopyTexture(api::command_list* cmd, api::resource source, uint32_t
 inline bool OnClearTarget(api::command_list* cmd, api::resource_view target, const float[4],
                           uint32_t, const api::rect*) {
   if (auto* layers = cmd->get_device()->get_private_data<FrameLayers>(); layers != nullptr) {
+    if (const auto clone = renodx::utils::resource::upgrade::GetResourceViewClone(target, {.allow_create = false});
+        clone.handle != 0u) {
+      target = clone;
+    }
     const auto view = target.handle & ~uint64_t{1};
     if (layers->target_view == view) {
       layers->capturing = false;
@@ -171,8 +185,9 @@ inline bool OnClearTarget(api::command_list* cmd, api::resource_view target, con
 }
 
 inline constexpr auto COVERAGE_ACTION = []<typename Context>(Context& context)
-    requires(std::is_same_v<typename Context::ArgumentType, action::DrawArguments>
-             || std::is_same_v<typename Context::ArgumentType, action::DrawIndexedArguments>) {
+  requires(std::is_same_v<typename Context::ArgumentType, action::DrawArguments>
+           || std::is_same_v<typename Context::ArgumentType, action::DrawIndexedArguments>)
+{
   action::CallbackResult<Context> result;
   auto* device = context.cmd_list->get_device();
   auto* layers = device->template get_private_data<FrameLayers>();

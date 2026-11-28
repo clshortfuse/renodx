@@ -3,6 +3,9 @@
 
 #define RENODX_PSYCHOV30_SLIDER_LAYOUT_VERSION 1
 
+// Limit HDR camera darkening to two stops below neutral exposure.
+#define RE6_MIN_CAMERA_EXPOSURE 0.25f
+
 
 // Preserve the injected Psycho preset ID for compatibility with the existing addon.
 #define RENODX_TONE_MAP_TYPE_VANILLA   0.f
@@ -61,8 +64,8 @@ struct ShaderInjectData {
 
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
-  float padding1;
-  float padding2;
+  float camera_exposure_ready;
+  float original_curve_matching;
 
 
   // Existing extra value used by the swapchain proxy path.
@@ -82,7 +85,7 @@ struct ShaderInjectData {
   // complete injection payload remains exactly 40 floats / 160 bytes.
   float psychov30_cone_response;  // x
   float scene_hud_split;          // y
-  float psycho_reserved_z;        // z
+  float smoothed_camera_exposure; // z: positive when addon history is available
   float midtone_separation;      // w
 };
 
@@ -145,6 +148,8 @@ float4 shader_injection[10] : register(c50);
 
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection[7][0]
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection[7][1]
+#define RENODX_CAMERA_EXPOSURE_READY            shader_injection[7][2]
+#define RENODX_ORIGINAL_CURVE_MATCHING          shader_injection[7][3]
 
 
 #define RENODX_CUSTOM_FLIP_UV_Y                shader_injection[8][0]
@@ -154,6 +159,7 @@ float4 shader_injection[10] : register(c50);
 
 #define RENODX_PSYCHOV30_CONE_RESPONSE         shader_injection[9][0]
 #define RENODX_SCENE_HUD_SPLIT                 shader_injection[9][1]
+#define RENODX_CAMERA_EXPOSURE                 shader_injection[9][2]
 #define RENODX_MIDTONE_SEPARATION              shader_injection[9][3]
 
 
@@ -219,6 +225,8 @@ cbuffer shader_injection : register(b13) {
 
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
+#define RENODX_CAMERA_EXPOSURE_READY            shader_injection.camera_exposure_ready
+#define RENODX_ORIGINAL_CURVE_MATCHING          shader_injection.original_curve_matching
 
 
 #define RENODX_CUSTOM_FLIP_UV_Y                shader_injection.custom_flip_uv_y
@@ -227,6 +235,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_PSYCHOV30_GAMUT_MODE            shader_injection.psychov30_gamut_mode
 #define RENODX_PSYCHOV30_CONE_RESPONSE         shader_injection.psychov30_cone_response
 #define RENODX_MIDTONE_SEPARATION              shader_injection.midtone_separation
+#define RENODX_CAMERA_EXPOSURE                 shader_injection.smoothed_camera_exposure
 
 
 #endif

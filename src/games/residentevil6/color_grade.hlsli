@@ -8,6 +8,25 @@ bool UseSceneHDR() {
       && RENODX_PEAK_WHITE_NITS > RENODX_DIFFUSE_WHITE_NITS;
 }
 
+bool MatchOriginalCurve() {
+  // Zero is the former padding value in already-built addons; negative is Off.
+  return RENODX_ORIGINAL_CURVE_MATCHING >= 0.f;
+}
+
+float GameHDRExposureRatio(float4 native_factors) {
+  if (!UseSceneHDR() || native_factors.x <= 0.f || !isfinite(native_factors.x)) return 1.f;
+  // Older addons contain the previous quarter-strength history. Only consume
+  // history when the addon explicitly marks the new, native-exposure filter.
+  if (RENODX_CAMERA_EXPOSURE_READY == 1.f
+      && RENODX_CAMERA_EXPOSURE > 0.f && isfinite(RENODX_CAMERA_EXPOSURE)) {
+    // x is the camera exposure. z also includes the game's brightness scale,
+    // which must remain outside temporal filtering.
+    return max(RENODX_CAMERA_EXPOSURE, RE6_MIN_CAMERA_EXPOSURE) / max(native_factors.x, 1.e-20f);
+  }
+  // Enforce the same floor live even before the addon filter is rebuilt.
+  return max(native_factors.x, RE6_MIN_CAMERA_EXPOSURE) / max(native_factors.x, 1.e-20f);
+}
+
 float3 DecodeGameSRGB(float3 encoded) {
   return lerp(pow(max((encoded + 0.055f) * 0.947867274f, 0.f), 2.4f),
       encoded * 0.0773993805f, encoded <= 0.03928f);
@@ -72,26 +91,6 @@ float GameLutWhiteCoordinate(sampler2D table) {
   return low > 0.f ? (low + 0.5f) / 1024.f : 1.f;
 }
 
-float3 ExtendGameLutHighlights(float3 address, float3 graded, sampler2D table, float white_coordinate) {
-  // Measure each authored curve just before its white point, after the builder's gamma.
-  const float shoulder_width = 0.0625f;
-  float edge_center = min(white_coordinate, 1023.5f / 1024.f);
-  float near_edge = max(edge_center - shoulder_width, 0.5f / 1024.f);
-  float3 inner = DecodeGameSRGB(tex2Dlod(table, float4(near_edge, 0.5f, 0.f, 0.f)).rgb);
-  float3 edge = DecodeGameSRGB(tex2Dlod(table, float4(edge_center, 0.5f, 0.f, 0.f)).rgb);
-  float3 slope = max((edge - inner) / max(edge_center - near_edge, 1.e-6f), 0.f);
-  float3 excess = max(address - white_coordinate, 0.f);
-
-  // Continue at the measured slope, then approach unit slope farther past the table.
-  // Preserve the authored shoulder longer. A nearly flat early white point
-  // still needs to recover slope promptly so it does not form a second plateau.
-  float3 transition = lerp(0.125f, 1.6f, smoothstep(0.08f, 0.5f, slope));
-  float3 shoulder = transition * (1.f - exp(-excess / transition));
-  float3 extended = excess + (slope - 1.f) * shoulder;
-  // Keep the LUT output scene-linear. The final tone mapper sets the display peak.
-  return graded + extended;
-}
-
 float3 ApplyGameMidtoneSeparation(float3 graded) {
   // Older add-ons leave this register at zero. Preview the default in that case.
   float setting = RENODX_MIDTONE_SEPARATION;
@@ -113,17 +112,26 @@ float3 ApplyGameColorGrade(float3 color, float4x4 color_matrix, sampler2D table,
   strength *= saturate(RENODX_COLOR_GRADE_STRENGTH);
   if (strength <= 0.f) return color;
 
-  // Continue the authored curve before its flat white endpoint. This is a
-  // linear-input 1D curve, so its measured slope can extend the real scene
-  // directly without a clipped SDR proxy or luminance-delta reconstruction.
-  float white_coordinate = 0.9f * GameLutWhiteCoordinate(table);
-  float3 lookup = min(max(address, 0.f), white_coordinate);
-  float3 graded = SampleGameLutLinear(table, lookup);
+  // Preserve the authored lookup coordinates through the usable LUT range.
+  // Beyond white, use one RGB scale and undo it after sampling to extend HDR
+  // without changing the LUT's SDR-range shoulder or clipping each channel.
+  float white_coordinate = min(GameLutWhiteCoordinate(table), 1023.5f / 1024.f);
+  float maximum = max(address.r, max(address.g, address.b));
+  float scale = 1.f;
   [branch]
-  if (any(address > white_coordinate)) {
-    graded = ExtendGameLutHighlights(address, graded, table, white_coordinate);
+  if (maximum > white_coordinate) {
+    scale = white_coordinate / maximum;
   }
-  return lerp(color, ApplyGameMidtoneSeparation(graded), strength);
+  float3 graded;
+  [branch]
+  if (MatchOriginalCurve()) {
+    // Match the original point-sampled, UNORM-quantized authored curve.
+    // The RGB proxy scale is undone, preserving upstream HDR beyond white.
+    graded = DecodeGameSRGB(QuantizeGameLut(SampleGameLutAtMipZero(table, max(address, 0.f) * scale))) / scale;
+  } else {
+    graded = ApplyGameMidtoneSeparation(SampleGameLutLinear(table, max(address, 0.f) * scale) / scale);
+  }
+  return lerp(color, graded, strength);
 }
 
 #endif

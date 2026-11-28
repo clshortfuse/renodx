@@ -10,7 +10,10 @@
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
 
+#include <array>
+
 #include "../../mods/shader.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -18,6 +21,19 @@ namespace {
 
 ShaderInjectData shader_injection;
 float current_settings_mode = 0.f;
+
+std::array<renodx::utils::resource::ResourceUpgradeInfo, 1> lut_upgrades = {{
+    {
+        .old_format = reshade::api::format::r10g10b10a2_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .dimensions = {.width = 1024, .height = 32, .depth = 1},
+        .usage_include = reshade::api::resource_usage::render_target,
+    },
+}};
+
+void OnInitDevice(reshade::api::device* device) {
+  renodx::utils::resource::upgrade::SetUpgradeInfos(device, lut_upgrades);
+}
 
 // ============================================================================
 // Tone mapper helpers
@@ -28,9 +44,8 @@ bool IsRenoDRT() {
          == GEARSRELOADED_TONE_MAP_TYPE_RENODRT;
 }
 
-bool IsPsychoV30() {
-  return shader_injection.tone_map_type
-         == GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV30;
+bool IsPsycho() {
+  return shader_injection.tone_map_type == GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV35;
 }
 
 bool IsCustomToneMapper() {
@@ -101,12 +116,12 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
 
-        .tooltip = "Vanilla uses the in-game HDR sliders. RenoDRT, PsychoV30 and PrismTM use the RenoDX brightness controls.",
+        .tooltip = "Vanilla uses the in-game HDR sliders. RenoDRT, PsychoV35 and PrismTM use the RenoDX brightness controls.",
 
         .labels = {
             "Vanilla",
             "RenoDRT",
-            "PsychoV30",
+            "PsychoV35",
             "PrismTM",
         },
 
@@ -121,7 +136,7 @@ renodx::utils::settings::Settings settings = {
           }
 
           if (value < 2.5f) {
-            return GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV30;
+            return GEARSRELOADED_TONE_MAP_TYPE_PSYCHOV35;
           }
 
           return GEARSRELOADED_TONE_MAP_TYPE_PRISM; },
@@ -150,7 +165,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapGameNits",
         .binding = &shader_injection.diffuse_white_nits,
 
-        .default_value = 140.f,
+        .default_value = 203.f,
 
         .label = "Game Brightness",
         .section = "Tone Mapping",
@@ -181,6 +196,7 @@ renodx::utils::settings::Settings settings = {
     },
 
     // ------------------------------------------------------------------------
+
     // RenoDRT advanced controls
     // ------------------------------------------------------------------------
 
@@ -486,7 +502,7 @@ renodx::utils::settings::Settings settings = {
     },
 
     // ========================================================================
-    // PsychoV30
+    // PsychoV35 (retain the existing setting keys for saved presets)
     // ========================================================================
 
     new renodx::utils::settings::Setting{
@@ -496,16 +512,16 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
 
         .label = "Purity",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
 
-        .tooltip = "Feeds PsychoV30's original purity_scale parameter.",
+        .tooltip = "Feeds the selected Psycho mapper's purity_scale parameter.",
 
         .min = 0.f,
         .max = 200.f,
 
         .format = "%.0f%%",
 
-        .is_enabled = []() { return IsPsychoV30(); },
+        .is_enabled = []() { return IsPsycho(); },
 
         .parse = [](float value) { return value * 0.01f; },
 
@@ -519,15 +535,15 @@ renodx::utils::settings::Settings settings = {
         .default_value = 50.f,
 
         .label = "Cone Response",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
 
-        .tooltip = "Feeds PsychoV30's original cone_response_exponent parameter.",
+        .tooltip = "Feeds the selected Psycho mapper's cone_response_exponent parameter.",
 
         .min = 0.0f,
         .max = 100.f,
 
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV30(); },
+        .is_enabled = []() { return IsPsycho(); },
 
         .parse = [](float value) { return value * 0.02f; },
 
@@ -541,16 +557,16 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
 
         .label = "Gamut Compression",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
 
-        .tooltip = "Feeds PsychoV30's original gamut_compression parameter.",
+        .tooltip = "Feeds the selected Psycho mapper's gamut_compression parameter.",
 
         .min = 0.f,
         .max = 100.f,
 
         .format = "%.0f%%",
 
-        .is_enabled = []() { return IsPsychoV30(); },
+        .is_enabled = []() { return IsPsycho(); },
 
         .parse = [](float value) { return value * 0.01f; },
 
@@ -563,21 +579,21 @@ renodx::utils::settings::Settings settings = {
 
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
 
-        // Preserve PsychoV30's supplied default: nonzero = BT.2020.
+        // Preserve the existing default: nonzero = BT.2020.
         .default_value = 1.f,
 
         .label = "Gamut Target",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
 
-        .tooltip = "Selects PsychoV30's existing gamut_compression_mode argument. "
-                   "The PsychoV30 shader itself is not modified.",
+        .tooltip = "Selects the Psycho mapper target gamut. "
+                   "Uses the shared PsychoV35 implementation.",
 
         .labels = {
             "BT.709",
             "BT.2020",
         },
 
-        .is_enabled = []() { return IsPsychoV30(); },
+        .is_enabled = []() { return IsPsycho(); },
 
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -589,17 +605,17 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
 
         .label = "Compression",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
 
-        .tooltip = "Feeds PsychoV30's original compression parameter. "
-                   "0 selects PsychoV30's automatic mode.",
+        .tooltip = "Feeds the selected Psycho mapper's compression parameter. "
+                   "0 selects automatic compression.",
 
         .min = 0.f,
         .max = 4.f,
 
         .format = "%.2f",
 
-        .is_enabled = []() { return IsPsychoV30(); },
+        .is_enabled = []() { return IsPsycho(); },
 
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -661,6 +677,7 @@ BOOL APIENTRY DllMain(
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::utils::resource::upgrade::use_resource_cloning = true;
 
         initialized = true;
       }
@@ -678,6 +695,13 @@ BOOL APIENTRY DllMain(
       fdw_reason,
       &settings,
       &OnPresetOff);
+
+  renodx::utils::resource::upgrade::Use(fdw_reason);
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+  } else if (fdw_reason == DLL_PROCESS_DETACH) {
+    reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+  }
 
   renodx::mods::shader::Use(
       fdw_reason,

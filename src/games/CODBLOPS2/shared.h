@@ -77,13 +77,13 @@ struct ShaderInjectData {
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
 
-  // PsychoV24 controls, appended so existing field positions stay stable.
+  // PsychoV35 reuses the PsychoV24 fields to preserve the injected layout.
   float psychov24_compression;
   float psychov24_gamut_compression;
   float psychov24_gamut_mode;
   float psychov24_cone_response;
 
-  // PsychoV24 Test24-specific controls.
+  // Retired PsychoV24-specific controls; keep storage for binary compatibility.
   // Appended so all pre-existing injected fields retain their offsets.
   float psychov24_highlight_saturation;
   float psychov24_gamut_hue_restore;
@@ -121,24 +121,24 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
-#define RENODX_TONE_MAP_TYPE_PSYCHOV24       24.f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV35
+#define RENODX_TONE_MAP_TYPE_PSYCHOV35       35.f
 #endif
 
-#ifndef RENODX_PSYCHOV24_COMPRESSION
-#define RENODX_PSYCHOV24_COMPRESSION         shader_injection.psychov24_compression
+#ifndef RENODX_PSYCHOV35_COMPRESSION
+#define RENODX_PSYCHOV35_COMPRESSION         shader_injection.psychov24_compression
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION   shader_injection.psychov24_gamut_compression
+#ifndef RENODX_PSYCHOV35_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV35_GAMUT_COMPRESSION   shader_injection.psychov24_gamut_compression
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_MODE
-#define RENODX_PSYCHOV24_GAMUT_MODE          shader_injection.psychov24_gamut_mode
+#ifndef RENODX_PSYCHOV35_GAMUT_MODE
+#define RENODX_PSYCHOV35_GAMUT_MODE          shader_injection.psychov24_gamut_mode
 #endif
 
-#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
-#define RENODX_PSYCHOV24_CONE_RESPONSE       shader_injection.psychov24_cone_response
+#ifndef RENODX_PSYCHOV35_CONE_RESPONSE
+#define RENODX_PSYCHOV35_CONE_RESPONSE       shader_injection.psychov24_cone_response
 #endif
 
 #ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION

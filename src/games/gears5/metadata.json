@@ -1,0 +1,22 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "gears5",
+  "title": "Gears 5",
+  "status": "experimental",
+  "compatibility": "in-progress",
+  "summary": "Native HDR tone-map replacement with PsychoV35, PrismTM, RenoDRT and extended SDR Vanilla+, plus UI brightness limited to 203 nits.",
+  "notes": [
+    "Native HDR mode is required for the custom tone-mapping path.",
+    "Four scene-LUT variants, the tactical-view composite, the red damage HUD and the final HDR/UI composite are registered in both compute and pixel forms for Async Compute on/off; additional permutations remain unverified.",
+    "Use an unprotected single-player session for development."
+  ],
+  "deploy": {
+    "steam_appid": 1097840,
+    "game_exe": "Gears5.exe",
+    "process_name": "Gears5.exe",
+    "api": "d3d12",
+    "architecture": [
+      "x64"
+    ]
+  }
+}

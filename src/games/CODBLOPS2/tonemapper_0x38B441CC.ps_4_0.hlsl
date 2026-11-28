@@ -2,50 +2,39 @@
 
 
 // ============================================================================
-// PsychoV24 configuration
+// PsychoV35 configuration
 // ============================================================================
-
-#ifndef RENODX_USE_PSYCHOV24
-#define RENODX_USE_PSYCHOV24 1
-#endif
 
 #ifndef RENODX_TONE_MAP_TYPE_VANILLA
 #define RENODX_TONE_MAP_TYPE_VANILLA 0.0f
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
-#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV35
+#define RENODX_TONE_MAP_TYPE_PSYCHOV35 35.0f
 #endif
 
 // 0.0 = automatic compression.
-#ifndef RENODX_PSYCHOV24_COMPRESSION
-#define RENODX_PSYCHOV24_COMPRESSION 0.0f
+#ifndef RENODX_PSYCHOV35_COMPRESSION
+#define RENODX_PSYCHOV35_COMPRESSION 0.0f
 #endif
 
-#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV35_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV35_GAMUT_COMPRESSION 1.0f
 #endif
 
-// 0 = disabled.
-// 1 = enabled.
-#ifndef RENODX_PSYCHOV24_GAMUT_MODE
-#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
+// 0 = BT.709 target.
+// 1 = BT.2020 target.
+#ifndef RENODX_PSYCHOV35_GAMUT_MODE
+#define RENODX_PSYCHOV35_GAMUT_MODE 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
-#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
+#ifndef RENODX_PSYCHOV35_CONE_RESPONSE
+#define RENODX_PSYCHOV35_CONE_RESPONSE 1.0f
 #endif
 
 
-#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
-#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
-#endif
-
-#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
-#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
-#endif
 // FXC can emit invalid D3D11 bytecode when an inlined abs() becomes a source
-// modifier on an opcode that does not permit that modifier. PsychoV24 still
+// modifier on an opcode that does not permit that modifier. PsychoV35 still
 // uses abs(), so clear the floating-point sign bit explicitly while compiling
 // the Psycho include. The macro is undefined immediately afterward so the
 // rest of the BO2 shader keeps its original abs() behavior.
@@ -125,11 +114,9 @@ uint4 RenoDXPsychoFXCSafeAbs(uint4 value)
     return value;
 }
 
-#if RENODX_USE_PSYCHOV24
 #define abs RenoDXPsychoFXCSafeAbs
-#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
+#include "../../shaders/tonemap/psychov/test35.hlsl"
 #undef abs
-#endif
 
 
 // ============================================================================
@@ -140,7 +127,7 @@ uint4 RenoDXPsychoFXCSafeAbs(uint4 value)
 //     before RenderIntermediatePass.
 // 0 = preserve the original BO2 encoded Vanilla output exactly.
 //
-// RenoDRT and PsychoV24 always receive the reconstructed linear scene signal,
+// RenoDRT and PsychoV35 always receive the reconstructed linear scene signal,
 // so no additional gamma decode is applied to the HDR path.
 #ifndef RENODX_GAMMA_DECODE_INPUT
 #define RENODX_GAMMA_DECODE_INPUT 1
@@ -190,8 +177,8 @@ uint4 RenoDXPsychoFXCSafeAbs(uint4 value)
 // Shared white-clip configuration
 // ============================================================================
 
-// The same hue-preserving white shoulder is applied before both RenoDRT and
-// PsychoV24. It does not affect Vanilla mode.
+// Retained legacy white-shoulder helper; the active main path does not call it.
+// PsychoV35 receives the extended HDR signal without this additional shoulder.
 //
 // Values below START pass through unchanged. Values above START are smoothly
 // compressed toward LIMIT. Lower values create a stronger white clip.
@@ -203,17 +190,12 @@ uint4 RenoDXPsychoFXCSafeAbs(uint4 value)
 #define RENODX_WHITE_CLIP_LIMIT 8.0f
 #endif
 
-// PsychoV24 also has its own internal clip point. Lower is stronger.
-#ifndef RENODX_PSYCHOV24_CLIP_POINT
-#define RENODX_PSYCHOV24_CLIP_POINT 8.0f
-#endif
-
 
 // ============================================================================
 // Controlled HDR highlight restoration
 // ============================================================================
 
-// Restores part of the pre-tonemap HDR signal after RenoDRT or PsychoV24.
+// Restores part of the pre-tonemap HDR signal after RenoDRT.
 // Shadows, midtones, and Vanilla mode remain unchanged.
 //
 // 0.00 = normal tonemapper output
@@ -284,20 +266,9 @@ Texture2D<float4> codeTexture1 : register(t2);  // packed 32x32x32 color LUT
 
 float SafeFinitePositive1(float value)
 {
-    // Replace NaN with zero.
-    value =
-        (value == value)
-        ? value
-        : 0.0f;
-
-    // Tonemappers expect positive scene-light values.
-    //
-    // 65504 is the largest finite value representable by float16.
-    // This does not clamp HDR values to 1.0.
-    return min(
-        max(value, 0.0f),
-        65504.0f
-    );
+    // IEEE bit checks survive FXC fast-math, unlike value == value/isnan.
+    if ((asuint(value) & 0x7F800000u) == 0x7F800000u) return 0.f;
+    return clamp(value, 0.f, 65504.f);
 }
 
 
@@ -879,7 +850,7 @@ float3 GammaDecode2(float3 encodedColor)
 }
 
 
-// Hue-preserving soft white clip shared by RenoDRT and PsychoV24.
+// Retained legacy hue-preserving soft white clip (inactive).
 //
 // The maximum RGB channel is used as the highlight magnitude. All channels
 // are then scaled equally, preserving the original highlight hue.
@@ -949,85 +920,50 @@ bool IsVanillaMode()
 }
 
 
-bool IsPsychoV24Mode()
+bool IsPsychoV35Mode()
 {
-    return abs(
-        RENODX_TONE_MAP_TYPE
-        - RENODX_TONE_MAP_TYPE_PSYCHOV24
-    ) < 0.5f;
+    // Accept the old mode id while live-loading into the PsychoV24 addon.
+    return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV35) < 0.5f
+        || abs(RENODX_TONE_MAP_TYPE - 24.f) < 0.5f;
 }
 
 
 // ============================================================================
-// PsychoV24 tonemapper
+// PsychoV35 tonemapper
 // ============================================================================
 
-float3 ApplyPsychoV24Tonemap(float3 linearColor)
+float3 ApplyPsychoV35Tonemap(float3 linearColor)
 {
-    linearColor =
-        SafePositive(linearColor);
+    linearColor = SafePositive(linearColor);
+    // Extend only the reconstructed scene highlights, before PsychoV35.
+    float maximum = MaxRGB(linearColor);
+    float excess = max(maximum - 1.f, 0.f);
+    if (maximum > 1.f) {
+        linearColor *= 1.f + excess * excess / maximum;
+    }
 
-#if RENODX_USE_PSYCHOV24
-
-    float peakValue = max(
-        RENODX_PEAK_WHITE_NITS
-        / max(
-            RENODX_DIFFUSE_WHITE_NITS,
-            1.0f
-        ),
-        1.0f
-    );
-
-    int gamutMode =
-        (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f)
-        ? 1
-        : 0;
-
-    linearColor =
-        renodx::tonemap::psychov::psychotm_test24(
-            linearColor,
-
-            // Display peak relative to diffuse white.
-            peakValue,
-
-            // Standard grading controls are applied by the common pre/post
-            // stages. Keep them neutral here to prevent double-processing.
-            1.0f,  // exposure
-            1.0f,  // highlights
-            1.0f,  // shadows
-            1.0f,  // contrast
-            1.0f,  // saturation
-
-            // PsychoV24 controls.
-            1.0f,                            // bleaching_intensity
-            RENODX_PSYCHOV24_CLIP_POINT,       // stronger clip_point
-
-            RENODX_TONE_MAP_HUE_CORRECTION,
-
-            1.0f,                            // adaptation_contrast
-            0,                               // white_curve_mode
-
-            RENODX_PSYCHOV24_CONE_RESPONSE,
-
-            0.18f.xxx,                       // current adaptation anchor
-            0.18f.xxx,                       // desired adaptation anchor
-
-            RENODX_PSYCHOV24_GAMUT_COMPRESSION,
-            gamutMode,
-
-            1.0f,                            // adaptive_normalization
-            RENODX_PSYCHOV24_COMPRESSION,
-
-            // PsychoV24 adds these two tail parameters. Keep highlight
-            // saturation neutral here because BO2's common post-tonemap stage
-            // already applies RENODX_TONE_MAP_HIGHLIGHT_SATURATION.
-            RENODX_PSYCHOV24_HIGHLIGHT_SATURATION, // highlight_saturation
-            RENODX_PSYCHOV24_GAMUT_HUE_RESTORE     // gamut_hue_restore
-        );
-
-#endif
-
-    return SafePositive(linearColor);
+    float peakValue = max(RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.f), 1.f);
+    // Express the peak in RenderIntermediatePass's input gamma domain.
+    if (RENODX_GAMMA_CORRECTION == renodx::draw::GAMMA_CORRECTION_GAMMA_2_2) {
+        peakValue = renodx::color::correct::GammaSafe(peakValue, true, 2.2f);
+    } else if (RENODX_GAMMA_CORRECTION == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4) {
+        peakValue = renodx::color::correct::GammaSafe(peakValue, true, 2.4f);
+    }
+    float3 mapped = renodx::tonemap::psychov::psychotm_test35(
+        linearColor, peakValue,
+        1.f, 1.f, 1.f, 1.f, 1.f,  // Grading already surrounds the mapper.
+        1.f, 100.f, 1.f, 1.f, 0,  // Reserved compatibility arguments.
+        max(RENODX_PSYCHOV35_CONE_RESPONSE, 0.01f),
+        0.18f.xxx, 0.18f.xxx,
+        RENODX_PSYCHOV35_GAMUT_COMPRESSION,
+        RENODX_PSYCHOV35_GAMUT_MODE > 0.5f ? 1 : 0,
+        1.f, RENODX_PSYCHOV35_COMPRESSION);
+    // Reject the complete triplet: per-channel NaN cleanup creates colored
+    // flashes. Use a finite, hue-preserving scene shoulder for invalid pixels.
+    if (any((asuint(mapped) & 0x7F800000u) == 0x7F800000u)) {
+        mapped = linearColor / (1.f + MaxRGB(linearColor) / peakValue);
+    }
+    return SafePositive(mapped);
 }
 
 
@@ -1040,11 +976,11 @@ float3 ApplyRenoDXTonemap(float3 linearColor)
     linearColor =
         SafePositive(linearColor);
 
-    if (IsPsychoV24Mode())
+    if (IsPsychoV35Mode())
     {
-        // PsychoV24 retains its own display mapping and gamut model, while the
+        // PsychoV35 retains its own display mapping and gamut model, while the
         // common pre/post grading stages surround it.
-        return ApplyPsychoV24Tonemap(
+        return ApplyPsychoV35Tonemap(
             linearColor
         );
     }
@@ -1186,7 +1122,7 @@ float3 ApplyBO2LUTCorrectionHDR(float3 linearColor)
 
     // Compare the LUT output with its input in linear light. Applying only
     // this delta preserves BO2's colour grade without retaining the original
-    // SDR shoulder, allowing RenoDRT or PsychoV24 to be the sole tonemapper.
+    // SDR shoulder, allowing RenoDRT or PsychoV35 to be the sole tonemapper.
     float3 shoulderedLinear =
         shoulderedEncoded * shoulderedEncoded;
 
@@ -1255,7 +1191,7 @@ void main(
     //   sqrt(scene + 4 * bloom^2)
     //
     // Everything inside sqrt is the useful linear pre-tonemap signal. Keep it
-    // linear for RenoDRT/PsychoV24 instead of applying BO2's SDR encode first.
+    // linear for RenoDRT/PsychoV35 instead of applying BO2's SDR encode first.
     float3 combinedLinear = SafePositive(
         sceneRGB
         + bloomRGB
@@ -1290,7 +1226,7 @@ void main(
     else
     {
         // Preserve BO2's packed LUT colour grade, but remove its original SDR
-        // shoulder so RenoDRT or PsychoV24 is the only active tonemapper.
+        // shoulder so RenoDRT or PsychoV35 is the only active tonemapper.
         float3 toneMapInput = ApplyBO2LUTCorrectionHDR(
             combinedLinear
         );
@@ -1298,8 +1234,8 @@ void main(
         // common.hlsl ordering:
         //   1. HDR Boost
         //   2. Exposure/Contrast/Flare/Highlights/Shadows
-        //   3. RenoDRT or PsychoV24 display mapping
-        //   4. Controlled HDR highlight restoration
+        //   3. RenoDRT or PsychoV35 display mapping
+        //   4. Legacy highlight restoration for RenoDRT only
         //   5. Saturation/Blowout/Highlight Saturation
         float3 commonPreTonemapColor = ApplyCommonPreTonemapPipeline(
             toneMapInput
@@ -1309,10 +1245,9 @@ void main(
             commonPreTonemapColor
         );
 
-        toneMappedColor = RestoreHDRHighlights(
-            toneMappedColor,
-            commonPreTonemapColor
-        );
+        if (!IsPsychoV35Mode()) {
+            toneMappedColor = RestoreHDRHighlights(toneMappedColor, commonPreTonemapColor);
+        }
 
         toneMappedColor = ApplyCommonPostTonemapPipeline(
             toneMappedColor

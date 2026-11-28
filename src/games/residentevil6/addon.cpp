@@ -2,14 +2,20 @@
  * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
-#include <include/reshade_api_resource.hpp>
-#include <Windows.h>
 #include <d3d9.h>
+#include <Windows.h>
+#include <wrl/client.h>
+#include <include/reshade_api_resource.hpp>
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
-#include <unordered_map>
+#include <type_traits>
 #include <vector>
 #define ImTextureID ImU64
 
@@ -23,8 +29,11 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/bitwise.hpp"
+#include "../../utils/command_action.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
+#include "./hdr_copy.hpp"
 #include "./scene_hud.hpp"
 #include "./shared.h"
 
@@ -37,6 +46,233 @@ static_assert(
     "RE6 ShaderInjectData must remain exactly 40 floats / 160 bytes (c50-c59).");
 
 namespace {
+
+renodx::utils::resource::ResourceUpgradeInfo hdr_post_process_upgrade = {
+    .new_format = reshade::api::format::r16g16b16a16_float,
+    .use_resource_view_cloning = true,
+    .use_resource_view_hot_swap = true,
+};
+
+// A distinct role lets the copy path discover scene writers across areas.
+renodx::utils::resource::ResourceUpgradeInfo hdr_scene_input_upgrade = {
+    .new_format = reshade::api::format::r16g16b16a16_float,
+    .use_resource_view_cloning = true,
+    .use_resource_view_hot_swap = true,
+};
+
+constexpr uint32_t HDR_POST_PROCESS_SHADERS[] = {
+    0x4E162C4Du,  // Shared scene color, RTV0 only; preserve HDR before post-processing.
+    0xDB03362Au,  // Equivalent scene-color writers in areas without 0x4E162C4D.
+    0x9F0F9263u,
+    0xC131F1DBu,  // Packed HDR color downsample.
+    0x8559BC08u,
+    0x2A86EB6Au,  // Bloom extraction, pyramid, blur and combine.
+    0x8977B27Bu,
+    0x4BFE1083u,
+    0xF57D77A7u,
+    0x602B7150u,
+    0x21D43B79u,  // HDR factor and subsequent color post-processing.
+    0x1E06E6D1u,
+    0x7CDC5FE0u,  // Motion blur color plus depth in alpha.
+    0x253E8BA3u,
+    0xD937CB7Cu,
+    0xD538F8D6u,  // LUT color passes.
+    0x69A8F7C1u,
+};
+
+bool ActivateHdrPostProcessTarget(reshade::api::device* device, reshade::api::resource_view view,
+                                  uint32_t shader_hash,
+                                  renodx::utils::resource::ResourceUpgradeInfo* upgrade = &hdr_post_process_upgrade) {
+  if (device->get_api() != reshade::api::device_api::d3d9 || view.handle == 0u) return false;
+  reshade::api::resource resource = {};
+  renodx::utils::resource::GetLiveResourceViewInfo(view, [&](const auto& info) {
+    if (!info.is_clone) resource = info.original_resource;
+  });
+  if (resource.handle == 0u) return false;
+
+  bool eligible = false;
+  bool discovered = false;
+  renodx::utils::resource::UpdateResourceInfo(resource, [&](auto* info) {
+    if (info->destroyed || info->is_clone || info->is_swap_chain) return;
+    if (info->clone_target != nullptr && info->clone_target != upgrade) return;
+    const auto& desc = info->desc;
+    if (desc.type != reshade::api::resource_type::texture_2d
+        || desc.texture.depth_or_layers != 1u || desc.texture.levels != 1u
+        || desc.texture.samples != 1u
+        || !renodx::utils::bitwise::HasFlag(desc.usage, reshade::api::resource_usage::render_target)) return;
+    switch (desc.texture.format) {
+      case reshade::api::format::b8g8r8a8_unorm:
+      case reshade::api::format::r8g8b8a8_unorm:
+      case reshade::api::format::r10g10b10a2_unorm:
+      case reshade::api::format::b10g10r10a2_unorm:
+        break;
+      default:
+        return;
+    }
+    discovered = info->clone_target == nullptr;
+    info->clone_target = upgrade;
+    eligible = true;
+  });
+  if (!eligible || !renodx::utils::resource::upgrade::ActivateCloneHotSwap(device, view)) return false;
+  if (renodx::utils::resource::upgrade::GetResourceViewClone(view).handle == 0u) {
+    renodx::utils::resource::upgrade::DeactivateCloneHotSwap(device, view);
+    return false;
+  }
+  // Keep selected color clones active: later effects and the next frame may read
+  // their contents before another recognized post-process draw overwrites them.
+  if (discovered) {
+    std::stringstream message;
+    message << "[RE6] Selected HDR post target " << std::hex << resource.handle
+            << " from shader " << shader_hash << " (0 = HDR color copy)";
+    reshade::log::message(reshade::log::level::info, message.str().c_str());
+  }
+  return true;
+}
+
+bool ActivateHdrPostProcessResource(reshade::api::device* device, reshade::api::resource resource,
+                                    renodx::utils::resource::ResourceUpgradeInfo* upgrade = &hdr_post_process_upgrade) {
+  std::vector<uint64_t> views;
+  renodx::utils::resource::GetResourceInfo(resource, [&](const auto& info) {
+    if (!info.destroyed && !info.is_swap_chain && !info.is_clone) {
+      views.assign(info.resource_view_handles.begin(), info.resource_view_handles.end());
+    }
+  });
+  for (const auto handle : views) {
+    if (ActivateHdrPostProcessTarget(device, {handle}, 0u, upgrade)) return true;
+  }
+  return false;
+}
+
+constexpr auto HDR_POST_PROCESS_ACTION = []<typename Context>(Context& context)
+  requires(std::is_same_v<typename Context::ArgumentType, renodx::utils::command_action::DrawArguments>)
+{
+  renodx::utils::command_action::CallbackResult<Context> result;
+  auto* device = context.cmd_list->get_device();
+  if (device->get_api() != reshade::api::device_api::d3d9) return result;
+  if (context.matched_shader_hash == 0xC131F1DBu) {
+    // This proven packed-color downsample identifies the actual scene input,
+    // independently of which material variants appeared in the current area.
+    Microsoft::WRL::ComPtr<IDirect3DBaseTexture9> texture;
+    if (SUCCEEDED(reinterpret_cast<IDirect3DDevice9*>(device->get_native())->GetTexture(0, texture.GetAddressOf()))
+        && texture != nullptr) {
+      reshade::api::resource source = {reinterpret_cast<uintptr_t>(texture.Get())};
+      renodx::utils::resource::GetResourceInfo(source, [&](const auto& info) {
+        if (info.is_clone) source = info.fallback;
+      });
+      ActivateHdrPostProcessResource(device, source, &hdr_scene_input_upgrade);
+    }
+  }
+  if (context.matched_shader_hash == 0x1E06E6D1u) {
+    // This screen AA pass is also used inside the cutscene's native 720p chain.
+    // Its hash alone does not establish an HDR color output.
+    Microsoft::WRL::ComPtr<IDirect3DBaseTexture9> texture;
+    if (FAILED(reinterpret_cast<IDirect3DDevice9*>(device->get_native())->GetTexture(0, texture.GetAddressOf()))
+        || texture == nullptr) return result;
+    reshade::api::resource source = {reinterpret_cast<uintptr_t>(texture.Get())};
+    bool is_hdr_color = false;
+    renodx::utils::resource::GetResourceInfo(source, [&](const auto& info) {
+      if (info.destroyed) return;
+      if (info.is_clone) {
+        source = info.fallback;
+      } else {
+        is_hdr_color = info.clone_enabled && info.clone_target == &hdr_post_process_upgrade;
+      }
+    });
+    if (!is_hdr_color && source.handle != reinterpret_cast<uintptr_t>(texture.Get()) && source.handle != 0u) {
+      renodx::utils::resource::GetResourceInfo(source, [&](const auto& info) {
+        is_hdr_color = !info.destroyed && info.clone_enabled && info.clone_target == &hdr_post_process_upgrade;
+      });
+    }
+    if (!is_hdr_color) return result;
+  }
+  auto* state = renodx::utils::command_action::GetSwapchainState(&context);
+  if (state == nullptr) return result;
+  bool changed = false;
+  for (const auto view : state->current_render_targets) {
+    if (ActivateHdrPostProcessTarget(context.cmd_list->get_device(), view, context.matched_shader_hash)) {
+      changed = true;
+    }
+    if (context.matched_shader_hash == 0x4E162C4Du
+        || context.matched_shader_hash == 0xDB03362Au
+        || context.matched_shader_hash == 0x9F0F9263u) break;
+  }
+  if (changed) {
+    renodx::utils::resource::upgrade::OnBindRenderTargetsAndDepthStencil(
+        context.cmd_list, static_cast<uint32_t>(state->current_render_targets.size()),
+        state->current_render_targets.data(), state->current_depth_stencil);
+  }
+  return result;
+};
+
+bool SelectHdrCopyTarget(reshade::api::device* device, reshade::api::resource source,
+                         reshade::api::resource dest) {
+  if (device->get_api() != reshade::api::device_api::d3d9 || source.handle == 0u || dest.handle == 0u) return false;
+  bool is_scene_input = false;
+  renodx::utils::resource::GetResourceInfo(dest, [&](const auto& info) {
+    is_scene_input = !info.destroyed && info.clone_enabled && info.clone_target == &hdr_scene_input_upgrade;
+  });
+  if (is_scene_input) {
+    // Discover its producer from a real scene-color copy. The first discovery
+    // frame may have clipped already; following frames render into float.
+    ActivateHdrPostProcessResource(device, source);
+  }
+  bool selected = false;
+  renodx::utils::resource::GetResourceInfo(dest, [&](const auto& info) {
+    selected = !info.destroyed && !info.is_swap_chain && !info.is_clone && info.clone_enabled
+               && info.desc.type == reshade::api::resource_type::texture_2d
+               && info.desc.texture.levels == 1u && info.desc.texture.depth_or_layers == 1u
+               && info.desc.texture.samples == 1u
+               && info.clone_target != nullptr
+               && info.clone_target->new_format == reshade::api::format::r16g16b16a16_float;
+  });
+  // DevKit can enable the input clone before its native scene-copy source has
+  // any HDR upgrade. That copy must refresh the enabled destination too.
+  if (selected) return true;
+  bool is_hdr_color = false;
+  renodx::utils::resource::GetResourceInfo(source, [&](const auto& info) {
+    is_hdr_color = !info.destroyed && info.clone_enabled && info.clone_target == &hdr_post_process_upgrade;
+  });
+  if (!is_hdr_color) return false;
+
+  // Copies inherit the source's proven color role, never a size/format heuristic.
+  ActivateHdrPostProcessResource(device, dest);
+  renodx::utils::resource::GetResourceInfo(dest, [&](const auto& info) {
+    selected = !info.destroyed && info.clone_enabled && info.clone_target == &hdr_post_process_upgrade;
+  });
+  return selected;
+}
+
+bool OnCopyPostProcessResource(reshade::api::command_list* cmd, reshade::api::resource source,
+                               reshade::api::resource dest) {
+  if (!SelectHdrCopyTarget(cmd->get_device(), source, dest)) return false;
+  const auto source_clone = renodx::utils::resource::upgrade::GetResourceClone(source);
+  const auto dest_clone = renodx::utils::resource::upgrade::GetResourceClone(dest);
+  if (dest_clone.handle == 0u) return false;
+  if (source_clone.handle == 0u) {
+    cmd->copy_resource(source, dest);
+  }
+  return re6_hdr_copy::CopyColorRegion(
+      reinterpret_cast<IDirect3DDevice9*>(cmd->get_device()->get_native()),
+      (source_clone.handle != 0u ? source_clone : source), 0u, nullptr,
+      dest_clone, 0u, nullptr, reshade::api::filter_mode::min_mag_mip_point);
+}
+
+bool OnCopyPostProcessTexture(reshade::api::command_list* cmd, reshade::api::resource source,
+                              uint32_t source_subresource, const reshade::api::subresource_box* source_box,
+                              reshade::api::resource dest, uint32_t dest_subresource,
+                              const reshade::api::subresource_box* dest_box, reshade::api::filter_mode filter) {
+  if (!SelectHdrCopyTarget(cmd->get_device(), source, dest)) return false;
+  const auto source_clone = renodx::utils::resource::upgrade::GetResourceClone(source);
+  const auto dest_clone = renodx::utils::resource::upgrade::GetResourceClone(dest);
+  if (dest_clone.handle == 0u) return false;
+  if (source_clone.handle == 0u) {
+    cmd->copy_texture_region(source, source_subresource, source_box, dest, dest_subresource, dest_box, filter);
+  }
+  return re6_hdr_copy::CopyColorRegion(
+      reinterpret_cast<IDirect3DDevice9*>(cmd->get_device()->get_native()),
+      (source_clone.handle != 0u ? source_clone : source), source_subresource, source_box,
+      dest_clone, dest_subresource, dest_box, filter);
+}
 
 bool OnCreatePostProcessResource(
     reshade::api::device* device,
@@ -56,22 +292,7 @@ bool OnCreatePostProcessResource(
     return false;
   }
 
-  const bool is_color_lut = desc.texture.width == 1024u && desc.texture.height == 1u;
-  if (!is_color_lut) {
-    const auto back_buffer = renodx::utils::swapchain::GetBackBufferDesc(device);
-    if (back_buffer.type == reshade::api::resource_type::unknown) return false;
-
-    // RE6's bloom ping-pong targets form a quarter-size through 1/32-size pyramid.
-    bool is_bloom_target = false;
-    for (uint32_t divisor = 4; divisor <= 32; divisor *= 2) {
-      if (desc.texture.width == back_buffer.texture.width / divisor
-          && desc.texture.height == back_buffer.texture.height / divisor) {
-        is_bloom_target = true;
-        break;
-      }
-    }
-    if (!is_bloom_target) return false;
-  }
+  if (desc.texture.width != 1024u || desc.texture.height != 1u) return false;
 
   constexpr auto hdr_format = reshade::api::format::r16g16b16a16_float;
   if (!device->check_format_support(hdr_format, usage)) return false;
@@ -494,6 +715,69 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 ShaderInjectData shader_injection;
 float* const scene_hud_split = &shader_injection.scene_hud_split;
 
+struct __declspec(uuid("69d8cc73-e905-47e7-baa0-450c05c6d10c")) CameraExposureState {
+  std::shared_mutex mutex;
+  std::chrono::steady_clock::time_point last_present = {};
+  float frame_seconds = 1.f / 60.f;
+  float filtered_stops = 0.f;
+  bool initialized = false;
+  bool updated_this_frame = false;
+};
+
+void OnInitCameraExposure(reshade::api::device* device) {
+  if (device->get_api() == reshade::api::device_api::d3d9) {
+    device->create_private_data<CameraExposureState>();
+  }
+}
+
+void OnDestroyCameraExposure(reshade::api::device* device) {
+  if (device->get_api() == reshade::api::device_api::d3d9) {
+    device->destroy_private_data<CameraExposureState>();
+  }
+}
+
+bool OnCameraExposureDraw(reshade::api::command_list* cmd) {
+  shader_injection.camera_exposure_ready = 0.f;
+  shader_injection.smoothed_camera_exposure = 0.f;
+  auto* device = cmd->get_device();
+  auto* state = device->get_private_data<CameraExposureState>();
+  if (state == nullptr || device->get_api() != reshade::api::device_api::d3d9) return true;
+  std::unique_lock lock(state->mutex);
+  if (shader_injection.tone_map_type <= 0.5f || shader_injection.diffuse_white_nits <= 0.f
+      || shader_injection.peak_white_nits <= shader_injection.diffuse_white_nits) {
+    state->initialized = false;
+    return true;
+  }
+  float factor[4] = {};
+  if (FAILED(reinterpret_cast<IDirect3DDevice9*>(device->get_native())->GetPixelShaderConstantF(1, factor, 1))
+      || !std::isfinite(factor[0]) || factor[0] <= 0.f
+      || !std::isfinite(factor[2]) || factor[2] <= 0.f) {
+    state->initialized = false;
+    return true;
+  }
+  if (!state->updated_this_frame || !state->initialized) {
+    // Preserve the native steady-state exposure and filter only its speed.
+    // factor.z / factor.x is a separate authored brightness scale.
+    const float target_stops = std::log2(std::max(factor[0], RE6_MIN_CAMERA_EXPOSURE));
+    if (!state->initialized) {
+      state->filtered_stops = target_stops;
+      state->initialized = true;
+    } else {
+      const float difference = target_stops - state->filtered_stops;
+      if (std::abs(difference) > 0.03f) {
+        const float step = difference * -std::expm1(-state->frame_seconds / 1.5f);
+        const float max_step = 0.5f * state->frame_seconds;
+        state->filtered_stops += std::clamp(step, -max_step, max_step);
+      }
+    }
+    state->updated_this_frame = true;
+  }
+  // Bloom and scene draws consume one camera exposure for the whole frame.
+  shader_injection.smoothed_camera_exposure = std::exp2(state->filtered_stops);
+  shader_injection.camera_exposure_ready = 1.f;
+  return true;
+}
+
 float current_settings_mode = 0.f;
 float force_windowed_borderless = 1.f;
 
@@ -597,13 +881,24 @@ renodx::utils::settings::Settings settings = {
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Grading",
-        .tooltip = "Vanilla keeps the original SDR final shader. RenoDRT uses RenoDX ToneMapPass. PsychoV30 calls psychotm_test30.",
+        .tooltip = "Vanilla keeps the original SDR final shader. With Match Original Curve off, RenoDRT uses RenoDX ToneMapPass and PsychoV30 calls psychotm_test30.",
         .labels = {"Vanilla", "RenoDRT", "PsychoV30"},
         .parse = [](float value) {
           if (value == 1.f) return TONE_MAP_TYPE_RENODRT;
           if (value == 2.f) return TONE_MAP_TYPE_PSYCHOV30;
           return TONE_MAP_TYPE_VANILLA;
         },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "OriginalCurveMatching",
+        .binding = &shader_injection.original_curve_matching,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Match Original Curve",
+        .section = "Grading",
+        .tooltip = "Preserves game exposure and the authored SDR curve, extending highlights toward Peak Brightness. Off uses the selected RenoDRT/Psycho curve and modified exposure.",
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
+        .parse = [](float value) { return (value > 0.f ? 1.f : -1.f); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -942,7 +1237,7 @@ renodx::utils::settings::Settings settings = {
     // Processing / Options
     // ------------------------------------------------------------
 
-    new renodx::utils::settings::Setting{
+   /*  new renodx::utils::settings::Setting{
         .key = "FPSLimit",
         .binding = &renodx::utils::swapchain::fps_limit,
         .default_value = 60.f,
@@ -951,7 +1246,7 @@ renodx::utils::settings::Settings settings = {
         .min = 30.f,
         .max = 500.f,
         .parse = [](float value) { return value * 2.f; },
-    },
+    }, */
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -1007,21 +1302,6 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
-const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
-    {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
-    {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
-    {"R8G8B8A8_UNORM", reshade::api::format::r8g8b8a8_unorm},
-    {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
-    {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
-    {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
-    {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
-    {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
-    {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
-    {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
-    {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
-    {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
-};
-
 constexpr float SWAP_CHAIN_ENCODING_HDR10 = 4.f;
 
 // Keeps the swapchain state in sync with the shader setting.
@@ -1071,11 +1351,6 @@ void OnPresetOff() {
       {"MidtoneSeparation", 0.f},
   });
 }
-
-const auto UPGRADE_TYPE_NONE = 0.f;
-const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
-const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
-const auto UPGRADE_TYPE_ANY = 3.f;
 
 void ApplyWindowedBorderless(HWND hwnd) {
   if (force_windowed_borderless < 0.5f) return;
@@ -1143,6 +1418,19 @@ void OnPresent(reshade::api::command_queue* queue,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
   auto* device = queue->get_device();
+  if (auto* state = device->get_private_data<CameraExposureState>()) {
+    const auto now = std::chrono::steady_clock::now();
+    std::unique_lock lock(state->mutex);
+    if (state->last_present != std::chrono::steady_clock::time_point{}) {
+      state->frame_seconds = std::chrono::duration<float>(now - state->last_present).count();
+      if (state->frame_seconds > 1.f) {
+        state->initialized = false;
+      }
+      state->frame_seconds = std::clamp(state->frame_seconds, 0.f, 0.25f);
+    }
+    state->last_present = now;
+    state->updated_this_frame = false;
+  }
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
@@ -1204,7 +1492,18 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // Always register present so the Windowed Borderless helper can run even if
         // the display proxy is disabled.
         reshade::register_event<reshade::addon_event::present>(OnPresent);
+        reshade::register_event<reshade::addon_event::init_device>(OnInitCameraExposure);
+        reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyCameraExposure);
+        custom_shaders.at(0x21D43B79u).on_draw = OnCameraExposureDraw;
+        custom_shaders.at(0x2A86EB6Au).on_draw = OnCameraExposureDraw;
         reshade::register_event<reshade::addon_event::create_resource>(OnCreatePostProcessResource);
+        reshade::register_event<reshade::addon_event::copy_resource>(OnCopyPostProcessResource);
+        reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyPostProcessTexture);
+        for (const auto shader_hash : HDR_POST_PROCESS_SHADERS) {
+          renodx::utils::command_action::Register(
+              HDR_POST_PROCESS_ACTION,
+              {.shader_hash = shader_hash, .command_types = renodx::utils::command_action::COMMAND_TYPE_DRAW});
+        }
 
         reshade::register_event<reshade::addon_event::init_device>(re6_scene_hud::OnInitDevice);
         reshade::register_event<reshade::addon_event::destroy_device>(re6_scene_hud::OnDestroyDevice);
@@ -1335,12 +1634,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainDeviceProxyBaseWaitIdle",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
+              .default_value = 1.f,
               .label = "Base Wait Idle",
               .section = "Display Proxy",
               .labels = {"Off", "On"},
               .is_global = true,
-              .is_visible = []() { return false; },
+              .is_visible = []() { return true; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           bool use_device_proxy =
@@ -1357,7 +1656,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .section = "Display Proxy",
               .labels = {"Off", "On"},
               .is_global = true,
-              .is_visible = []() { return false; },
+              .is_visible = []() { return true; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           bool use_device_proxy =
@@ -1365,90 +1664,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
-        for (const auto& [key, format] : UPGRADE_TARGETS) {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "Upgrade_" + key,
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
-              .label = key,
-              .section = "Resource Upgrades",
-              .labels = {
-                  "Off",
-                  "Output size",
-                  "Output ratio",
-                  "Any size",
-              },
-              .is_global = true,
-              .is_visible = []() { return false; },
-          };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          settings.push_back(setting);
-
-          auto value = setting->GetValue();
-          if (value > 0) {
-            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-                .old_format = format,
-                .new_format = reshade::api::format::r16g16b16a16_float,
-                .ignore_size = (value == UPGRADE_TYPE_ANY),
-                .use_resource_view_cloning = false,
-                .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
-                                                       ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
-                                                       : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-                .usage_include = reshade::api::resource_usage::render_target,
-            });
-            std::stringstream s;
-            s << "Applying user resource upgrade for ";
-            s << format << ": " << value;
-            reshade::log::message(reshade::log::level::info, s.str().c_str());
-          }
-        }
-
         initialized = true;
       }
-     renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::r8g8b8a8_unorm,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-
-});
-renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::r8g8b8a8_typeless,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-
-});
-renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-
-});
-/* renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::b8g8r8a8_unorm,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-    .dimensions = {.width = 960, .height = 540},
-
-    .usage_include = reshade::api::resource_usage::render_target,
-
-}); */
-
-renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::b8g8r8a8_unorm,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-
-});
-renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::r10g10b10a2_unorm,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-
-});
-renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    .old_format = reshade::api::format::b10g10r10a2_unorm,
-    .new_format = reshade::api::format::r16g16b16a16_float,
-
-});
       break;
     case DLL_PROCESS_DETACH:
       RE6RemoveCrashFixHooks();
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyCameraExposure);
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitCameraExposure);
       reshade::unregister_event<reshade::addon_event::create_resource>(OnCreatePostProcessResource);
+      renodx::utils::command_action::Unregister(HDR_POST_PROCESS_ACTION);
+      reshade::unregister_event<reshade::addon_event::copy_texture_region>(OnCopyPostProcessTexture);
+      reshade::unregister_event<reshade::addon_event::copy_resource>(OnCopyPostProcessResource);
+
       renodx::utils::command_action::Unregister(re6_scene_hud::GAMMA_ACTION);
       renodx::utils::command_action::Unregister(re6_scene_hud::COVERAGE_ACTION);
       reshade::unregister_event<reshade::addon_event::clear_render_target_view>(re6_scene_hud::OnClearTarget);
@@ -1465,7 +1693,6 @@ renodx::mods::swapchain::resource_upgrade_infos.push_back({
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-
 
   return TRUE;
 }

@@ -52,10 +52,10 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT", "PsychoV30", "PrismTM"},
+        .labels = {"Vanilla", "RenoDRT", "PsychoV35", "PrismTM"},
         .parse = [](float value) {
           if (value < 1.5f) return value * 3.f;
-          if (value < 2.5f) return GEARS4_TONE_MAP_PSYCHOV30;
+          if (value < 2.5f) return GEARS4_TONE_MAP_PSYCHOV35;
           return GEARS4_TONE_MAP_PRISM;
         },
         .is_visible = []() { return current_settings_mode >= 1; },
@@ -297,55 +297,55 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.psychov30_purity_scale,
         .default_value = 100.f,
         .label = "Purity",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
         .tooltip = "Scales color purity relative to adaptation.",
         .max = 200.f,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV30; },
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV30ConeResponse",
         .binding = &shader_injection.psychov30_cone_response,
         .default_value = 1.f,
         .label = "Cone Response",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
         .tooltip = "Sets the cone response exponent around mid gray.",
         .min = 0.1f,
         .max = 2.f,
         .format = "%.2f",
-        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV30; },
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV30GamutCompression",
         .binding = &shader_injection.psychov30_gamut_compression,
         .default_value = 100.f,
         .label = "Gamut Compression",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
         .tooltip = "Sets how strongly out-of-gamut colors are projected into the gamut target.",
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV30; },
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV30GamutTarget",
         .binding = &shader_injection.psychov30_gamut_target,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Gamut Target",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
         .tooltip = "Selects the gamut that gamut compression targets.",
         .labels = {"BT.709", "BT.2020"},
-        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV30; },
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35; },
     },
     new renodx::utils::settings::Setting{
         .key = "PsychoV30Compression",
         .binding = &shader_injection.psychov30_compression,
         .default_value = 0.f,
         .label = "Compression",
-        .section = "PsychoV30",
+        .section = "PsychoV35",
         .tooltip = "Sets the highlight compression power. Zero selects it automatically from Peak Brightness.",
         .max = 4.f,
         .format = "%.2f",
-        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV30; },
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == GEARS4_TONE_MAP_PSYCHOV35; },
     },
 };
 
@@ -1564,6 +1564,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .new_format = reshade::api::format::r16g16b16a16_float,
             .dimensions = {.width = 32, .height = 32, .depth = 32},
             .resource_tag = 1.f,
+            .use_resource_view_cloning = true,
         });
 
         AddGamePatches();
